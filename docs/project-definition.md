@@ -15,6 +15,15 @@ This issue is important because discussions that experience rapid engagement and
 This project aims to address this problem by developing a predictive model that uses early-stage discussion features to predict whether a stock-related discussion will experience a significant engagement and sentiment surge within the next 24 hours.
 
 3. Research question
+Can machine learning models accurately predict whether a stock-related social media discussion will experience a significant engagement and sentiment surge within the next 24 hours using information available during the discussion's early stage?
+
+Which early-stage features are most predictive of future surges?
+
+Do temporal growth features outperform sentiment features?
+
+Does combining engagement, temporal, and sentiment features improve predictive performance?
+
+How accurately can a surge be predicted 24 hours before it occurs?
 
 4. Definition of "Surge"
 
