@@ -156,23 +156,11 @@ Each record includes a unique post ID, creation timestamp, title, body text (sel
 
 The pipeline follows a linear staged architecture where each stage receives the output of its predecessor. All stages share a centralised configuration module and produce deterministic outputs via seeded randomness.
 
-```mermaid
-graph LR
-    A[CSV<br>Dataset] --> B[Data Loader]
-    B --> C[Preprocessor]
-    C --> D[Feature<br>Engineer]
-    D --> E[Target<br>Labeller]
-    E --> F[Model<br>Trainer]
-    F --> G[Evaluator]
-    G --> H[Metrics &<br>Plots]
+<figure align="center">
+  <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
+  <figcaption>Figure 2: Data Pipeline.</figcaption>
+</figure>
 
-    CFG[PipelineConfig] -.-> B
-    CFG -.-> C
-    CFG -.-> D
-    CFG -.-> E
-    CFG -.-> F
-    CFG -.-> G
-```
 
 The system is implemented as a Python package (`surge_pipeline`) with a corresponding CLI entry point (`run_pipeline.py`). Each module exposes a well-defined function interface, allowing both notebook-based exploration and script-based batch execution.
 
@@ -270,7 +258,6 @@ A model is considered to demonstrate meaningful predictive signal if it achieves
 ---
 
 ## 6. Project Plan and Timeline
-
 
 <figure align="center">
   <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
