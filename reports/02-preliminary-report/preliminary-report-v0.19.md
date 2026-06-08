@@ -381,11 +381,32 @@ This project addresses all three gaps by defining a composite binary surge targe
 
 ## 8. Success Criteria
 
+Success is defined at three tiers to distinguish between a viable proof-of-concept, a strong result, and an exceptional outcome:
+
+| Tier | AUC-ROC | Interpretation |
+|------|---------|----------------|
+| **Minimum success** | > 0.60 | Demonstrates predictive signal above random; validates that surge prediction from early features is feasible |
+| **Target success** | > 0.70 | Indicates moderate discriminative power; comparable to early-stage results in related popularity prediction literature [1][5] |
+| **Stretch goal** | > 0.80 | Strong predictive performance; would represent a notable contribution to the field |
+
+### Functional criteria
+
 - Pipeline executes end-to-end on the static dataset without errors
-- At least one model achieves AUC-ROC > 0.60 on the test set (indicating predictive signal above random)
-- All pipeline stages are reproducible with fixed random seed
-- Code is well-documented and structured for academic submission
-- Report clearly articulates methodology, results, and limitations
+- All pipeline stages produce deterministic outputs with fixed random seed (verified by running twice and comparing)
+- Temporal train-test split contains no data leakage (max training timestamp ≤ min test timestamp)
+
+### Analytical criteria
+
+- At least one model achieves minimum success (AUC-ROC > 0.60) on the temporally held-out test set
+- Composite model (Phase 2) is compared against engagement-only baseline (Phase 1) with statistical significance testing
+- Threshold sensitivity analysis produces at least 3 viable operating points with documented precision-recall trade-offs
+- Confidence intervals are reported for all metrics
+
+### Academic criteria
+
+- Code is well-documented, modular, and structured for reproducibility
+- Report clearly articulates methodology, results, limitations, and threats to validity
+- All claims about model performance are supported by statistical evidence (confidence intervals, significance tests)
 
 ---
 
