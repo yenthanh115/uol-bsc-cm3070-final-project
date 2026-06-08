@@ -93,6 +93,44 @@ A discussion is labelled as a surge (1) if the composite metric exceeds a config
 - Jupyter notebooks (exploration)
 - pytest + Hypothesis (testing)
 
+### 3.3 System Architecture
+
+The pipeline follows a linear staged architecture where each stage receives the output of its predecessor. All stages share a centralised configuration module and produce deterministic outputs via seeded randomness.
+
+```
+TODO: data pipeline diagram
+```
+
+The system is implemented as a Python package (`surge_pipeline`) with a corresponding CLI entry point (`run_pipeline.py`). Each module exposes a well-defined function interface, allowing both notebook-based exploration and script-based batch execution.
+
+### 3.4 Feature Design
+
+The feature engineering module computes seven features for each discussion record:
+
+| Feature | Type | Description | Rationale |
+|---------|------|-------------|-----------|
+| `sentiment_score` | Continuous [-1, 1] | TextBlob polarity of post text | Captures emotional tone; strong sentiment may precede surges [4] |
+| `hour_of_day` | Discrete [0–23] | Hour when the post was created | Trading hours and after-hours activity show different surge patterns |
+| `day_of_week` | Discrete [0–6] | Day when the post was created | Weekend vs weekday discussion dynamics differ |
+| `time_since_previous` | Continuous ≥ 0 | Hours since previous post in dataset | Rapid successive posting may signal emerging activity [1] |
+| `engagement_rate` | Continuous ≥ 0 | Total engagement / hours since posting | Normalises engagement by exposure time |
+| `word_count` | Discrete ≥ 0 | Number of whitespace-separated tokens | Longer posts may carry more informational content [3] |
+| `has_ticker` | Binary | Presence of $TICKER pattern | Ticker mentions signal explicit stock focus |
+
+These features combine temporal, behavioural, sentiment, and textual signals as supported by the literature [1][3][4][5].
+
+### 3.5 Composite Target Design
+
+The binary surge target is computed using a forward-looking 24-hour window:
+
+1. For each record at observation time *t*, identify all subsequent records within *(t, t + 24h]*
+2. Compute engagement growth: *(future_engagement − current_engagement) / max(current_engagement, 1)*
+3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
+4. Combine: *composite = engagement_growth + |sentiment_change|*
+5. Label: *1* if composite > threshold (default 2.0), else *0*
+
+This approach captures discussions that experience simultaneous growth in both attention and emotional intensity, rather than those with only engagement spikes or only sentiment shifts.
+
 ---
 
 ## 4. Risk Register
