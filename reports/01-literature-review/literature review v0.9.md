@@ -1,14 +1,29 @@
 # 1. Introduction
+## 1.1 Background and Relevance of Social Media Trend Detection
 
-Social media platforms have become important environments for the rapid spread of information, opinion, and public discussion. Topics can gain attention within hours through reposts, comments, likes, hashtags, and user interaction, making social media a major source of real-time signals about emerging public interest. The early detection of such trends has practical value across many domains, including marketing, journalism, public opinion monitoring. In the finance domain in particular, sudden increases in online discussion and sentiment may influence investor attention, shape market sentiment, and affect short-term behaviour, making early identification of emerging trends especially valuable.
+Social media platforms are major spaces for the rapid spread of information, opinions, and public discussion. Through reposts, comments, likes, and hashtags, topics can attract attention quickly and provide real-time signals of changing public interest. Detecting these trends early has practical value in areas such as marketing, journalism, public opinion monitoring, and finance. In financial contexts especially, sudden shifts in online discussion and sentiment may shape investor attention, influence expectations, and contribute to short-term market reactions.
 
-However, detecting trend emergence at an early stage is a difficult task. Social media activity is highly dynamic, noisy, and often short-lived. Some topics experience brief spikes in attention and quickly disappear, while others develop into sustained trends with wider influence. This creates an important research challenge: distinguishing between ordinary fluctuations in activity and meaningful early signals that indicate genuine trend formation.
+## 1.2 Trend Emergence as a Research Problem
 
-Previous research suggests that early prediction is possible, but it approaches the problem from different perspectives. Some studies emphasis temporal patterns, showing that early activity levels can be informative about future popularity. Other focus on engagement behaviour, such as reposts, comments, and interaction growth, as indicators of collective attention. More recent work has also examined sentiment and textual signals, arguing that the emotional tone and semantic content of discussions may provide additional predictive value. Alongside these approaches, diffusion-based research has explored how information spreads through social networks and whether early cascade behaviour can signal large future impact.
+Despite its importance, identifying trend emergence at an early stage remains difficult. Social media activity is highly dynamic, noisy, and often short-lived. Many discussions produce brief spikes in attention before fading, while others develop into sustained trends with broader influence. In this review, trend emergence refers to the point at which a topic begins to move beyond ordinary background discussion and shows signs of sustained growth in attention, engagement, or diffusion. This differs from popularity prediction, which mainly estimates the eventual level of attention that content will receive.
 
-Although these approaches provide valuable foundations, they also reveal important limitations. Much of the literature focuses on predicting eventual popularity rather than identifying trend emergence during its earliest stages. Many studies rely primarily on a single category of features, which can limit their ability to capture the multi-dimensional nature of social media behaviour. In addition, a substantial proportion of prior work is developed in broad or platform-general contexts rather than in specific practical domains such as finance, where both sentiment and timing may be especially important.
+<figure align="center">
+  <img src="figures/01-figure-trend-lifecycle.png" alt="Trend Lifecycle" width="500">
+  <figcaption>Figure 1: Trend Lifecycle.</figcaption>
+</figure>
 
-This literature review therefore examines the field through a thematic and critical perspective rather than as a sequence of individual studies. It considers the methodological development of research on early prediction, engagement modelling, sentiment analysis, and diffusion, while evaluating the strengths and limitations of each approach. By doing so, the review builds the case for a project that combines temporal, engagement, and sentiment features to support the early detection of social media trend emergence in the finance domain, addressing gaps in early-stage prediction, multi-feature integration, and domain focused practical modelling.
+Recent research also suggests that online trends should be understood as part of a broader lifecycle rather than as isolated popularity outcomes. Wang and Huberman [6] show that collective attention follows identifiable temporal dynamics, while Kong et al. [7] describe popularity as evolving through stages such as emergence, growth, peak, and decline. Yuan and Li [8] further indicate that early stages of popularity evolution may contain signals that appear before large-scale diffusion. From this perspective, trend emergence is the earliest phase of a broader process, making it distinct from studies that focus mainly on final popularity or later-stage spread.
+
+## 1.3 Scope of the Review and Research Gap
+This literature review examines key methodological approaches relevant to this problem, including early popularity prediction, machine learning and content-based forecasting, sentiment analysis, and information diffusion research. 
+
+<figure align="center">
+  <img src="figures/02-figure-methodologies.png" alt="Early Trend Detection Methodologies" width="500">
+  <figcaption>Figure 2: Early Trend Detection Methodologies.</figcaption>
+</figure>
+ 
+Together, these studies show that online behaviour can be predicted from temporal, behavioural, semantic, and structural signals. However, much of the literature focuses on predicting eventual popularity rather than detecting the earliest stage of trend formation. Many studies also rely on a single category of features, and relatively little attention has been given to finance-specific trend emergence. This review therefore evaluates the strengths and limitations of existing approaches and identifies the research gaps that support a predictive modelling project focused on the early detection of finance-related social media trends.
+
 
 # 2. Foundation
 
