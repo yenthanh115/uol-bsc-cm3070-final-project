@@ -265,6 +265,40 @@ Model performance will be compared against:
 
 A model is considered to demonstrate meaningful predictive signal if it achieves AUC-ROC > 0.60 on the test set.
 
+### 4.5 Statistical Robustness
+
+Single-run point estimates are insufficient for drawing conclusions about model performance, particularly on imbalanced datasets where small changes in the test set composition can produce large metric fluctuations. The evaluation strategy therefore incorporates the following statistical procedures:
+
+**Confidence intervals.** All reported metrics (accuracy, precision, recall, F1, AUC-ROC) will be accompanied by 95% confidence intervals computed via bootstrap resampling (1,000 iterations) on the test set predictions. This quantifies the uncertainty around each estimate and allows meaningful comparison between models — two models are considered to differ meaningfully only if their confidence intervals do not overlap.
+
+**Multiple-seed evaluation.** To assess sensitivity to random initialisation, each model will be trained and evaluated across 5 different random seeds (42, 123, 256, 512, 1024). The temporal split is deterministic (order-based), so seed variation affects model initialisation (Random Forest bootstrap samples, XGBoost column subsampling) rather than the data split itself. Results will report the mean and standard deviation of each metric across seeds. If standard deviations exceed 0.05 for AUC-ROC, this signals instability warranting investigation.
+
+**Paired statistical tests.** To determine whether performance differences between models are statistically significant rather than due to chance, McNemar's test will be applied to paired predictions on the same test set. This is appropriate for comparing two classifiers on the same data without independence assumptions. A significance level of α = 0.05 will be used, with Bonferroni correction applied when comparing multiple model pairs.
+
+### 4.6 Threshold Sensitivity Analysis
+
+The composite surge threshold (default: 2.0) directly controls the class distribution and therefore influences model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiment will be conducted:
+
+**Threshold sweep.** The full pipeline will be executed at threshold values of {1.0, 1.5, 2.0, 2.5, 3.0}, producing five distinct labelling configurations. For each threshold:
+
+- Record the resulting class distribution (surge rate, imbalance ratio)
+- Train all three models (LR, RF, XGBoost) on the relabelled data
+- Evaluate on the corresponding test set and report metrics with confidence intervals
+
+**Expected outcomes and decision criteria:**
+
+| Threshold | Expected surge rate | Expected behaviour |
+|-----------|--------------------|--------------------|
+| 1.0 | ~15–25% | More positive labels; models may achieve high recall but low precision (many false positives) |
+| 1.5 | ~8–15% | Moderate imbalance; potentially best balance between precision and recall |
+| 2.0 | ~3–8% | Default operating point; higher precision but recall may suffer |
+| 2.5 | ~1–4% | Sparse positives; models may struggle to learn the minority class |
+| 3.0 | <2% | Extreme imbalance; likely below viable training threshold |
+
+The threshold producing the highest F1-score on the test set will be reported as the recommended operating point. If multiple thresholds produce similar F1 but different precision-recall trade-offs, both will be presented with guidance on which is preferable depending on the use case (surveillance favours recall; alert systems favour precision).
+
+**Interaction with phased approach.** The threshold sensitivity analysis will be conducted independently for both the engagement-only baseline (Phase 1) and the composite target (Phase 2), enabling comparison of how each target definition responds to threshold variation.
+
 ---
 
 ## 5. Risk Register
