@@ -138,3 +138,22 @@ This document records key design decisions made during the development of the En
 - **Decision:** Add dedicated sections: 1.4 (Unit of Analysis and Prediction Scope) and 1.5 (Surge Definition) with formal mathematical definition.
 - **Rationale:** Without these, the report is ambiguous about what is being predicted. Explicit definitions prevent misinterpretation and strengthen the methodology.
 - **Status:** Accepted
+
+---
+
+## DEC-010: Composite metric scale mismatch — empirical investigation over a priori normalisation
+
+- **Date:** 2026-06-08
+- **Context:** The composite surge formula (`engagement_growth + |sentiment_change|`) combines two components on different scales. Engagement growth is an unbounded ratio (values of 10+ are common for low-engagement posts), while |sentiment_change| is bounded by [0, 2.0] due to TextBlob's polarity range. This means the composite is likely dominated by the engagement component in practice, making the "composite" nature potentially illusory.
+- **Decision:** Retain the raw additive formulation as the starting point. Do not apply a priori normalisation or weighting. Instead, analyse the relative influence of each component experimentally through the existing phased design and threshold sensitivity analysis.
+- **Rationale:**
+  1. Any normalisation scheme (z-scores, min-max, weighting) requires assumptions about relative importance that are not empirically grounded at this stage
+  2. The Phase 1 vs Phase 2 comparison already quantifies sentiment's marginal contribution — if it adds nothing, the scale mismatch is the likely explanation
+  3. The threshold sensitivity analysis will reveal how the effective contribution of each component varies across operating points
+  4. Reporting the dominance pattern (if confirmed) is itself a valid finding rather than a flaw to be hidden
+- **Alternatives considered:**
+  - Z-score normalisation of both components — rejected: requires computing population statistics before labelling, introduces circular dependency with threshold
+  - Weighted sum (e.g., `α * engagement_growth + β * |sentiment_change|`) — rejected: choice of weights would be arbitrary without prior evidence
+  - Separate thresholds per component (engagement > X AND sentiment > Y) — deferred to future work if composite proves inadequate
+- **If analysis confirms dominance:** Will report as finding and discuss alternative formulations (standardised z-scores, weighted sums, multiplicative combination) as future work directions.
+- **Status:** Accepted
