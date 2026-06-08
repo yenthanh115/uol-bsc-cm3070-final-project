@@ -16,6 +16,6 @@ The preliminary report establishes the project foundations:
 
 ## Status
 
-- [ ] Draft started
+- [x] Draft started
 - [ ] Internal review
 - [ ] Submitted
