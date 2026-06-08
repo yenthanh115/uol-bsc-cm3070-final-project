@@ -229,7 +229,7 @@ A model is considered to demonstrate meaningful predictive signal if it achieves
 
 ## 7. Initial Literature Review Summary
 
-### 6.1 Key Research Areas
+### 7.1 Key Research Areas
 
 The project draws on four established research areas within social media prediction and computational finance:
 
@@ -241,32 +241,43 @@ The project draws on four established research areas within social media predict
 
 4. **Information diffusion and cascade prediction** — Work examining how information spreads through social networks, using early propagation patterns and structural properties to forecast whether content will continue growing.
 
-### 6.2 Foundational Papers
+### 7.2 Critical Evaluation of Foundational Works
 
-The following papers form the primary foundations for this project:
+#### Early Popularity Prediction
 
-| # | Authors | Year | Contribution |
-|---|---------|------|-------------|
-| 1 | Szabo & Huberman | 2010 | Demonstrated strong correlations between early and later popularity on YouTube/Digg using simple statistical models |
-| 2 | Lerman & Hogg | 2010 | Highlighted the role of social dynamics and user interaction in shaping content popularity |
-| 3 | Bandari, Asur & Huberman | 2012 | Showed that content and metadata features can predict news popularity with ~84% accuracy before strong engagement occurs |
-| 4 | Bollen, Mao & Zeng | 2011 | Demonstrated that collective mood from Twitter (especially "Calm") predicted Dow Jones movements with ~87.6% directional accuracy |
-| 5 | Cheng, Adamic, Dow, Kleinberg & Leskovec | 2014 | Showed that large cascades can be predicted from early resharing behaviour with AUC of 0.877 |
-| 6 | Wang & Huberman | 2012 | Identified that collective attention follows identifiable temporal dynamics in long-term trends |
-| 7 | Kong, Mao, Chen & Zeng | 2018 | Described popularity as evolving through stages (emergence, growth, peak, decline) |
-| 8 | Yuan & Li | 2025 | Indicated that early stages of popularity evolution contain predictive signals before large-scale diffusion |
+Szabo and Huberman [1] demonstrated strong log-linear correlations between early and later popularity on YouTube and Digg, showing that simple regression on early view counts can predict future attention with high accuracy. However, their model assumes a stationary growth process and relies on content that has already accumulated measurable engagement. This limits applicability to *pre-engagement* prediction — the model cannot make forecasts at or near the time of posting, which is precisely the regime of interest for early surge detection. Furthermore, their evaluation was limited to platforms with specific ranking algorithms (Digg's front-page mechanism), raising questions about generalisability to finance-focused forums where content discovery differs fundamentally.
 
-### 6.3 Identified Research Gap
+Lerman and Hogg [2] modelled the interplay between social network structure and content discovery, highlighting that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach provided mechanistic insight but required detailed knowledge of platform-specific network topology — data rarely available for financial discussion platforms. The model also assumed homogeneous user behaviour, which is unrealistic in stock forums where institutional participants, retail traders, and bots exhibit very different engagement patterns.
 
-Three gaps emerge from the literature that this project addresses:
+#### Machine Learning and Content-Based Prediction
 
-1. **Focus on eventual outcomes** — Most studies predict final popularity, cascade size, or market movement rather than detecting the earliest transition from ordinary discussion to emerging trend.
+Bandari et al. [3] advanced the field by demonstrating that content metadata (source, category, subjectivity, named entities) could predict popularity *before* engagement accumulates, achieving ~84% classification accuracy. This was a methodologically important shift toward pre-publication prediction. However, the study used coarse popularity bins rather than continuous or binary surge targets, and the feature set was designed for news articles rather than user-generated financial discussion. Their reliance on manually engineered features also limits transferability — features like "news source reputation" have no direct analogue in anonymous forum posts. The 84% accuracy figure, while frequently cited, should also be interpreted cautiously: it was measured on a four-class classification task with uneven class sizes, meaning that majority-class baselines already achieve substantial accuracy.
 
-2. **Single-feature reliance** — Many approaches rely on one category of features (temporal, sentiment, or structural alone), even though trend formation is likely driven by interactions among multiple signal types.
+#### NLP and Sentiment Analysis
 
-3. **Limited finance-specific attention** — Despite the importance of sentiment, speculation, and rapid event-driven reactions in financial discussions, relatively little work targets finance-specific surge emergence.
+Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tool (OpinionFinder and GPOMS) also lacks domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify. For this project, TextBlob shares similar lexicon-based limitations, which is acknowledged in the risk register and motivates the choice of a configurable sentiment component.
 
-This project addresses these gaps by combining temporal, engagement, and sentiment features within a composite surge target framework, using a clearly defined 24-hour prediction window applied to stock-related social media discussions.
+#### Information Diffusion and Cascade Prediction
+
+Cheng et al. [5] achieved ~79.5% accuracy (AUC 0.877) predicting whether Facebook photo cascades would double in size, using only early resharing observations. The methodological rigour was strong: large sample size (millions of cascades), temporal features derived from propagation speed, and structural virality metrics. However, the study focused exclusively on image resharing on Facebook — a platform with explicit social graph structure and algorithmic content distribution that differs markedly from text-based financial forums. The cascade framework also assumes discrete, traceable sharing events, whereas engagement on discussion platforms (upvotes, comments) often lacks explicit propagation chains. The concept of "early propagation speed" nevertheless informs this project's `time_since_previous` feature as a proxy for activity acceleration.
+
+#### Lifecycle and Temporal Evolution
+
+Wang and Huberman [6] and Kong et al. [7] characterised popularity as following identifiable temporal lifecycles (emergence → growth → peak → decline). While these frameworks provide useful conceptual grounding, both studies are primarily descriptive rather than predictive — they identify patterns retrospectively but do not offer methods for real-time forecasting. Yuan and Li [8] extended this by suggesting that early-stage signals may predict later evolution, but their work focused on emergency information diffusion rather than financial contexts, and the temporal granularity (days to weeks) is coarser than the 24-hour window relevant to stock discussion surges.
+
+### 7.3 Synthesis and Identified Research Gap
+
+Collectively, the literature establishes three important findings: (a) early behavioural signals contain predictive information about future online attention [1][5]; (b) multiple feature types (temporal, content, sentiment, structural) each contribute explanatory power [2][3][4]; and (c) popularity follows identifiable temporal dynamics that can theoretically be detected early [7][8].
+
+However, three critical gaps remain:
+
+1. **Prediction target mismatch** — Most studies predict *eventual outcomes* (final popularity, total cascade size, market direction) rather than detecting the *onset* of rapid growth within a bounded time window. This distinction matters practically: an analyst does not need to know that a post will eventually receive 10,000 upvotes — they need to know that a surge is developing *now*, within an actionable timeframe. None of the reviewed studies define or predict a composite engagement-and-sentiment surge within a fixed short-term window.
+
+2. **Single-signal approaches** — Each research strand demonstrates the value of one feature category (Szabo: temporal; Bandari: content; Bollen: sentiment; Cheng: structural), yet few studies combine these signals into an integrated predictive framework. The literature suggests that multiple signal types interact during trend formation [2][7], but empirical integration remains limited. This project's multi-signal feature set (Section 3.4) is motivated directly by this gap.
+
+3. **Domain transfer problem** — The reviewed studies draw on general social media (YouTube, Digg, Facebook, Twitter broadly) rather than finance-specific discussion platforms. Financial discussions have distinctive characteristics — event-driven reactions, domain-specific language, speculative behaviour, and regulatory sensitivity — that may invalidate assumptions from general popularity research. Bollen et al. [4] address financial context but predict market outcomes rather than social media dynamics themselves. No reviewed study predicts engagement-and-sentiment surges specifically within stock-related discussion data.
+
+This project addresses all three gaps by defining a composite binary surge target within a fixed 24-hour window, combining temporal, engagement, sentiment, and textual features, and applying the framework specifically to stock-related social media discussions.
 
 ---
 
