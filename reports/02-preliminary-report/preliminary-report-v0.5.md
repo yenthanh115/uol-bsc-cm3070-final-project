@@ -91,15 +91,11 @@ Existing research frequently focuses on predicting overall popularity or analysi
 
 ## 5. Project Plan and Timeline
 
-| Phase | Activities | Target |
-|-------|-----------|--------|
-| Preliminary Report | Project definition, scope, initial lit review, risk register | Phase 1 |
-| Literature Review | Systematic review of engagement prediction, sentiment analysis, surge detection | Phase 2 |
-| Data Pipeline Development | Implement loading, preprocessing, feature engineering, labelling | Phase 3 |
-| Model Training & Evaluation | Train models, evaluate, compare, iterate | Phase 4 |
-| Draft Report | Methodology, initial results, analysis | Phase 5 |
-| Refinement | Address feedback, improve models, expand analysis | Phase 6 |
-| Final Report | Complete write-up, conclusions, future work | Phase 7 |
+
+<figure align="center">
+  <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
+  <figcaption>Figure 1: Project Timeline.</figcaption>
+</figure>
 
 ---
 
