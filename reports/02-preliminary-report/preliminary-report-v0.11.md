@@ -28,7 +28,24 @@ In large social media environments, thousands of stock-related discussions occur
 
 Existing research frequently focuses on predicting overall popularity or analysing already-popular content [1][3], providing less emphasis on forecasting whether a stock-related discussion is about to experience a significant surge within a clearly defined future time window. Studies that do address financial social media often focus on sentiment-to-market correlations [4] rather than on predicting the social media dynamics themselves.
 
-### 1.4 Surge Definition
+### 1.4 Unit of Analysis
+
+The terms *record* and *discussion* are used with distinct meanings throughout this report:
+
+- **Record (Discussion Record)**: A single row in the dataset representing one individual post or comment on a social media platform. Each record has its own timestamp, text body, engagement counts, and unique identifier. This is the atomic unit of analysis — every feature is computed per record, and every prediction is made per record.
+
+- **Discussion (Thread)**: A broader conversational context in which multiple records participate — for example, a Reddit thread or a StockTwits conversation about a particular ticker. The dataset may contain multiple records belonging to the same discussion.
+
+**The prediction target is defined at the record level, not the discussion level.** For a given record observed at time *t*, the system asks: *"Will the surrounding activity in this dataset show a surge pattern within the next 24 hours relative to this record's baseline?"* The "subsequent records within *(t, t + 24h]*" used in the composite computation are all records in the dataset (regardless of thread membership) that fall within that time window. This is a deliberate simplification: rather than modelling thread-level dynamics (which would require reliable thread-linking metadata and substantially more complex labelling logic), the pipeline treats the dataset as a time-ordered stream of individual contributions and measures whether future activity — in aggregate — exhibits growth relative to each observation point.
+
+**Implications and limitations of this choice:**
+
+- The model predicts whether a *record* precedes a surge in overall dataset activity, not whether a specific discussion thread will go viral.
+- Records from the same thread will share overlapping prediction windows, potentially receiving similar labels. This correlation is expected and does not constitute data leakage because the temporal split separates training and test sets chronologically.
+- If the dataset is filtered to a single stock ticker, the prediction effectively becomes: "Will discussion around this ticker surge in the next 24 hours?" — closer to a discussion-level interpretation.
+- Future work could extend this to thread-level aggregation, where features and labels are computed per discussion rather than per record, given sufficiently rich metadata.
+
+### 1.5 Surge Definition
 
 In this project, a **surge** is defined as a statistically significant increase in the composite engagement-and-sentiment metric of a stock-related social media discussion within a fixed 24-hour prediction window. Specifically, for a given discussion record observed at time *t*, the system computes:
 
@@ -45,7 +62,7 @@ A discussion is labelled as a surge (1) if the composite metric exceeds a config
 
 This definition captures cases where discussions experience rapid growth in both public attention and emotional intensity, distinguishing them from discussions that attract engagement without sentiment shifts or vice versa.
 
-### 1.5 Motivation
+### 1.6 Motivation
 
 - Discussions experiencing rapid engagement and sentiment growth often attract broader public attention and may influence information diffusion, investor behaviour, and market perception [4]
 - Platforms hosting financial discussions (e.g., Reddit, StockTwits) process thousands of new posts daily, making manual identification of emerging surges impractical for analysts and researchers
@@ -125,15 +142,15 @@ These features combine temporal, behavioural, sentiment, and textual signals as 
 
 ### 3.5 Composite Target Design
 
-The binary surge target is computed using a forward-looking 24-hour window:
+The binary surge target is computed at the record level using a forward-looking 24-hour window (see Section 1.4 for the unit of analysis):
 
-1. For each record at observation time *t*, identify all subsequent records within *(t, t + 24h]*
+1. For each record at observation time *t*, identify all subsequent records in the dataset within *(t, t + 24h]* — regardless of thread membership
 2. Compute engagement growth: *(future_engagement − current_engagement) / max(current_engagement, 1)*
 3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
 4. Combine: *composite = engagement_growth + |sentiment_change|*
 5. Label: *1* if composite > threshold (default 2.0), else *0*
 
-This approach captures discussions that experience simultaneous growth in both attention and emotional intensity, rather than those with only engagement spikes or only sentiment shifts.
+This approach treats the dataset as a chronologically ordered stream and measures whether the aggregate activity following a given record exhibits a substantial combined shift in engagement and sentiment. It captures records that precede periods of simultaneous growth in both attention and emotional intensity.
 
 ---
 
