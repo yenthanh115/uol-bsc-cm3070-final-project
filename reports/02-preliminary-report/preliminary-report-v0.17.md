@@ -28,35 +28,60 @@ In large social media environments, thousands of stock-related discussions occur
 
 Existing research frequently focuses on predicting overall popularity or analysing already-popular content [1][3], providing less emphasis on forecasting whether a stock-related discussion is about to experience a significant surge within a clearly defined future time window. Studies that do address financial social media often focus on sentiment-to-market correlations [4] rather than on predicting the social media dynamics themselves.
 
-### 1.4 Unit of Analysis
+### 1.4 Unit of Analysis and Prediction Scope
 
-The terms *record* and *discussion* are used with distinct meanings throughout this report:
+A central design question is: *what exactly is being predicted?* The project title refers to "surges in stock-related social media discussions," but this phrase is ambiguous — it could mean a surge within a single thread, a surge across all discussion about a specific ticker, or a surge across an entire subreddit. This section defines the prediction scope precisely.
 
-- **Record (Discussion Record)**: A single row in the dataset representing one individual post or comment on a social media platform. Each record has its own timestamp, text body, engagement counts, and unique identifier. This is the atomic unit of analysis — every feature is computed per record, and every prediction is made per record.
+#### Terminology
 
-- **Discussion (Thread)**: A broader conversational context in which multiple records participate — for example, a Reddit thread or a StockTwits conversation about a particular ticker. The dataset may contain multiple records belonging to the same discussion.
+- **Record**: A single row in the dataset representing one Reddit submission (post). Each record has its own timestamp, title, body text, engagement counts (score, num_comments), and extracted ticker symbols. This is the atomic unit of the dataset.
 
-**The prediction target is defined at the record level, not the discussion level.** For a given record observed at time *t*, the system asks: *"Will the surrounding activity in this dataset show a surge pattern within the next 24 hours relative to this record's baseline?"* The "subsequent records within *(t, t + 24h]*" used in the composite computation are all records in the dataset (regardless of thread membership) that fall within that time window. This is a deliberate simplification: rather than modelling thread-level dynamics (which would require reliable thread-linking metadata and substantially more complex labelling logic), the pipeline treats the dataset as a time-ordered stream of individual contributions and measures whether future activity — in aggregate — exhibits growth relative to each observation point.
+- **Ticker-window**: The set of all records mentioning the same stock ticker within a defined time interval. This is the primary analytical grouping.
 
-**Implications and limitations of this choice:**
+- **Discussion thread**: A Reddit post and its associated comments. Thread-level data is not available in the dataset (comments are not linked to parent submissions), so thread-level prediction is not feasible.
 
-- The model predicts whether a *record* precedes a surge in overall dataset activity, not whether a specific discussion thread will go viral.
-- Records from the same thread will share overlapping prediction windows, potentially receiving similar labels. This correlation is expected and does not constitute data leakage because the temporal split separates training and test sets chronologically.
-- If the dataset is filtered to a single stock ticker, the prediction effectively becomes: "Will discussion around this ticker surge in the next 24 hours?" — closer to a discussion-level interpretation.
-- Future work could extend this to thread-level aggregation, where features and labels are computed per discussion rather than per record, given sufficiently rich metadata.
+#### Prediction target: Per-ticker surge detection
+
+**The prediction operates at the record level but measures surges scoped to the same ticker.** For a given record mentioning ticker $X observed at time *t*, the system asks:
+
+> *"Will discussion about ticker $X experience a surge in engagement and sentiment within the next 24 hours?"*
+
+Specifically, the "subsequent records within *(t, t + 24h]*" used in the composite surge computation are **records in the dataset that mention the same ticker** within that time window. This means:
+
+- A record about $TSLA is evaluated against future $TSLA activity, not against unrelated $AAPL posts
+- The prediction is per-ticker rather than per-subreddit — it detects whether a specific stock's discussion is about to surge
+- Records mentioning multiple tickers contribute to the window of each mentioned ticker independently
+
+This scoping is the most defensible interpretation because:
+
+1. **Conceptual coherence** — "A surge in stock-related discussion" most naturally refers to intensifying activity around a specific stock, not to an entire forum becoming more active. A subreddit-wide surge would conflate unrelated events (e.g., $GME and $AAPL surging simultaneously for different reasons).
+
+2. **Practical utility** — Stakeholders (analysts, surveillance teams) care about surges in discussion around specific securities, not about aggregate forum traffic. A per-ticker prediction directly answers: "Should I pay attention to what's happening with this stock right now?"
+
+3. **Data availability** — The dataset includes extracted ticker symbols per record, making ticker-scoped windowing feasible without requiring thread-linking metadata.
+
+4. **Alignment with the literature** — Early popularity prediction [1][5] and cascade prediction [5] both operate at the level of individual content items or topics, not at the level of entire platforms.
+
+#### Implications and limitations
+
+- Records that do not mention any identifiable ticker are excluded from surge labelling (they lack a grouping key).
+- For tickers with very few records in the dataset, the 24-hour window may contain insufficient data to compute meaningful engagement growth. A minimum record count within the window may be required (to be determined during EDA).
+- Records mentioning multiple tickers receive a label based on the combined activity across all mentioned tickers — an simplification that could be refined by computing per-ticker labels independently.
+- The model still makes predictions at the record level (one prediction per record), but the target label reflects ticker-scoped dynamics rather than subreddit-wide dynamics.
+- If future work uses a single-ticker filtered dataset (e.g., only $GME posts), the ticker scoping becomes equivalent to global scoping within that subset.
 
 ### 1.5 Surge Definition
 
-In this project, a **surge** is defined as a statistically significant increase in the composite engagement-and-sentiment metric of a stock-related social media discussion within a fixed 24-hour prediction window. Specifically, for a given discussion record observed at time *t*, the system computes:
+In this project, a **surge** is defined as a statistically significant increase in the composite engagement-and-sentiment metric for a specific stock ticker within a fixed 24-hour prediction window. Specifically, for a given record mentioning ticker $X observed at time *t*, the system computes:
 
-- **Engagement growth**: the relative change in cumulative engagement (likes, comments, shares, upvotes) between time *t* and *t + 24h*.
-- **Sentiment change**: the absolute difference between the sentiment polarity at observation time and the mean sentiment polarity of subsequent records within the window.
+- **Engagement growth**: the relative change in cumulative engagement (score, num_comments) across all $X-mentioning records between time *t* and *t + 24h*.
+- **Sentiment change**: the absolute difference between the sentiment polarity at observation time and the mean sentiment polarity of subsequent $X-mentioning records within the window.
 
 The **composite surge metric** is defined as:
 
 > *composite = engagement_growth + |sentiment_change|*
 
-A discussion is labelled as a surge (1) if the composite metric exceeds a configurable threshold (default: 2.0), and no-surge (0) otherwise.
+A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold (default: 2.0), and no-surge (0) otherwise.
 
 **Threshold justification.** The default threshold of 2.0 is motivated by the scale of each component. Engagement growth is a ratio where 1.0 represents a doubling of interactions, while sentiment change is bounded by approximately [0, 2.0] given that TextBlob polarity ranges from −1 to +1. A composite threshold of 2.0 therefore requires a substantial combined shift — for example, engagement tripling with no sentiment movement, or engagement doubling alongside a full polarity reversal. Lower thresholds (e.g., 1.5) risk labelling routine fluctuations as surges, inflating the positive class with non-exceptional events. Higher thresholds (e.g., 3.0) would produce very few positive labels, limiting the model's ability to learn meaningful patterns from sparse examples. The value 2.0 balances selectivity against sufficient sample size for model training. Critically, this parameter is configurable and will be subject to a sensitivity analysis (see Risk Register, Risk #6) to assess how threshold variation affects class distribution and model performance across the dataset.
 
@@ -182,15 +207,15 @@ These features combine temporal, behavioural, sentiment, and textual signals as 
 
 ### 3.5 Composite Target Design
 
-The binary surge target is computed at the record level using a forward-looking 24-hour window (see Section 1.4 for the unit of analysis):
+The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker (see Section 1.4 for the unit of analysis):
 
-1. For each record at observation time *t*, identify all subsequent records in the dataset within *(t, t + 24h]* — regardless of thread membership
+1. For each record mentioning ticker $X at observation time *t*, identify all subsequent records **that also mention $X** within *(t, t + 24h]*
 2. Compute engagement growth: *(future_engagement − current_engagement) / max(current_engagement, 1)*
 3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
 4. Combine: *composite = engagement_growth + |sentiment_change|*
 5. Label: *1* if composite > threshold (default 2.0), else *0*
 
-This approach treats the dataset as a chronologically ordered stream and measures whether the aggregate activity following a given record exhibits a substantial combined shift in engagement and sentiment. It captures records that precede periods of simultaneous growth in both attention and emotional intensity.
+This approach measures whether the discussion around a specific stock exhibits a substantial combined shift in engagement and sentiment following the observation point. It captures records that precede per-ticker surges — periods where a specific stock attracts simultaneous growth in both attention and emotional intensity — rather than detecting subreddit-wide activity spikes that may conflate unrelated events.
 
 ---
 
