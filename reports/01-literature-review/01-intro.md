@@ -8,7 +8,7 @@ Social media platforms are major spaces for the rapid spread of information, opi
 Despite its importance, identifying trend emergence at an early stage remains difficult. Social media activity is highly dynamic, noisy, and often short-lived. Many discussions produce brief spikes in attention before fading, while others develop into sustained trends with broader influence. In this review, trend emergence refers to the point at which a topic begins to move beyond ordinary background discussion and shows signs of sustained growth in attention, engagement, or diffusion. This differs from popularity prediction, which mainly estimates the eventual level of attention that content will receive.
 
 <figure align="center">
-  <img src="figures/01-figure-trend-lifecycle.png" alt="Trend Lifecycle" width="500">
+  <img src="figures/01-trend-lifecycle.png" alt="Trend Lifecycle" width="500">
   <figcaption>Figure 1: Trend Lifecycle.</figcaption>
 </figure>
 
@@ -18,7 +18,7 @@ Recent research also suggests that online trends should be understood as part of
 This literature review examines key methodological approaches relevant to this problem, including early popularity prediction, machine learning and content-based forecasting, sentiment analysis, and information diffusion research. 
 
 <figure align="center">
-  <img src="figures/02-figure-methodologies.png" alt="Early Trend Detection Methodologies" width="500">
+  <img src="figures/02-methodologies.png" alt="Early Trend Detection Methodologies" width="500">
   <figcaption>Figure 2: Early Trend Detection Methodologies.</figcaption>
 </figure>
  
