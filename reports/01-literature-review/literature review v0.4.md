@@ -1,4 +1,4 @@
-# Introduction
+# 1. Introduction
 
 Social media platforms have become important environments for the rapid spread of information, opinion, and public discussion. Topics can gain attention within hours through reposts, comments, likes, hashtags, and user interaction, making social media a major source of real-time signals about emerging public interest. The early detection of such trends has practical value across many domains, including marketing, journalism, public opinion monitoring. In the finance domain in particular, sudden increases in online discussion and sentiment may influence investor attention, shape market sentiment, and affect short-term behaviour, making early identification of emerging trends especially valuable.
 
@@ -10,7 +10,7 @@ Although these approaches provide valuable foundations, they also reveal importa
 
 This literature review therefore examines the field through a thematic and critical perspective rather than as a sequence of individual studies. It considers the methodological development of research on early prediction, engagement modelling, sentiment analysis, and diffusion, while evaluating the strengths and limitations of each approach. By doing so, the review builds the case for a project that combines temporal, engagement, and sentiment features to support the early detection of social media trend emergence in the finance domain, addressing gaps in early-stage prediction, multi-feature integration, and domain focused practical modelling.
 
-# Foundation
+# 2. Foundation
 
 One of the earliest foundations of research relevant to social media trend prediction is early popularity prediction. This body of work is important because it established the idea that the initial behaviour of users interacting with online content may contain signals about future outcomes. Although early popularity prediction is not identical to trend emergence detection, it provides a useful starting point for understanding how early-stage online activity can be analysed to anticipate later growth. In this sense, foundation studies in popularity prediction support the broader argument that early trend prediction is possible. 
 
@@ -25,7 +25,7 @@ However, these foundational approaches also reveal clear limitations when consid
 
 These limitations are especially important in a domain such as finance, where timing, public reaction, and emotional tone may all contribute to whether online discussion becomes practically significant. Foundational studies therefore support the feasibility of early prediction, but they do not fully address the challenges of early-stage, domain-focused trend detection. This creates the need for later approaches that integrate a broader set of predictive signals, including temporal, engagement, and sentiment features, which is the direction taken by the current project.
 
-# Machine Learning and Content-Based Prediction
+# 3. Machine Learning and Content-Based Prediction
 
 As research on social media prediction developed, methods began moving beyond simple temporal popularity measurements toward machine learning approaches that incorporated a wider range of predictive features. This marked an important methodological shift. Earlier studies had shown that initial attention levels could help forecast later popularity, but newer work suggest that prediction could be improved by analysing not only how users interact with content, but also the characteristics of the content itself.  This development was significant because both popularity and trend emergence are shaped by multiple influences, including temporal behaviour, source attributes, linguistic form, and audience response, rather than by any single factor alone.
 
@@ -37,7 +37,7 @@ Another limitation is that content-based prediction did not necessarily amount t
 
 Overall, this stage of the literature is important because it demonstrates that social media prediction benefits from combining multiple types of signals rather than relying on a single indicator. At the same time, it also shows that early machine learning approaches were only a partial solution. Their strengths lie in expanding the range of usable features, while their limitations help justify later work that integrates temporal, engagement, and sentiment features more directly, which is the direction taken by the current project.
 
-# NLP and Sentiment Analysis in Social Media Prediction
+# 4. NLP and Sentiment Analysis in Social Media Prediction
 
 As social media platforms developed into major spaces for public discussion and opinion expression, researchers increasingly explored whether the linguistic and emotional content of posts could provide predictive information about collective behaviour and real-world events. This led to the growing use of natural language processing (NLP) and sentiment analysis in predictive modelling research. Unlike earlier approaches that relied mainly on engagement counts or temporal growth patterns, sentiment-based approaches aim to capture the meaning, tone, and emotional dynamics of user-generated content.
 
