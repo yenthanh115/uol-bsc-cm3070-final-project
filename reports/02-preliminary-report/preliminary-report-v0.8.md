@@ -133,7 +133,55 @@ This approach captures discussions that experience simultaneous growth in both a
 
 ---
 
-## 4. Risk Register
+## 4. Evaluation Strategy
+
+### 4.1 Performance Metrics
+
+Each trained model will be evaluated on the temporally held-out test set using the following classification metrics:
+
+| Metric | Purpose |
+|--------|---------|
+| **Accuracy** | Overall proportion of correct predictions |
+| **Precision** | Proportion of predicted surges that are actual surges (minimises false alarms) |
+| **Recall** | Proportion of actual surges that are correctly predicted (minimises missed surges) |
+| **F1-Score** | Harmonic mean of precision and recall, balancing both concerns |
+| **AUC-ROC** | Area under the Receiver Operating Characteristic curve; measures discriminative ability across all classification thresholds |
+
+Given the expected class imbalance (surges are rare events), precision-recall trade-offs and AUC-ROC will be prioritised over raw accuracy as primary evaluation criteria.
+
+### 4.2 Evaluation Artefacts
+
+The evaluation module will produce the following artefacts for inclusion in the final report:
+
+- **Confusion matrices** — One per model, visualising true positives, false positives, true negatives, and false negatives
+- **Combined ROC curve plot** — All models on a single figure with AUC values for direct comparison
+- **Metrics summary table** — Structured CSV/JSON file with all metrics per model, suitable for tabular inclusion in the report
+- **Feature importance rankings** — For tree-based models (Random Forest, XGBoost), documenting which features contribute most to predictions
+
+### 4.3 Train-Test Split Strategy
+
+The dataset will be split using **temporal ordering** rather than random sampling to prevent data leakage:
+
+- Records are sorted chronologically by timestamp
+- The first 80% (configurable) form the training set
+- The remaining 20% form the test set
+- This ensures no future information leaks into training, reflecting realistic deployment conditions
+
+This approach is critical because random splitting would allow the model to observe future engagement patterns during training, artificially inflating performance [5].
+
+### 4.4 Baseline Comparison
+
+Model performance will be compared against:
+
+- **Random baseline** — AUC-ROC of 0.5 (no discriminative power)
+- **Majority-class baseline** — Always predicting "no surge" (establishes the floor for accuracy)
+- **Single-feature baselines** — Individual features used alone as predictors to assess marginal contribution
+
+A model is considered to demonstrate meaningful predictive signal if it achieves AUC-ROC > 0.60 on the test set.
+
+---
+
+## 5. Risk Register
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|------|-----------|--------|------------|
@@ -148,7 +196,7 @@ This approach captures discussions that experience simultaneous growth in both a
 
 ---
 
-## 5. Project Plan and Timeline
+## 6. Project Plan and Timeline
 
 
 <figure align="center">
@@ -158,7 +206,7 @@ This approach captures discussions that experience simultaneous growth in both a
 
 ---
 
-## 6. Initial Literature Review Summary
+## 7. Initial Literature Review Summary
 
 ### 6.1 Key Research Areas
 
@@ -201,7 +249,7 @@ This project addresses these gaps by combining temporal, engagement, and sentime
 
 ---
 
-## 7. Success Criteria
+## 8. Success Criteria
 
 - Pipeline executes end-to-end on the static dataset without errors
 - At least one model achieves AUC-ROC > 0.60 on the test set (indicating predictive signal above random)
