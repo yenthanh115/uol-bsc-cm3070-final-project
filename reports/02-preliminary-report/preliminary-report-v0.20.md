@@ -65,7 +65,7 @@ This scoping is the most defensible interpretation because:
 #### Implications and limitations
 
 - Records that do not mention any identifiable ticker are excluded from surge labelling (they lack a grouping key).
-- For tickers with very few records in the dataset, the 24-hour window may contain insufficient data to compute meaningful engagement growth. A minimum record count within the window may be required (to be determined during EDA).
+- **Ticker sparsity (Risk #9).** For tickers with very few records in the dataset, the 24-hour window may contain 0, 1, or 2 future records — too few to compute a stable engagement growth ratio or meaningful mean sentiment. A single outlier post in a sparse window could flip the surge label arbitrarily. This is likely to affect the majority of the 2,912 tickers in the pennystocks dataset, as ticker frequency distributions in social media follow a heavy-tailed power law (a small number of tickers dominate discussion volume). Mitigation: enforce a minimum record count (default N ≥ 3) within each ticker's 24-hour window; records failing this threshold will be excluded from surge labelling. The exclusion rate and its effect on class distribution will be quantified during EDA.
 - Records mentioning multiple tickers receive a label based on the combined activity across all mentioned tickers — an simplification that could be refined by computing per-ticker labels independently.
 - The model still makes predictions at the record level (one prediction per record), but the target label reflects ticker-scoped dynamics rather than subreddit-wide dynamics.
 - If future work uses a single-ticker filtered dataset (e.g., only $GME posts), the ticker scoping becomes equivalent to global scoping within that subset.
@@ -315,6 +315,7 @@ The threshold producing the highest F1-score on the test set will be reported as
 | 6 | Composite target threshold sensitivity | Medium | Medium | Sensitivity analysis across multiple thresholds |
 | 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models |
 | 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup |
+| 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude or flag records where window contains 0–2 future records; report exclusion rate; conduct sensitivity analysis on minimum-N threshold during EDA |
 
 ---
 

@@ -157,3 +157,43 @@ This document records key design decisions made during the development of the En
   - Separate thresholds per component (engagement > X AND sentiment > Y) — deferred to future work if composite proves inadequate
 - **If analysis confirms dominance:** Will report as finding and discuss alternative formulations (standardised z-scores, weighted sums, multiplicative combination) as future work directions.
 - **Status:** Accepted
+
+---
+
+## DEC-011: Per-ticker sparsity — minimum window record count
+
+- **Date:** 2026-06-08
+- **Context:** The per-ticker surge computation requires future records mentioning the same ticker within a 24-hour window. Many tickers (likely the majority of the 2,912 in pennystocks) have very sparse posting activity — their 24h window may contain 0, 1, or 2 future records. With so few data points, engagement growth becomes a ratio of near-zero denominators, and mean sentiment is computed from 1–2 samples, making the composite metric numerically unstable and the surge label essentially random.
+- **Decision:** Enforce a minimum record count (default N ≥ 3) within each ticker's 24-hour forward window. Records that do not meet this threshold are excluded from surge labelling entirely (they receive no label and are dropped from training/evaluation).
+- **Rationale:**
+  1. A ratio computed from 0–2 future observations is not statistically meaningful — a single outlier can flip the label
+  2. Mean sentiment from 1–2 records has no interpretive value (no regression toward any true mean)
+  3. Excluding unstable labels is preferable to training on noise
+  4. The exclusion rate quantifies how much of the dataset is affected, which is itself informative about the dataset's suitability for per-ticker analysis
+- **Alternatives considered:**
+  - No minimum (include all records) — rejected: would produce noisy labels that degrade model learning
+  - Higher minimum (N ≥ 5 or N ≥ 10) — deferred: may exclude too much data, but will be tested in sensitivity analysis
+  - Imputation or smoothing (e.g., Bayesian shrinkage toward global mean) — considered for future work: adds complexity without clear benefit at this stage
+  - Fallback to subreddit-scoped windowing for sparse tickers — rejected: breaks conceptual coherence of per-ticker design
+- **Validation plan:** During EDA, compute the distribution of per-ticker window sizes across the dataset. Report: (a) what fraction of records are excluded at N ≥ 3, (b) how exclusion rate changes at N ∈ {1, 2, 3, 5, 10}, (c) whether excluded records are systematically different from retained records.
+- **Risk classification:** Elevated to formal risk (Risk #9, Likelihood: High, Impact: High) because ticker frequency follows a power-law distribution — most tickers are mentioned rarely.
+- **Status:** Accepted (N ≥ 3 as default, subject to EDA sensitivity analysis)
+
+---
+
+## DEC-011: Per-ticker sparsity mitigation — minimum record count in prediction window
+
+- **Date:** 2026-06-08
+- **Context:** The per-ticker surge scoping (DEC-002) means that for a given record mentioning ticker $X at time t, only future records also mentioning $X within (t, t+24h] are used to compute engagement growth and sentiment change. For tickers with very few posts, this window may contain 0–2 records, making the surge metric unstable or meaningless (e.g., a single future post with slightly different sentiment could trigger a "surge" label).
+- **Decision:** Enforce a minimum record count of N ≥ 3 within the 24-hour ticker window. Records where the window contains fewer than 3 future same-ticker records are excluded from surge labelling (or flagged for sensitivity analysis).
+- **Rationale:**
+  1. With 0–1 future records, engagement growth and sentiment change are either undefined or based on a single observation — statistically meaningless
+  2. With 2 records, the "mean future sentiment" is an average of 2 points — highly sensitive to individual outliers
+  3. N ≥ 3 provides a minimal basis for computing meaningful aggregate statistics while preserving as much data as possible
+  4. The exclusion rate will be reported to quantify data loss, and sensitivity analysis on the minimum-N threshold will be conducted during EDA
+- **Alternatives considered:**
+  - No minimum (use all records) — rejected: produces unreliable labels that could mislead the model
+  - N ≥ 5 or N ≥ 10 — considered: higher thresholds are more statistically stable but may exclude too much data for low-activity tickers; will be tested in sensitivity analysis
+  - Imputation for sparse windows (e.g., carry forward last known values) — rejected: introduces assumptions not grounded in observed behaviour
+- **Risk addressed:** Risk Register #9 (Per-ticker sparsity destabilises surge metric)
+- **Status:** Accepted (subject to sensitivity analysis on minimum-N during EDA)
