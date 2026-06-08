@@ -100,7 +100,29 @@ This definition captures cases where discussions experience rapid growth in both
 - Standard evaluation metrics and visualisations
 - Reproducible pipeline with seeded randomness
 
-### 2.2 Out of Scope
+### 2.2 Dataset
+
+The primary data source is the **Reddit Finance Data** dataset published on Kaggle (https://www.kaggle.com/datasets/leukipp/reddit-finance-data). This dataset contains submissions from nine stock-related subreddits collected over the calendar year 2021, totalling approximately **1.38 million records** across the following communities:
+
+| Subreddit | Records | Tickers | Engagement (mean score) | Selftext Missing |
+|-----------|---------|---------|------------------------|-----------------|
+| wallstreetbets | 775,326 | 4,451 | 116.0 | 33.8% |
+| gme | 273,327 | 340 | 101.3 | 48.7% |
+| stocks | 75,857 | 1,963 | 30.2 | 0.1% |
+| StockMarket | 72,620 | 1,597 | 6.3 | 29.2% |
+| pennystocks | 54,785 | 2,912 | 29.4 | 20.7% |
+| stockmarket | 43,809 | 1,475 | 35.0 | 39.1% |
+| investing | 41,912 | 990 | 17.8 | 0.0% |
+| robinhoodpennystocks | 23,304 | 855 | 30.8 | 36.0% |
+| robinhood | 18,893 | 294 | 5.5 | 25.3% |
+
+Each record includes a unique post ID, creation timestamp, title, body text (selftext), engagement metrics (score, num_comments), subreddit, and extracted ticker symbols. The date range covers January–December 2021, a period of high retail trading activity that includes the GameStop short squeeze and subsequent meme-stock phenomena.
+
+**Primary dataset selection.** Based on exploratory data analysis (see Appendix: EDA Report), `pennystocks/submissions_reddit.csv` (54,785 records, 2,912 tickers) is recommended as the primary development dataset due to high data completeness (20.7% selftext missing — lowest among larger subreddits), sufficient volume for model training, and diverse ticker coverage. The `wallstreetbets` and `gme` datasets are retained as secondary validation sets to test generalisability across communities with different engagement distributions.
+
+**Surge viability.** Preliminary surge analysis across 81 threshold configurations confirms that viable composite surge definitions exist (44 configurations produce ≥2% positive class rate). At the recommended operating point (engagement ≥ 90th percentile, sentiment shift ≥ 0.5 standard deviations, 24-hour window), surge rates range from 5–9% across most subreddits, producing imbalance ratios of 10:1 to 18:1 — challenging but tractable with appropriate evaluation strategies (see Risk Register, Risk #1).
+
+### 2.3 Out of Scope
 
 - Real-time or live data ingestion from APIs
 - Deployment as a production service
