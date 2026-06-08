@@ -44,13 +44,19 @@ Existing research frequently focuses on predicting overall popularity or analysi
 
 ### 2.2 Out of Scope
 
+- Real-time or live data ingestion from APIs
+- Deployment as a production service
+- Trading signals or financial advice
+- Multi-class or regression targets
+- Cross-platform data fusion (single source dataset)
+
 ---
 
 ## 3. Proposed Methodology
 
 ### 3.1 Data Pipeline Stages
 
-1. **Data Loading** — Read static dataset from disk (CSV)
+1. **Data Loading** — Read static dataset from disk (CSV/Parquet)
 2. **Preprocessing** — Deduplicate, parse timestamps, normalise text, remove nulls
 3. **Feature Engineering** — Compute sentiment, temporal, engagement-rate, and text features
 4. **Target Labelling** — Compute composite surge target using 24-hour prediction window
@@ -58,6 +64,13 @@ Existing research frequently focuses on predicting overall popularity or analysi
 6. **Evaluation** — Compute metrics, generate confusion matrices and ROC curves
 
 ### 3.2 Tools and Technologies
+
+- Python 3.10+
+- pandas, numpy, scikit-learn, XGBoost
+- TextBlob (sentiment analysis)
+- matplotlib (visualisation)
+- Jupyter notebooks (exploration)
+- pytest + Hypothesis (testing)
 
 ---
 
@@ -77,6 +90,16 @@ Existing research frequently focuses on predicting overall popularity or analysi
 ---
 
 ## 5. Project Plan and Timeline
+
+| Phase | Activities | Target |
+|-------|-----------|--------|
+| Preliminary Report | Project definition, scope, initial lit review, risk register | Phase 1 |
+| Literature Review | Systematic review of engagement prediction, sentiment analysis, surge detection | Phase 2 |
+| Data Pipeline Development | Implement loading, preprocessing, feature engineering, labelling | Phase 3 |
+| Model Training & Evaluation | Train models, evaluate, compare, iterate | Phase 4 |
+| Draft Report | Methodology, initial results, analysis | Phase 5 |
+| Refinement | Address feedback, improve models, expand analysis | Phase 6 |
+| Final Report | Complete write-up, conclusions, future work | Phase 7 |
 
 ---
 
@@ -111,9 +134,23 @@ The following papers form the primary foundations for this project:
 
 ### 6.3 Identified Research Gap
 
+Three gaps emerge from the literature that this project addresses:
+
+1. **Focus on eventual outcomes** — Most studies predict final popularity, cascade size, or market movement rather than detecting the earliest transition from ordinary discussion to emerging trend.
+
+2. **Single-feature reliance** — Many approaches rely on one category of features (temporal, sentiment, or structural alone), even though trend formation is likely driven by interactions among multiple signal types.
+
+3. **Limited finance-specific attention** — Despite the importance of sentiment, speculation, and rapid event-driven reactions in financial discussions, relatively little work targets finance-specific surge emergence.
+
+This project addresses these gaps by combining temporal, engagement, and sentiment features within a composite surge target framework, using a clearly defined 24-hour prediction window applied to stock-related social media discussions.
 
 ---
 
 ## 7. Success Criteria
 
+- Pipeline executes end-to-end on the static dataset without errors
+- At least one model achieves AUC-ROC > 0.60 on the test set (indicating predictive signal above random)
+- All pipeline stages are reproducible with fixed random seed
+- Code is well-documented and structured for academic submission
+- Report clearly articulates methodology, results, and limitations
 
