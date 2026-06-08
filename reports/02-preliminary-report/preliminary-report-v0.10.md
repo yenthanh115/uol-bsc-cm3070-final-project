@@ -39,7 +39,11 @@ The **composite surge metric** is defined as:
 
 > *composite = engagement_growth + |sentiment_change|*
 
-A discussion is labelled as a surge (1) if the composite metric exceeds a configurable threshold (default: 2.0), and no-surge (0) otherwise. This definition captures cases where discussions experience rapid growth in both public attention and emotional intensity, distinguishing them from discussions that attract engagement without sentiment shifts or vice versa.
+A discussion is labelled as a surge (1) if the composite metric exceeds a configurable threshold (default: 2.0), and no-surge (0) otherwise.
+
+**Threshold justification.** The default threshold of 2.0 is motivated by the scale of each component. Engagement growth is a ratio where 1.0 represents a doubling of interactions, while sentiment change is bounded by approximately [0, 2.0] given that TextBlob polarity ranges from −1 to +1. A composite threshold of 2.0 therefore requires a substantial combined shift — for example, engagement tripling with no sentiment movement, or engagement doubling alongside a full polarity reversal. Lower thresholds (e.g., 1.5) risk labelling routine fluctuations as surges, inflating the positive class with non-exceptional events. Higher thresholds (e.g., 3.0) would produce very few positive labels, limiting the model's ability to learn meaningful patterns from sparse examples. The value 2.0 balances selectivity against sufficient sample size for model training. Critically, this parameter is configurable and will be subject to a sensitivity analysis (see Risk Register, Risk #6) to assess how threshold variation affects class distribution and model performance across the dataset.
+
+This definition captures cases where discussions experience rapid growth in both public attention and emotional intensity, distinguishing them from discussions that attract engagement without sentiment shifts or vice versa.
 
 ### 1.5 Motivation
 
