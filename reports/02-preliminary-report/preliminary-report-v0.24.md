@@ -301,7 +301,7 @@ Single-run point estimates are insufficient for drawing conclusions about model 
 
 The composite surge threshold (default: 2.0) directly controls the class distribution and therefore influences model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiment will be conducted:
 
-**Threshold sweep.** The full pipeline will be executed at threshold values of {1.0, 1.5, 2.0, 2.5, 3.0}, producing five distinct labelling configurations. For each threshold:
+**Threshold sweep.** The full pipeline will be executed at threshold values of {1.0, 1.5, 2.0, 2.5, 3.0}, producing five distinct labelling configurations. The pipeline is designed for parameterised batch execution, allowing all threshold × model × seed × phase combinations to run without manual intervention. For each threshold:
 
 - Record the resulting class distribution (surge rate, imbalance ratio)
 - Train all three models (LR, RF, XGBoost) on the relabelled data
