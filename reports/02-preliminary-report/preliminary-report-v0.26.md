@@ -277,6 +277,12 @@ The dataset will be split using **temporal ordering** rather than random samplin
 
 This approach is critical because random splitting would allow the model to observe future activity patterns during training, artificially inflating performance [5].
 
+**Temporal concept drift.** The dataset spans January–December 2021, a period of significant regime change in retail trading activity. The first quarter (GameStop short squeeze, meme-stock mania) exhibits fundamentally different engagement dynamics than Q3–Q4 (post-squeeze normalisation, declining retail participation). With an 80/20 temporal split, the training set covers approximately January–October and the test set covers November–December. These periods may differ in base surge rates, active ticker composition, and posting patterns — a form of temporal concept drift that could depress test performance regardless of model quality. To characterise this risk, the evaluation will:
+
+- Report the surge rate (positive class proportion) separately for the training and test partitions
+- If rates differ substantially (>50% relative difference), discuss the implications for model generalisation
+- Note this as a limitation inherent to the single temporal split design; a sliding-window evaluation across multiple time periods would provide a more complete picture but is deferred to future work due to computational scope
+
 ### 4.4 Hyperparameter Tuning via Temporal Cross-Validation
 
 Hyperparameter selection for each model is conducted within the training partition using **expanding-window temporal cross-validation**. This ensures that tuning decisions respect chronological ordering and do not leak future information into model configuration.
