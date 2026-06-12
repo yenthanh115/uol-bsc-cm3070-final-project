@@ -77,17 +77,27 @@ In this project, a **surge** is defined as a statistically significant increase 
 - **Posting volume growth**: the relative change in the number of posts mentioning ticker $X between the prior 24 hours and the subsequent 24 hours — specifically, *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*.
 - **Sentiment change**: the absolute difference between the sentiment polarity at observation time and the mean sentiment polarity of subsequent $X-mentioning records within the window.
 
-The **composite surge metric** is defined as:
+The **composite surge metric** is defined using z-score normalisation to ensure both components contribute equally:
 
-> *composite = posting_volume_growth + |sentiment_change|*
+> *z_volume = (posting_volume_growth − μ_vol) / σ_vol*
+>
+> *z_sentiment = (|sentiment_change| − μ_sent) / σ_sent*
+>
+> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
-A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold, and no-surge (0) otherwise.
+where μ and σ are the mean and standard deviation of each raw component computed from the training partition only, and w₁ = w₂ = 0.5 by default (equal weighting).
+
+A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold *τ* (in standard deviation units), and no-surge (0) otherwise.
+
+**Why z-score normalisation.** The two raw components operate on fundamentally different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling, but values of 10+ are common for tickers that go from 1–2 posts/day to 10+), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. Without normalisation, the composite metric would be dominated by the volume component — rendering sentiment structurally unable to influence the surge label. This would undermine the core research question (does sentiment add predictive value?) by preventing sentiment from affecting the target definition in Phase 2. Z-score normalisation places both components on a common zero-mean, unit-variance scale, ensuring that each contributes proportionally to the composite regardless of its raw magnitude. The threshold *τ* then has a clear statistical interpretation: "the combined signal exceeds *τ* standard deviations above the typical joint activity level."
 
 **Why posting volume rather than engagement scores.** The dataset provides engagement metrics (score, num_comments) as final snapshot values at crawl time, not as point-in-time values at post creation. Using these values in the surge formula would introduce a circular dependency: posts that eventually experience a surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than detecting its onset. Posting volume growth — the increase in the number of posts about a ticker — is derived entirely from creation timestamps, which are fixed at post creation and uncontaminated by future activity. A value of 1.0 means the number of posts about $X doubled; 2.0 means it tripled.
 
-**Threshold determination.** The default composite threshold will be determined empirically during EDA rather than set a priori. The two components operate on different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. The threshold sensitivity analysis (Section 4.7) will sweep a range of candidate values and select the operating point that balances class distribution against model trainability. The goal is to produce a surge rate of approximately 5–10% (imbalance ratio 10:1 to 18:1) as indicated by the preliminary viability analysis (Section 2.2).
+**Normalisation statistics and data leakage prevention.** The mean (μ) and standard deviation (σ) for each component are computed exclusively from the training partition (the first 80% of records by timestamp). Test-set records are normalised using these training-set statistics, not their own. This prevents information about the test distribution from leaking into the labelling process. Because the normalisation is fitted on training data, the z-scores on test records may not be perfectly centred at zero — this is expected and mirrors realistic deployment conditions where future distributional shifts are unknown.
 
-**Scale considerations.** The two components operate on different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling, but values of 10+ are possible for tickers that go from 1–2 posts/day to 10+), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. This asymmetry means that in practice, the composite metric may be dominated by the volume component for tickers experiencing rapid posting acceleration. Rather than applying an *a priori* normalisation or weighting scheme — which would require assumptions about the relative importance of each signal that are not empirically grounded — this project treats the raw additive formulation as the starting point and commits to analysing the relative influence of each component experimentally. Specifically, the Phase 1 vs Phase 2 comparison (below) will quantify the marginal contribution of sentiment, and the threshold sensitivity analysis (Section 4.7) will examine how the effective contribution of each component varies across operating points. If the analysis reveals that sentiment is consistently negligible relative to volume growth, this will be reported as a finding and alternative formulations (e.g., standardised z-scores, weighted sums, or separate thresholds per component) will be discussed as directions for future work.
+**Threshold determination.** The composite threshold *τ* will be determined empirically during EDA rather than set a priori. Because both components are standardised, *τ* is expressed in units of standard deviations of the combined metric. The threshold sensitivity analysis (Section 4.7) will sweep a range of candidate values and select the operating point that balances class distribution against model trainability. The goal is to produce a surge rate of approximately 5–10% (imbalance ratio 10:1 to 18:1) as indicated by the preliminary viability analysis (Section 2.2).
+
+**Configurable weighting.** The default equal weighting (w₁ = w₂ = 0.5) reflects an agnostic prior about the relative importance of volume versus sentiment in defining a surge. The weight sensitivity analysis (Section 4.7) will sweep w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} (with w₁ = 1 − w₂) to empirically assess how the relative contribution of each component affects class distribution and model performance. This directly supports the Phase 1 vs Phase 2 comparison: Phase 1 uses w₂ = 0 (volume only), while Phase 2 uses w₂ = 0.5 (equal composite).
 
 **Rationale for a composite metric.** Engagement and sentiment are combined into a single target rather than treated as separate prediction tasks for three reasons:
 
@@ -99,9 +109,9 @@ A record is labelled as a surge (1) if the composite metric exceeds a configurab
 
 **Phased experimental approach.** To empirically validate the composite design, the project adopts a two-phase modelling strategy:
 
-- **Phase 1 (Baseline): Volume-only prediction.** The initial models will be trained using a posting-volume-only surge target — labelling records based solely on posting volume growth exceeding a threshold, without incorporating sentiment change. This establishes a performance baseline grounded in the most directly observable signal and aligns with the early popularity prediction literature [1][5], which demonstrates that activity-based features carry strong predictive power on their own.
+- **Phase 1 (Baseline): Volume-only prediction.** The initial models will be trained using a posting-volume-only surge target — setting w₂ = 0 so that the composite reduces to z_volume alone, labelling records based solely on standardised posting volume growth exceeding the threshold. This establishes a performance baseline grounded in the most directly observable signal and aligns with the early popularity prediction literature [1][5], which demonstrates that activity-based features carry strong predictive power on their own.
 
-- **Phase 2 (Advanced): Composite volume + sentiment prediction.** The full composite target (posting_volume_growth + |sentiment_change|) will then be introduced, with models trained on the combined feature set including sentiment scores. Comparing Phase 2 against the Phase 1 baseline directly measures the marginal predictive contribution of sentiment signals. If the composite model outperforms the volume-only baseline, this provides empirical evidence that sentiment integration adds value beyond posting activity alone — supporting the theoretical motivation. If performance is equivalent or worse, this informs a critical discussion about whether sentiment signals are redundant or too noisy in this domain.
+- **Phase 2 (Advanced): Composite volume + sentiment prediction.** The full composite target (w₁ × z_volume + w₂ × z_sentiment, with w₁ = w₂ = 0.5) will then be introduced, with models trained on the combined feature set including sentiment scores. Because the z-score normalisation guarantees that sentiment carries equal weight in the label definition, any performance difference between Phase 1 and Phase 2 reflects a genuine contribution (or lack thereof) from the sentiment signal — not an artefact of scale asymmetry. If the composite model outperforms the volume-only baseline, this provides empirical evidence that sentiment integration adds value beyond posting activity alone — supporting the theoretical motivation. If performance is equivalent or worse, this informs a critical discussion about whether sentiment signals are redundant or too noisy in this domain.
 
 This phased design strengthens the project's contribution by providing controlled evidence for (or against) the value of composite targets, rather than assuming that combining signals is inherently beneficial.
 
@@ -232,8 +242,9 @@ The binary surge target is computed at the record level using a forward-looking 
 1. For each record mentioning ticker $X at observation time *t*, identify all subsequent records **that also mention $X** within *(t, t + 24h]*
 2. Compute posting volume growth: *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*
 3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
-4. Combine: *composite = posting_volume_growth + |sentiment_change|*
-5. Label: *1* if composite > threshold (default: configurable, to be determined via EDA), else *0*
+4. Standardise: *z_volume = (posting_volume_growth − μ_vol) / σ_vol*; *z_sentiment = (|sentiment_change| − μ_sent) / σ_sent* (using training-set statistics)
+5. Combine: *composite = (w₁ × z_volume) + (w₂ × z_sentiment)* where w₁ = w₂ = 0.5 by default
+6. Label: *1* if composite > threshold *τ* (configurable, in standard deviation units), else *0*
 
 **Rationale for volume-based engagement.** The dataset provides engagement metrics (score, num_comments) only as final snapshot values, not as point-in-time observations. Using these values in the target formula would create a circular dependency: posts that eventually surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than predicting its onset. Posting volume growth — the increase in the *number* of posts about a ticker — uses only timestamps, which are reliable creation-time values unaffected by future activity. A doubling in the number of posts about $X represents a genuine surge in community attention toward that stock.
 
@@ -327,29 +338,39 @@ Single-run point estimates are insufficient for drawing conclusions about model 
 
 **Paired statistical tests.** To determine whether performance differences between models are statistically significant rather than due to chance, McNemar's test will be applied to paired predictions on the same test set. This is appropriate for comparing two classifiers on the same data without independence assumptions. A significance level of α = 0.05 will be used, with Bonferroni correction applied when comparing multiple model pairs.
 
-### 4.7 Threshold Sensitivity Analysis
+### 4.7 Threshold and Weight Sensitivity Analysis
 
-The composite surge threshold (default: 2.0) directly controls the class distribution and therefore influences model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiment will be conducted:
+The composite surge threshold *τ* and weight parameters (w₁, w₂) directly control the class distribution and therefore influence model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiments will be conducted:
 
-**Threshold sweep.** The full pipeline will be executed at threshold values of {1.0, 1.5, 2.0, 2.5, 3.0}, producing five distinct labelling configurations. The pipeline is designed for parameterised batch execution, allowing all threshold × model × seed × phase combinations to run without manual intervention. For each threshold:
+**Threshold sweep.** The full pipeline will be executed at threshold values of *τ* ∈ {0.5, 1.0, 1.5, 2.0, 2.5} (in standard deviation units of the composite metric), producing five distinct labelling configurations. The pipeline is designed for parameterised batch execution, allowing all threshold × model × seed × phase combinations to run without manual intervention. For each threshold:
 
 - Record the resulting class distribution (surge rate, imbalance ratio)
 - Train all three models (LR, RF, XGBoost) on the relabelled data
 - Evaluate on the corresponding test set and report metrics with confidence intervals
 
+Because both components are z-score normalised, the threshold has a consistent statistical interpretation across all operating points: *τ* = 1.5 means "the combined signal exceeds 1.5 standard deviations above the training-set mean." This eliminates the interpretability problem of the previous raw additive formulation.
+
 **Expected outcomes and decision criteria:**
 
-| Threshold | Expected surge rate | Expected behaviour |
-|-----------|--------------------|--------------------|
-| 1.0 | ~15–25% | More positive labels; models may achieve high recall but low precision (many false positives) |
-| 1.5 | ~8–15% | Moderate imbalance; potentially best balance between precision and recall |
-| 2.0 | ~3–8% | Default operating point; higher precision but recall may suffer |
-| 2.5 | ~1–4% | Sparse positives; models may struggle to learn the minority class |
-| 3.0 | <2% | Extreme imbalance; likely below viable training threshold |
+| Threshold (τ) | Expected surge rate | Expected behaviour |
+|---------------|--------------------|--------------------|
+| 0.5 | ~20–30% | Many positives; high recall, low precision |
+| 1.0 | ~10–18% | Moderate imbalance; potentially best precision-recall balance |
+| 1.5 | ~5–10% | Target operating range; aligned with viability analysis |
+| 2.0 | ~2–5% | Sparse positives; models may struggle with minority class |
+| 2.5 | <2% | Extreme imbalance; likely below viable training threshold |
 
 The threshold producing the highest F1-score on the test set will be reported as the recommended operating point. If multiple thresholds produce similar F1 but different precision-recall trade-offs, both will be presented with guidance on which is preferable depending on the use case (surveillance favours recall; alert systems favour precision).
 
-**Interaction with phased approach.** The threshold sensitivity analysis will be conducted independently for both the volume-only baseline (Phase 1) and the composite target (Phase 2), enabling comparison of how each target definition responds to threshold variation.
+**Weight sensitivity sweep.** To empirically assess the relative contribution of each component to predictive performance, the pipeline will be executed with w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} (where w₁ = 1 − w₂) at the recommended threshold *τ*. This produces a spectrum from pure volume (w₂ = 0, equivalent to Phase 1) through equal weighting (w₂ = 0.5, Phase 2 default) to pure sentiment (w₂ = 1.0). For each weight configuration:
+
+- Record the resulting class distribution
+- Train and evaluate all three models
+- Report metrics with confidence intervals
+
+This sweep directly answers whether the optimal weighting differs from the default equal split, and whether sentiment's contribution is monotonically positive or exhibits diminishing/negative returns at high weightings. The weight producing the highest F1-score will be reported alongside the default, with discussion of practical implications.
+
+**Interaction with phased approach.** Phase 1 corresponds to w₂ = 0 (volume only); Phase 2 corresponds to w₂ = 0.5 (equal composite). The weight sweep generalises this comparison across the full spectrum, providing a richer picture of how sentiment weight affects predictive performance. The threshold sweep is conducted independently at each phase's default weighting.
 
 ---
 
@@ -362,7 +383,7 @@ The threshold producing the highest F1-score on the test set will be reported as
 | 3 | Data quality issues (missing fields, noise) | Medium | Medium | Robust preprocessing with logging, document exclusion criteria |
 | 4 | Temporal data leakage | Medium | High | Strict temporal split, no future data in features or labels |
 | 5 | Overfitting on small dataset | Medium | High | Cross-validation, regularisation, report train vs test gaps |
-| 6 | Composite target threshold sensitivity | Medium | Medium | Sensitivity analysis across multiple thresholds |
+| 6 | Composite target threshold and weight sensitivity | Medium | Medium | Z-score normalisation ensures equal component contribution; sensitivity analysis across multiple thresholds and weight configurations |
 | 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models |
 | 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup |
 | 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude or flag records where window contains 0–2 future records; report exclusion rate; conduct sensitivity analysis on minimum-N threshold during EDA |
@@ -451,8 +472,9 @@ Success is defined at three tiers to distinguish between a viable proof-of-conce
 ### Analytical criteria
 
 - At least one model achieves minimum success (AUC-ROC > 0.60) on the temporally held-out test set
-- Composite model (Phase 2) is compared against volume-only baseline (Phase 1) with statistical significance testing
+- Composite model (Phase 2, w₂ = 0.5) is compared against volume-only baseline (Phase 1, w₂ = 0) with statistical significance testing
 - Threshold sensitivity analysis produces at least 3 viable operating points with documented precision-recall trade-offs
+- Weight sensitivity sweep quantifies the marginal contribution of sentiment across the w₂ spectrum
 - Confidence intervals are reported for all metrics
 
 ### Academic criteria

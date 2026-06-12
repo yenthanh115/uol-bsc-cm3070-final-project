@@ -6,7 +6,7 @@ This document records key design decisions made during the development of the En
 
 | ID | Decision | Date | Status |
 |----|----------|------|--------|
-| DEC-001 | Composite surge threshold default value | 2026-06-08 | Accepted |
+| DEC-001 | Composite surge threshold default value | 2026-06-08 | Superseded → DEC-013 |
 | DEC-002 | Unit of analysis — per-ticker scoping | 2026-06-08 | Accepted |
 | DEC-003 | Why combine engagement and sentiment (composite metric) | 2026-06-08 | Accepted |
 | DEC-004 | Phased experimental approach (baseline → composite) | 2026-06-08 | Accepted |
@@ -15,9 +15,10 @@ This document records key design decisions made during the development of the En
 | DEC-007 | Tiered success criteria | 2026-06-08 | Accepted |
 | DEC-008 | Literature review requires critical evaluation | 2026-06-08 | Accepted |
 | DEC-009 | Report structure — add surge definition and unit of analysis | 2026-06-08 | Accepted |
-| DEC-010 | Composite metric scale mismatch — empirical investigation over a priori normalisation | 2026-06-08 | Accepted |
+| DEC-010 | Composite metric scale mismatch — z-score normalisation with configurable weighting | 2026-06-08 | Superseded → DEC-013 |
 | DEC-011 | Per-ticker sparsity — minimum window record count | 2026-06-08 | Accepted |
 | DEC-012 | Eliminate snapshot engagement values — use posting volume instead | 2026-06-12 | Accepted |
+| DEC-013 | Z-score normalisation of composite surge metric | 2026-06-11 | Accepted |
 
 ---
 
@@ -162,18 +163,8 @@ This document records key design decisions made during the development of the En
 
 - **Date:** 2026-06-08
 - **Context:** The composite surge formula (`engagement_growth + |sentiment_change|`) combines two components on different scales. Engagement growth is an unbounded ratio (values of 10+ are common for low-engagement posts), while |sentiment_change| is bounded by [0, 2.0] due to TextBlob's polarity range. This means the composite is likely dominated by the engagement component in practice, making the "composite" nature potentially illusory.
-- **Decision:** Retain the raw additive formulation as the starting point. Do not apply a priori normalisation or weighting. Instead, analyse the relative influence of each component experimentally through the existing phased design and threshold sensitivity analysis.
-- **Rationale:**
-  1. Any normalisation scheme (z-scores, min-max, weighting) requires assumptions about relative importance that are not empirically grounded at this stage
-  2. The Phase 1 vs Phase 2 comparison already quantifies sentiment's marginal contribution — if it adds nothing, the scale mismatch is the likely explanation
-  3. The threshold sensitivity analysis will reveal how the effective contribution of each component varies across operating points
-  4. Reporting the dominance pattern (if confirmed) is itself a valid finding rather than a flaw to be hidden
-- **Alternatives considered:**
-  - Z-score normalisation of both components — rejected: requires computing population statistics before labelling, introduces circular dependency with threshold
-  - Weighted sum (e.g., `α * engagement_growth + β * |sentiment_change|`) — rejected: choice of weights would be arbitrary without prior evidence
-  - Separate thresholds per component (engagement > X AND sentiment > Y) — deferred to future work if composite proves inadequate
-- **If analysis confirms dominance:** Will report as finding and discuss alternative formulations (standardised z-scores, weighted sums, multiplicative combination) as future work directions.
-- **Status:** Accepted
+- **Decision:** ~~Retain the raw additive formulation as the starting point.~~ **SUPERSEDED by DEC-013** (2026-06-11). The original approach of deferring normalisation to post-hoc analysis was found to be methodologically unsound — it would allow the volume component to structurally dominate the target label, making the Phase 1 vs Phase 2 comparison unable to detect sentiment's contribution even if one existed.
+- **Status:** ~~Accepted~~ Superseded → DEC-013
 
 ---
 
@@ -224,4 +215,43 @@ This document records key design decisions made during the development of the En
   - Keep score in target but exclude from features (Option B) — rejected: still introduces circular dependency in labelling (surge drives high scores on future posts, which inflates the "future engagement" term)
   - Use score as a feature with a fixed early-window proxy (e.g., score at 1 hour) — rejected: dataset does not provide temporal score snapshots, only final values
   - Remove engagement entirely and predict sentiment-only surges — rejected: loses the volume dimension which is central to the surge concept
+- **Status:** Accepted
+
+
+---
+
+## DEC-013: Z-score normalisation of composite surge metric
+
+- **Date:** 2026-06-11
+- **Context:** The composite surge formula (`posting_volume_growth + |sentiment_change|`) combines two components on fundamentally different scales. Posting volume growth is an unbounded ratio (values of 10+ are common for tickers going from 1–2 posts/day to 10+), while |sentiment_change| is bounded by [0, 2.0] due to TextBlob's polarity range of [-1, +1]. Without normalisation, the volume component structurally dominates the composite — rendering sentiment unable to influence the surge label. This undermines the core research question (does sentiment add predictive value?) because Phase 2 would effectively use the same label as Phase 1 regardless of sentiment dynamics.
+- **Decision:** Replace the raw additive formula with z-score normalised components and configurable weighting:
+  ```
+  z_volume    = (posting_volume_growth − μ_vol) / σ_vol
+  z_sentiment = (|sentiment_change| − μ_sent) / σ_sent
+  composite   = (w₁ × z_volume) + (w₂ × z_sentiment)
+  ```
+  where μ and σ are computed from the training partition only, and w₁ = w₂ = 0.5 by default.
+- **Rationale:**
+  1. **Equal contribution by construction** — both components become zero-mean, unit-variance; neither dominates regardless of their raw scale differences
+  2. **Interpretable threshold** — τ expressed in standard deviation units has consistent statistical meaning across all operating points ("the combined signal exceeds τ SDs above typical")
+  3. **Principled Phase 1 vs Phase 2 comparison** — Phase 1 sets w₂ = 0; Phase 2 sets w₂ = 0.5. Because z-score normalisation guarantees sentiment carries equal weight in Phase 2, any performance difference reflects a genuine signal contribution, not a scale artefact
+  4. **Configurable weight** — w₁/w₂ split becomes a hyperparameter for sensitivity analysis (sweep w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}), providing empirical evidence for optimal weighting
+  5. **No circular dependency** — normalisation statistics are fitted on training data only; test records use training-set μ/σ, preventing leakage
+- **Supersedes:** DEC-010 (which deferred normalisation to post-hoc analysis). The original reasoning — that normalisation "requires assumptions about relative importance" — was incorrect. Equal weighting (w₁ = w₂ = 0.5) is the *neutral* assumption (agnostic prior), and the weight sweep provides the empirical grounding that DEC-010 sought to defer to. Deferring normalisation would have meant that the Phase 1 vs Phase 2 comparison was structurally incapable of detecting sentiment's contribution even if one existed.
+- **Also supersedes:** DEC-001 threshold value (2.0). The threshold is now expressed in standard deviation units rather than raw composite units, so the numeric value will differ. Default τ to be determined empirically during EDA.
+- **Alternatives considered:**
+  - Min-max normalisation — rejected: sensitive to outliers; volume growth has no natural maximum so min-max requires clipping
+  - Rank-based normalisation — rejected: loses magnitude information that may be predictively useful
+  - Multiplicative combination (volume_growth × |sentiment_change|) — rejected: produces zero whenever either component is zero, which is too restrictive (a pure volume surge with neutral sentiment would score 0)
+  - Separate thresholds per component (volume > X AND sentiment > Y) — rejected: creates a rectangular decision boundary that doesn't capture the intuition of "combined" surge strength
+- **Implementation notes:**
+  - μ_vol, σ_vol, μ_sent, σ_sent computed from training partition only (first 80% by timestamp)
+  - Test records normalised with training-set statistics (no test leakage)
+  - If σ = 0 for either component (degenerate case, e.g., all training records have identical volume growth), that component receives z = 0 and the composite reduces to the other component alone
+- **Impact on report sections:**
+  - Section 1.5 (Surge Definition): formula updated, "Scale considerations" paragraph removed (problem solved by design), normalisation rationale and configurable weighting paragraphs added
+  - Section 3.5 (Composite Target Design): steps updated to include standardisation
+  - Section 4.7: renamed to "Threshold and Weight Sensitivity Analysis"; threshold values updated to SD units; weight sweep added
+  - Section 8 (Success Criteria): weight sweep added to analytical criteria
+  - Risk Register #6: updated description
 - **Status:** Accepted
