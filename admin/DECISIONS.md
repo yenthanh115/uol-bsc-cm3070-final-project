@@ -2,6 +2,23 @@
 
 This document records key design decisions made during the development of the Engagement and Sentiment Surge Prediction Pipeline. Each entry captures the context, decision, rationale, and alternatives considered for traceability and academic reporting.
 
+## Table of Contents
+
+| ID | Decision | Date | Status |
+|----|----------|------|--------|
+| DEC-001 | Composite surge threshold default value | 2026-06-08 | Accepted |
+| DEC-002 | Unit of analysis — per-ticker scoping | 2026-06-08 | Accepted |
+| DEC-003 | Why combine engagement and sentiment (composite metric) | 2026-06-08 | Accepted |
+| DEC-004 | Phased experimental approach (baseline → composite) | 2026-06-08 | Accepted |
+| DEC-005 | Dataset selection — Reddit Finance Data (Kaggle) | 2026-06-08 | Accepted |
+| DEC-006 | Statistical robustness in evaluation | 2026-06-08 | Accepted |
+| DEC-007 | Tiered success criteria | 2026-06-08 | Accepted |
+| DEC-008 | Literature review requires critical evaluation | 2026-06-08 | Accepted |
+| DEC-009 | Report structure — add surge definition and unit of analysis | 2026-06-08 | Accepted |
+| DEC-010 | Composite metric scale mismatch — empirical investigation over a priori normalisation | 2026-06-08 | Accepted |
+| DEC-011 | Per-ticker sparsity — minimum window record count | 2026-06-08 | Accepted |
+| DEC-012 | Eliminate snapshot engagement values — use posting volume instead | 2026-06-12 | Accepted |
+
 ---
 
 ## DEC-001: Composite surge threshold default value
@@ -181,19 +198,30 @@ This document records key design decisions made during the development of the En
 
 ---
 
-## DEC-011: Per-ticker sparsity mitigation — minimum record count in prediction window
+## DEC-012: Eliminate snapshot engagement values from features and target — use posting volume instead
 
-- **Date:** 2026-06-08
-- **Context:** The per-ticker surge scoping (DEC-002) means that for a given record mentioning ticker $X at time t, only future records also mentioning $X within (t, t+24h] are used to compute engagement growth and sentiment change. For tickers with very few posts, this window may contain 0–2 records, making the surge metric unstable or meaningless (e.g., a single future post with slightly different sentiment could trigger a "surge" label).
-- **Decision:** Enforce a minimum record count of N ≥ 3 within the 24-hour ticker window. Records where the window contains fewer than 3 future same-ticker records are excluded from surge labelling (or flagged for sensitivity analysis).
+- **Date:** 2026-06-12
+- **Context:** The Reddit Finance dataset provides engagement metrics (score, num_comments) as **final snapshot values** collected at crawl time, not as point-in-time values at post creation. This means these values incorporate all future engagement — including engagement generated *by* the surge being predicted. Using them as features (`engagement_rate = score / hours_since_posting`) or in the target formula (`engagement_growth = (future_engagement − current_engagement) / max(current_engagement, 1)`) constitutes temporal data leakage. The model would effectively "see" the outcome it is trying to predict.
+- **Decision:** 
+  1. **Features:** Remove `engagement_rate` and `has_ticker` from the feature set. Do not use `score` or `num_comments` as prediction-time features. Replace with leakage-free alternatives: `ticker_post_rate_24h` (backward-looking post count), `ticker_post_acceleration` (ratio of recent to older posting frequency), `title_length`, and `num_tickers_mentioned`.
+  2. **Target:** Replace score-based engagement growth with **posting volume growth** — the ratio of posts mentioning the same ticker in the future 24h window vs. the prior 24h window. This is derived entirely from creation timestamps, which are fixed at post creation and uncontaminated by future activity.
+  3. **Constraint:** No dataset field that represents a post-creation-time aggregate (score, num_comments) may be used as a feature or in the target formula unless it can be proven to represent a value available at observation time *t*.
 - **Rationale:**
-  1. With 0–1 future records, engagement growth and sentiment change are either undefined or based on a single observation — statistically meaningless
-  2. With 2 records, the "mean future sentiment" is an average of 2 points — highly sensitive to individual outliers
-  3. N ≥ 3 provides a minimal basis for computing meaningful aggregate statistics while preserving as much data as possible
-  4. The exclusion rate will be reported to quantify data loss, and sensitivity analysis on the minimum-N threshold will be conducted during EDA
+  1. Score and num_comments are accumulated over the post's lifetime — they are outcomes, not inputs available at prediction time
+  2. `engagement_rate` = score / hours_since_posting gives an average rate using the final score, which includes all future votes including those from the surge period
+  3. In a hypothetical deployment scenario, these values would not be available at observation time — only the text, timestamp, and historical posting patterns would be observable
+  4. Posting volume (count of posts) is derived from timestamps alone and is conceptually aligned with what a surge means: more people creating posts about a stock
+  5. `has_ticker` removed because all records in the modelling dataset mention at least one ticker (prerequisite for ticker-scoped analysis) — the feature would be constant = 1
+- **Impact on composite target formula:**
+  - Old: `composite = engagement_growth + |sentiment_change|` where engagement_growth used score values
+  - New: `composite = posting_volume_growth + |sentiment_change|` where posting_volume_growth = (count of $X posts in (t, t+24h]) / max(count of $X posts in (t−24h, t], 1)) − 1
+  - Default threshold (previously 2.0) will be redetermined empirically during EDA since the scale of posting volume growth differs from score-based growth
+- **Impact on feature set:**
+  - Removed: `engagement_rate`, `has_ticker`
+  - Added: `ticker_post_rate_24h`, `ticker_post_acceleration`, `title_length`, `num_tickers_mentioned`
+  - Retained unchanged: `sentiment_score`, `hour_of_day`, `day_of_week`, `time_since_previous` (scope clarified to per-ticker), `word_count`
 - **Alternatives considered:**
-  - No minimum (use all records) — rejected: produces unreliable labels that could mislead the model
-  - N ≥ 5 or N ≥ 10 — considered: higher thresholds are more statistically stable but may exclude too much data for low-activity tickers; will be tested in sensitivity analysis
-  - Imputation for sparse windows (e.g., carry forward last known values) — rejected: introduces assumptions not grounded in observed behaviour
-- **Risk addressed:** Risk Register #9 (Per-ticker sparsity destabilises surge metric)
-- **Status:** Accepted (subject to sensitivity analysis on minimum-N during EDA)
+  - Keep score in target but exclude from features (Option B) — rejected: still introduces circular dependency in labelling (surge drives high scores on future posts, which inflates the "future engagement" term)
+  - Use score as a feature with a fixed early-window proxy (e.g., score at 1 hour) — rejected: dataset does not provide temporal score snapshots, only final values
+  - Remove engagement entirely and predict sentiment-only surges — rejected: loses the volume dimension which is central to the surge concept
+- **Status:** Accepted

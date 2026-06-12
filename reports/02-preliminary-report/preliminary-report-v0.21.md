@@ -9,7 +9,7 @@ Predicting Engagement and Sentiment Surges in Stock-Related Social Media Discuss
 ### 1.2 Objectives
 
 - Develop a predictive model using early-stage discussion features to forecast whether a stock-related social media discussion will experience a significant engagement and sentiment surge within 24 hours
-- Engineer meaningful features from raw social media discussion data including temporal, textual, engagement-rate, and sentiment signals
+- Engineer meaningful features from raw social media discussion data including temporal, textual, activity-frequency, and sentiment signals
 - Compare traditional ML approaches (Logistic Regression, Random Forest, XGBoost) for binary surge classification
 - Evaluate model performance using standard classification metrics (accuracy, precision, recall, F1, AUC-ROC)
 
@@ -65,31 +65,33 @@ This scoping is the most defensible interpretation because:
 #### Implications and limitations
 
 - Records that do not mention any identifiable ticker are excluded from surge labelling (they lack a grouping key).
-- **Ticker sparsity (Risk #9).** For tickers with very few records in the dataset, the 24-hour window may contain 0, 1, or 2 future records — too few to compute a stable engagement growth ratio or meaningful mean sentiment. A single outlier post in a sparse window could flip the surge label arbitrarily. This is likely to affect the majority of the 2,912 tickers in the pennystocks dataset, as ticker frequency distributions in social media follow a heavy-tailed power law (a small number of tickers dominate discussion volume). Mitigation: enforce a minimum record count (default N ≥ 3) within each ticker's 24-hour window; records failing this threshold will be excluded from surge labelling. The exclusion rate and its effect on class distribution will be quantified during EDA.
-- Records mentioning multiple tickers receive a label based on the combined activity across all mentioned tickers — an simplification that could be refined by computing per-ticker labels independently.
+- **Ticker sparsity (Risk #9).** For tickers with very few records in the dataset, the 24-hour window may contain 0, 1, or 2 future records — too few to compute a stable posting volume growth ratio or meaningful mean sentiment. A single outlier post in a sparse window could flip the surge label arbitrarily. This is likely to affect the majority of the 2,912 tickers in the pennystocks dataset, as ticker frequency distributions in social media follow a heavy-tailed power law (a small number of tickers dominate discussion volume). Mitigation: enforce a minimum record count (default N ≥ 3) within each ticker's 24-hour window; records failing this threshold will be excluded from surge labelling. The exclusion rate and its effect on class distribution will be quantified during EDA.
+- Records mentioning multiple tickers receive a label based on the combined activity across all mentioned tickers — a simplification that could be refined by computing per-ticker labels independently.
 - The model still makes predictions at the record level (one prediction per record), but the target label reflects ticker-scoped dynamics rather than subreddit-wide dynamics.
 - If future work uses a single-ticker filtered dataset (e.g., only $GME posts), the ticker scoping becomes equivalent to global scoping within that subset.
 
 ### 1.5 Surge Definition
 
-In this project, a **surge** is defined as a statistically significant increase in the composite engagement-and-sentiment metric for a specific stock ticker within a fixed 24-hour prediction window. Specifically, for a given record mentioning ticker $X observed at time *t*, the system computes:
+In this project, a **surge** is defined as a statistically significant increase in the composite posting-volume-and-sentiment metric for a specific stock ticker within a fixed 24-hour prediction window. Specifically, for a given record mentioning ticker $X observed at time *t*, the system computes:
 
-- **Engagement growth**: the relative change in cumulative engagement (score, num_comments) across all $X-mentioning records between time *t* and *t + 24h*.
+- **Posting volume growth**: the relative change in the number of posts mentioning ticker $X between the prior 24 hours and the subsequent 24 hours — specifically, *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*.
 - **Sentiment change**: the absolute difference between the sentiment polarity at observation time and the mean sentiment polarity of subsequent $X-mentioning records within the window.
 
 The **composite surge metric** is defined as:
 
-> *composite = engagement_growth + |sentiment_change|*
+> *composite = posting_volume_growth + |sentiment_change|*
 
-A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold (default: 2.0), and no-surge (0) otherwise.
+A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold, and no-surge (0) otherwise.
 
-**Threshold justification.** The default threshold of 2.0 is motivated by the scale of each component. Engagement growth is a ratio where 1.0 represents a doubling of interactions, while sentiment change is bounded by approximately [0, 2.0] given that TextBlob polarity ranges from −1 to +1. A composite threshold of 2.0 therefore requires a substantial combined shift — for example, engagement tripling with no sentiment movement, or engagement doubling alongside a full polarity reversal. Lower thresholds (e.g., 1.5) risk labelling routine fluctuations as surges, inflating the positive class with non-exceptional events. Higher thresholds (e.g., 3.0) would produce very few positive labels, limiting the model's ability to learn meaningful patterns from sparse examples. The value 2.0 balances selectivity against sufficient sample size for model training. Critically, this parameter is configurable and will be subject to a sensitivity analysis (see Risk Register, Risk #6) to assess how threshold variation affects class distribution and model performance across the dataset.
+**Why posting volume rather than engagement scores.** The dataset provides engagement metrics (score, num_comments) as final snapshot values at crawl time, not as point-in-time values at post creation. Using these values in the surge formula would introduce a circular dependency: posts that eventually experience a surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than detecting its onset. Posting volume growth — the increase in the number of posts about a ticker — is derived entirely from creation timestamps, which are fixed at post creation and uncontaminated by future activity. A value of 1.0 means the number of posts about $X doubled; 2.0 means it tripled.
 
-**Scale considerations.** The two components operate on different scales: engagement growth is an unbounded ratio (where 1.0 represents doubling, but values of 10+ are possible for low-engagement posts that subsequently attract attention), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. This asymmetry means that in practice, the composite metric may be dominated by the engagement component for records with large engagement growth. Rather than applying an *a priori* normalisation or weighting scheme — which would require assumptions about the relative importance of each signal that are not empirically grounded — this project treats the raw additive formulation as the starting point and commits to analysing the relative influence of each component experimentally. Specifically, the Phase 1 vs Phase 2 comparison (below) will quantify the marginal contribution of sentiment, and the threshold sensitivity analysis (Section 4.6) will examine how the effective contribution of each component varies across operating points. If the analysis reveals that sentiment is consistently negligible relative to engagement, this will be reported as a finding and alternative formulations (e.g., standardised z-scores, weighted sums, or separate thresholds per component) will be discussed as directions for future work.
+**Threshold determination.** The default composite threshold will be determined empirically during EDA rather than set a priori. The two components operate on different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. The threshold sensitivity analysis (Section 4.6) will sweep a range of candidate values and select the operating point that balances class distribution against model trainability. The goal is to produce a surge rate of approximately 5–10% (imbalance ratio 10:1 to 18:1) as indicated by the preliminary viability analysis (Section 2.2).
+
+**Scale considerations.** The two components operate on different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling, but values of 10+ are possible for tickers that go from 1–2 posts/day to 10+), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. This asymmetry means that in practice, the composite metric may be dominated by the volume component for tickers experiencing rapid posting acceleration. Rather than applying an *a priori* normalisation or weighting scheme — which would require assumptions about the relative importance of each signal that are not empirically grounded — this project treats the raw additive formulation as the starting point and commits to analysing the relative influence of each component experimentally. Specifically, the Phase 1 vs Phase 2 comparison (below) will quantify the marginal contribution of sentiment, and the threshold sensitivity analysis (Section 4.6) will examine how the effective contribution of each component varies across operating points. If the analysis reveals that sentiment is consistently negligible relative to volume growth, this will be reported as a finding and alternative formulations (e.g., standardised z-scores, weighted sums, or separate thresholds per component) will be discussed as directions for future work.
 
 **Rationale for a composite metric.** Engagement and sentiment are combined into a single target rather than treated as separate prediction tasks for three reasons:
 
-1. **Neither signal alone captures a meaningful surge.** A discussion can attract high engagement through controversy, memes, or platform algorithms without any genuine shift in investor sentiment. Conversely, sentiment can shift sharply in a low-visibility post that never gains traction. Neither event in isolation constitutes the kind of surge relevant to financial monitoring — it is the *co-occurrence* of rising attention and intensifying emotion that distinguishes actionable surges from routine noise. The composite metric requires both dimensions to contribute before the threshold is reached.
+1. **Neither signal alone captures a meaningful surge.** A discussion topic can attract high posting volume through controversy, memes, or platform algorithms without any genuine shift in investor sentiment. Conversely, sentiment can shift sharply in a low-visibility topic that never gains posting traction. Neither event in isolation constitutes the kind of surge relevant to financial monitoring — it is the *co-occurrence* of rising posting activity and intensifying emotion that distinguishes actionable surges from routine noise. The composite metric requires both dimensions to contribute before the threshold is reached.
 
 2. **The literature supports signal interaction.** Existing work demonstrates that engagement signals [1] and sentiment signals [4] each carry independent predictive value, but studies examining their interaction are scarce (see Section 7.3, Gap 2). By defining the target as a joint function, this project directly tests the hypothesis that combined engagement-and-sentiment events are more meaningful and more predictable than either component alone. The sensitivity analysis will decompose performance by varying the relative contribution of each component.
 
@@ -97,17 +99,17 @@ A record is labelled as a surge (1) if the composite metric exceeds a configurab
 
 **Phased experimental approach.** To empirically validate the composite design, the project adopts a two-phase modelling strategy:
 
-- **Phase 1 (Baseline): Engagement-only prediction.** The initial models will be trained using an engagement-only surge target — labelling records based solely on engagement growth exceeding a threshold, without incorporating sentiment change. This establishes a performance baseline grounded in the most directly observable signal and aligns with the early popularity prediction literature [1][5], which demonstrates that engagement-based features carry strong predictive power on their own.
+- **Phase 1 (Baseline): Volume-only prediction.** The initial models will be trained using a posting-volume-only surge target — labelling records based solely on posting volume growth exceeding a threshold, without incorporating sentiment change. This establishes a performance baseline grounded in the most directly observable signal and aligns with the early popularity prediction literature [1][5], which demonstrates that activity-based features carry strong predictive power on their own.
 
-- **Phase 2 (Advanced): Composite engagement + sentiment prediction.** The full composite target (engagement growth + |sentiment change|) will then be introduced, with models trained on the combined feature set including sentiment scores. Comparing Phase 2 against the Phase 1 baseline directly measures the marginal predictive contribution of sentiment signals. If the composite model outperforms the engagement-only baseline, this provides empirical evidence that sentiment integration adds value beyond engagement alone — supporting the theoretical motivation. If performance is equivalent or worse, this informs a critical discussion about whether sentiment signals are redundant or too noisy in this domain.
+- **Phase 2 (Advanced): Composite volume + sentiment prediction.** The full composite target (posting_volume_growth + |sentiment_change|) will then be introduced, with models trained on the combined feature set including sentiment scores. Comparing Phase 2 against the Phase 1 baseline directly measures the marginal predictive contribution of sentiment signals. If the composite model outperforms the volume-only baseline, this provides empirical evidence that sentiment integration adds value beyond posting activity alone — supporting the theoretical motivation. If performance is equivalent or worse, this informs a critical discussion about whether sentiment signals are redundant or too noisy in this domain.
 
 This phased design strengthens the project's contribution by providing controlled evidence for (or against) the value of composite targets, rather than assuming that combining signals is inherently beneficial.
 
-This definition captures cases where discussions experience rapid growth in both public attention and emotional intensity, distinguishing them from discussions that attract engagement without sentiment shifts or vice versa.
+This definition captures cases where discussions experience rapid growth in both public posting activity and emotional intensity, distinguishing them from topics that attract posting volume without sentiment shifts or vice versa.
 
 ### 1.6 Motivation
 
-- Discussions experiencing rapid engagement and sentiment growth often attract broader public attention and may influence information diffusion, investor behaviour, and market perception [4]
+- Discussions experiencing rapid posting volume growth and sentiment shifts often attract broader public attention and may influence information diffusion, investor behaviour, and market perception [4]
 - Platforms hosting financial discussions (e.g., Reddit, StockTwits) process thousands of new posts daily, making manual identification of emerging surges impractical for analysts and researchers
 - Early detection of surge-prone discussions enables proactive monitoring rather than reactive analysis, with applications in financial risk assessment, market surveillance, and social media analytics
 - The 2021 GameStop short squeeze demonstrated how rapidly escalating social media discussion can translate into real market impact, underscoring the need for early warning systems [5]
@@ -120,7 +122,7 @@ This definition captures cases where discussions experience rapid growth in both
 ### 2.1 In Scope
 
 - Pre-collected static dataset of stock-related social media discussions (CSV/Parquet)
-- Feature engineering: temporal, textual, sentiment, and engagement-rate features
+- Feature engineering: temporal, textual, sentiment, and activity-frequency features
 - Binary classification: surge (1) vs no-surge (0) within 24-hour window
 - Traditional ML models: Logistic Regression, Random Forest, XGBoost
 - Optional deep learning baseline (LSTM/Transformer) for comparison
@@ -165,7 +167,7 @@ Each record includes a unique post ID, creation timestamp, title, body text (sel
 
 1. **Data Loading** — Read static dataset from disk (CSV/Parquet)
 2. **Preprocessing** — Deduplicate, parse timestamps, normalise text, remove nulls
-3. **Feature Engineering** — Compute sentiment, temporal, engagement-rate, and text features
+3. **Feature Engineering** — Compute sentiment, temporal, activity-frequency, and text features
 4. **Target Labelling** — Compute composite surge target using 24-hour prediction window
 5. **Model Training** — Train LR, RF, XGBoost with temporal train-test split
 6. **Evaluation** — Compute metrics, generate confusion matrices and ROC curves
@@ -193,31 +195,37 @@ The system is implemented as a Python package (`surge_pipeline`) with a correspo
 
 ### 3.4 Feature Design
 
-The feature engineering module computes seven features for each discussion record:
+The feature engineering module computes features for each discussion record. A critical design constraint is that **only information available at observation time *t*** may be used as a prediction feature. The Reddit Finance dataset provides engagement metrics (score, num_comments) as final snapshot values collected at crawl time, not as point-in-time values at post creation. Because these snapshot values incorporate all future engagement — including engagement generated *by* the surge being predicted — they cannot be used as features without introducing data leakage. Instead, the feature set relies on temporal, textual, and activity-frequency signals that are fully determined at observation time.
 
 | Feature | Type | Description | Rationale |
 |---------|------|-------------|-----------|
 | `sentiment_score` | Continuous [-1, 1] | TextBlob polarity of post text | Captures emotional tone; strong sentiment may precede surges [4] |
 | `hour_of_day` | Discrete [0–23] | Hour when the post was created | Trading hours and after-hours activity show different surge patterns |
 | `day_of_week` | Discrete [0–6] | Day when the post was created | Weekend vs weekday discussion dynamics differ |
-| `time_since_previous` | Continuous ≥ 0 | Hours since previous post in dataset | Rapid successive posting may signal emerging activity [1] |
-| `engagement_rate` | Continuous ≥ 0 | Total engagement / hours since posting | Normalises engagement by exposure time |
-| `word_count` | Discrete ≥ 0 | Number of whitespace-separated tokens | Longer posts may carry more informational content [3] |
-| `has_ticker` | Binary | Presence of $TICKER pattern | Ticker mentions signal explicit stock focus |
+| `time_since_previous` | Continuous ≥ 0 | Hours since previous post mentioning the same ticker | Rapid successive posting about the same ticker signals emerging activity [1] |
+| `ticker_post_rate_24h` | Continuous ≥ 0 | Number of posts mentioning this ticker in the 24 hours before time *t* | Measures current per-ticker discussion intensity using only historical data |
+| `ticker_post_acceleration` | Continuous | Ratio of post count in prior 12h to post count in prior 12–24h | Captures whether per-ticker discussion frequency is already increasing |
+| `word_count` | Discrete ≥ 0 | Number of whitespace-separated tokens in post text | Longer posts may carry more informational content [3] |
+| `title_length` | Discrete ≥ 0 | Number of whitespace-separated tokens in post title | Short urgent titles vs. detailed titles may signal different discussion types |
+| `num_tickers_mentioned` | Discrete ≥ 1 | Count of distinct ticker symbols in the post | Multi-ticker posts may indicate broader market discussion vs. focused analysis |
 
-These features combine temporal, behavioural, sentiment, and textual signals as supported by the literature [1][3][4][5].
+**Excluded features.** The dataset fields `score` and `num_comments` are explicitly excluded from the feature set because they represent final snapshot values that are not available at observation time. Using them would constitute temporal data leakage — the model would effectively "see" the outcome it is trying to predict. The previously considered `engagement_rate` (score / hours since posting) is excluded for the same reason. The previously considered `has_ticker` feature is excluded because all records in the modelling dataset are required to mention at least one identifiable ticker (see Section 1.4); the feature would be a constant of 1 with zero predictive value.
+
+These features combine temporal, activity-frequency, sentiment, and textual signals using only backward-looking or creation-time information, as supported by the literature [1][3][4][5].
 
 ### 3.5 Composite Target Design
 
-The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker (see Section 1.4 for the unit of analysis):
+The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker (see Section 1.4 for the unit of analysis). Critically, the target uses **posting volume** (record counts derived from timestamps) rather than engagement scores, because score and num_comments in the dataset are snapshot values that are not available at observation time.
 
 1. For each record mentioning ticker $X at observation time *t*, identify all subsequent records **that also mention $X** within *(t, t + 24h]*
-2. Compute engagement growth: *(future_engagement − current_engagement) / max(current_engagement, 1)*
+2. Compute posting volume growth: *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*
 3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
-4. Combine: *composite = engagement_growth + |sentiment_change|*
-5. Label: *1* if composite > threshold (default 2.0), else *0*
+4. Combine: *composite = posting_volume_growth + |sentiment_change|*
+5. Label: *1* if composite > threshold (default: configurable, to be determined via EDA), else *0*
 
-This approach measures whether the discussion around a specific stock exhibits a substantial combined shift in engagement and sentiment following the observation point. It captures records that precede per-ticker surges — periods where a specific stock attracts simultaneous growth in both attention and emotional intensity — rather than detecting subreddit-wide activity spikes that may conflate unrelated events.
+**Rationale for volume-based engagement.** The dataset provides engagement metrics (score, num_comments) only as final snapshot values, not as point-in-time observations. Using these values in the target formula would create a circular dependency: posts that eventually surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than predicting its onset. Posting volume growth — the increase in the *number* of posts about a ticker — uses only timestamps, which are reliable creation-time values unaffected by future activity. A doubling in the number of posts about $X represents a genuine surge in community attention toward that stock.
+
+This approach measures whether the discussion around a specific stock exhibits a substantial combined shift in posting activity and sentiment following the observation point. It captures records that precede per-ticker surges — periods where a specific stock attracts simultaneous growth in both discussion frequency and emotional intensity — rather than detecting subreddit-wide activity spikes that may conflate unrelated events.
 
 ---
 
@@ -255,7 +263,7 @@ The dataset will be split using **temporal ordering** rather than random samplin
 - The remaining 20% form the test set
 - This ensures no future information leaks into training, reflecting realistic deployment conditions
 
-This approach is critical because random splitting would allow the model to observe future engagement patterns during training, artificially inflating performance [5].
+This approach is critical because random splitting would allow the model to observe future activity patterns during training, artificially inflating performance [5].
 
 ### 4.4 Baseline Comparison
 
@@ -299,7 +307,7 @@ The composite surge threshold (default: 2.0) directly controls the class distrib
 
 The threshold producing the highest F1-score on the test set will be reported as the recommended operating point. If multiple thresholds produce similar F1 but different precision-recall trade-offs, both will be presented with guidance on which is preferable depending on the use case (surveillance favours recall; alert systems favour precision).
 
-**Interaction with phased approach.** The threshold sensitivity analysis will be conducted independently for both the engagement-only baseline (Phase 1) and the composite target (Phase 2), enabling comparison of how each target definition responds to threshold variation.
+**Interaction with phased approach.** The threshold sensitivity analysis will be conducted independently for both the volume-only baseline (Phase 1) and the composite target (Phase 2), enabling comparison of how each target definition responds to threshold variation.
 
 ---
 
@@ -401,7 +409,7 @@ Success is defined at three tiers to distinguish between a viable proof-of-conce
 ### Analytical criteria
 
 - At least one model achieves minimum success (AUC-ROC > 0.60) on the temporally held-out test set
-- Composite model (Phase 2) is compared against engagement-only baseline (Phase 1) with statistical significance testing
+- Composite model (Phase 2) is compared against volume-only baseline (Phase 1) with statistical significance testing
 - Threshold sensitivity analysis produces at least 3 viable operating points with documented precision-recall trade-offs
 - Confidence intervals are reported for all metrics
 
