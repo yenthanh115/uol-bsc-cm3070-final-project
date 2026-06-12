@@ -376,17 +376,20 @@ This sweep directly answers whether the optimal weighting differs from the defau
 
 ## 5. Risk Register
 
-| # | Risk | Likelihood | Impact | Mitigation |
-|---|------|-----------|--------|------------|
-| 1 | Class imbalance (few surge events) | High | High | Use stratified evaluation, consider SMOTE/class weighting, report precision-recall curves |
-| 2 | Sentiment analysis accuracy (TextBlob limitations) | Medium | Medium | Document limitations, consider FinBERT as alternative if time allows |
-| 3 | Data quality issues (missing fields, noise) | Medium | Medium | Robust preprocessing with logging, document exclusion criteria |
-| 4 | Temporal data leakage | Medium | High | Strict temporal split, no future data in features or labels |
-| 5 | Overfitting on small dataset | Medium | High | Cross-validation, regularisation, report train vs test gaps |
-| 6 | Composite target threshold and weight sensitivity | Medium | Medium | Z-score normalisation ensures equal component contribution; sensitivity analysis across multiple thresholds and weight configurations |
-| 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models |
-| 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup |
-| 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude or flag records where window contains 0–2 future records; report exclusion rate; conduct sensitivity analysis on minimum-N threshold during EDA |
+| # | Risk | Likelihood | Impact | Mitigation | Status |
+|---|------|-----------|--------|------------|--------|
+| 1 | Class imbalance (few surge events) | High | High | Use stratified evaluation, consider SMOTE/class weighting, report precision-recall curves | Open |
+| 2 | Sentiment analysis accuracy (TextBlob limitations) | Medium | Medium | Document limitations, consider FinBERT as alternative if time allows | Open |
+| 3 | Data quality issues (missing fields, noise) | Medium | Medium | Robust preprocessing with logging, document exclusion criteria | Open |
+| 4 | Temporal data leakage via train-test split | Medium | High | Strict temporal split, no future data in features or labels | Open |
+| 5 | Overfitting on small dataset | Medium | High | Temporal cross-validation (Section 4.4), regularisation, report train vs test gaps | Open |
+| 6 | Composite target threshold and weight sensitivity | Medium | Medium | Z-score normalisation ensures equal component contribution; sensitivity analysis across multiple thresholds and weight configurations | Open |
+| 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models | Open |
+| 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup | Open |
+| 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude or flag records where window contains 0–2 future records; report exclusion rate; conduct sensitivity analysis on minimum-N threshold during EDA | Open |
+| 10 | Snapshot engagement values as features (data leakage) | High | Critical | Dataset provides score/num_comments as final snapshot values, not point-in-time. Using them as features would leak future information. Eliminated entirely — features use only timestamps, text, and backward-looking post counts | Mitigated |
+| 11 | Snapshot engagement values in target formula (circular labelling) | High | Critical | Replaced score-based engagement growth with posting volume growth derived from timestamps only. Label interpretation paragraph acknowledges labels represent observed outcomes | Mitigated |
+| 12 | Temporal concept drift (Q1 meme-stock era vs Q3–Q4 normalisation) | Medium | Medium | Report train/test surge rate differences; acknowledge as limitation of single temporal split; sliding-window evaluation deferred to future work | Open |
 
 ---
 
