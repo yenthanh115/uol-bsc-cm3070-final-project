@@ -215,6 +215,8 @@ The feature engineering module computes features for each discussion record. A c
 
 These features combine temporal, activity-frequency, sentiment, and textual signals using only backward-looking or creation-time information, as supported by the literature [1][3][4][5].
 
+**Note on feature–target correlation.** The activity-frequency features (`time_since_previous`, `ticker_post_rate_24h`, `ticker_post_acceleration`) are correlated with the target by design — current posting momentum is expected to predict future posting momentum. This is analogous to using current temperature to predict tomorrow's temperature: the correlation is informative rather than circular, because the features are strictly backward-looking (computed from timestamps prior to *t*) while the target is strictly forward-looking (computed from timestamps after *t*). No future information leaks into the features. If these features dominate model importance rankings, this expected relationship will be discussed in the evaluation.
+
 ### 3.5 Composite Target Design
 
 The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker (see Section 1.4 for the unit of analysis). Critically, the target uses **posting volume** (record counts derived from timestamps) rather than engagement scores, because score and num_comments in the dataset are snapshot values that are not available at observation time.
