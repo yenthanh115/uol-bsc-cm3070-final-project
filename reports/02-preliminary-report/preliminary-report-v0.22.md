@@ -107,6 +107,8 @@ This phased design strengthens the project's contribution by providing controlle
 
 This definition captures cases where discussions experience rapid growth in both public posting activity and emotional intensity, distinguishing them from topics that attract posting volume without sentiment shifts or vice versa.
 
+**Label interpretation.** The surge label is derived from observed future outcomes (posting volume growth and sentiment shift in the 24 hours following observation). This is standard for supervised classification on historical data — the label represents "a surge was observed to have occurred" rather than an independently verified ground truth. The label's validity rests on the assumption that a substantial increase in per-ticker posting volume accompanied by a sentiment shift constitutes a meaningful surge event. This assumption cannot be externally validated within the scope of this project (there is no independent "surge registry" to compare against), but the definition is operationally grounded: stakeholders monitoring social media activity would recognise a doubling or tripling of posting frequency about a specific stock as noteworthy. The threshold sensitivity analysis (Section 4.6) further tests the robustness of the labelling scheme across different operating points.
+
 ### 1.6 Motivation
 
 - Discussions experiencing rapid posting volume growth and sentiment shifts often attract broader public attention and may influence information diffusion, investor behaviour, and market perception [4]
