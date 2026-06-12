@@ -277,7 +277,31 @@ The dataset will be split using **temporal ordering** rather than random samplin
 
 This approach is critical because random splitting would allow the model to observe future activity patterns during training, artificially inflating performance [5].
 
-### 4.4 Baseline Comparison
+### 4.4 Hyperparameter Tuning via Temporal Cross-Validation
+
+Hyperparameter selection for each model is conducted within the training partition using **expanding-window temporal cross-validation**. This ensures that tuning decisions respect chronological ordering and do not leak future information into model configuration.
+
+**Procedure:**
+
+1. The training set (first 80% of records by timestamp) is divided into *k* = 4 sequential folds of approximately equal size.
+2. For each fold *i* (i = 2, 3, 4):
+   - Training: all records from folds 1 through *i − 1* (expanding window)
+   - Validation: records from fold *i*
+3. This produces 3 train/validation splits, each progressively larger on the training side.
+4. Candidate hyperparameter configurations are evaluated by mean validation AUC-ROC across the 3 splits.
+5. The configuration with the highest mean validation AUC-ROC is selected and retrained on the full training partition before final evaluation on the held-out test set.
+
+**Scope of tuning per model:**
+
+| Model | Tuned hyperparameters |
+|-------|----------------------|
+| Logistic Regression | Regularisation strength (C), penalty type (L1/L2) |
+| Random Forest | n_estimators, max_depth, min_samples_leaf |
+| XGBoost | n_estimators, max_depth, learning_rate, subsample, colsample_bytree |
+
+A small grid or randomised search (≤50 configurations per model) keeps computational cost manageable while preventing default-hyperparameter overfitting. Logistic Regression requires minimal tuning; the primary beneficiaries are the tree-based models where default settings rarely coincide with the optimal operating point for imbalanced binary classification.
+
+### 4.5 Baseline Comparison
 
 Model performance will be compared against:
 
@@ -287,7 +311,7 @@ Model performance will be compared against:
 
 A model is considered to demonstrate meaningful predictive signal if it achieves AUC-ROC > 0.60 on the test set.
 
-### 4.5 Statistical Robustness
+### 4.6 Statistical Robustness
 
 Single-run point estimates are insufficient for drawing conclusions about model performance, particularly on imbalanced datasets where small changes in the test set composition can produce large metric fluctuations. The evaluation strategy therefore incorporates the following statistical procedures:
 
@@ -297,7 +321,7 @@ Single-run point estimates are insufficient for drawing conclusions about model 
 
 **Paired statistical tests.** To determine whether performance differences between models are statistically significant rather than due to chance, McNemar's test will be applied to paired predictions on the same test set. This is appropriate for comparing two classifiers on the same data without independence assumptions. A significance level of α = 0.05 will be used, with Bonferroni correction applied when comparing multiple model pairs.
 
-### 4.6 Threshold Sensitivity Analysis
+### 4.7 Threshold Sensitivity Analysis
 
 The composite surge threshold (default: 2.0) directly controls the class distribution and therefore influences model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiment will be conducted:
 
