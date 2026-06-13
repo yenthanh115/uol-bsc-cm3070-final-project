@@ -59,20 +59,19 @@ The threshold *τ* will be determined empirically during EDA, targeting a surge 
 
 ### 2.1 In Scope
 
-- Pre-collected static dataset of stock-related social media discussions (CSV/Parquet)
+- Pre-collected static dataset of stock-related Reddit discussions (CSV)
 - Feature engineering: temporal, textual, sentiment, and activity-frequency features
 - Binary classification: surge (1) vs no-surge (0) within 24-hour window
 - Traditional ML models: Logistic Regression, Random Forest, XGBoost
-- Optional deep learning baseline (LSTM/Transformer) for comparison
 - Standard evaluation metrics and visualisations
 - Reproducible pipeline with seeded randomness
 
 ### 2.2 Dataset
 
-The primary data source is the **Reddit Finance Data** dataset published on Kaggle (https://www.kaggle.com/datasets/leukipp/reddit-finance-data). This dataset contains submissions from nine stock-related subreddits collected over the calendar year 2021, totalling approximately **1.38 million records** across the following communities:
+The **Reddit Finance Data** dataset (Kaggle) contains submissions from nine stock-related subreddits over calendar year 2021, totalling ~1.38 million records. Each record includes post ID, timestamp, title, body text, engagement metrics (score, num_comments), subreddit, and extracted ticker symbols.
 
-| Subreddit | Records | Tickers | Engagement (mean score) | Selftext Missing |
-|-----------|---------|---------|------------------------|-----------------|
+| Subreddit | Records | Tickers | Mean Score | Selftext Missing |
+|-----------|---------|---------|-----------|-----------------|
 | wallstreetbets | 775,326 | 4,451 | 116.0 | 33.8% |
 | gme | 273,327 | 340 | 101.3 | 48.7% |
 | stocks | 75,857 | 1,963 | 30.2 | 0.1% |
@@ -83,19 +82,17 @@ The primary data source is the **Reddit Finance Data** dataset published on Kagg
 | robinhoodpennystocks | 23,304 | 855 | 30.8 | 36.0% |
 | robinhood | 18,893 | 294 | 5.5 | 25.3% |
 
-Each record includes a unique post ID, creation timestamp, title, body text (selftext), engagement metrics (score, num_comments), subreddit, and extracted ticker symbols. The date range covers January–December 2021, a period of high retail trading activity that includes the GameStop short squeeze and subsequent meme-stock phenomena.
+**Primary subset:** `pennystocks` (54,785 records, 2,912 tickers) — selected for high data completeness, sufficient volume, and diverse ticker coverage. Secondary validation on `wallstreetbets` and `gme` for generalisability testing.
 
-**Primary dataset selection.** Based on exploratory data analysis (see Appendix: EDA Report), `pennystocks/submissions_reddit.csv` (54,785 records, 2,912 tickers) is recommended as the primary development dataset due to high data completeness (20.7% selftext missing — lowest among larger subreddits), sufficient volume for model training, and diverse ticker coverage. The `wallstreetbets` and `gme` datasets are retained as secondary validation sets to test generalisability across communities with different engagement distributions.
-
-**Surge viability.** Preliminary surge analysis across 81 threshold configurations confirms that viable composite surge definitions exist (44 configurations produce ≥2% positive class rate). At the recommended operating point (engagement ≥ 90th percentile, sentiment shift ≥ 0.5 standard deviations, 24-hour window), surge rates range from 5–9% across most subreddits, producing imbalance ratios of 10:1 to 18:1 — challenging but tractable with appropriate evaluation strategies (see Risk Register, Risk #1).
+Preliminary analysis confirms viable surge definitions exist: at the target operating point, surge rates of 5–9% produce imbalance ratios of 10:1 to 18:1.
 
 ### 2.3 Out of Scope
 
-- Real-time or live data ingestion from APIs
-- Deployment as a production service
+- Real-time data ingestion or API streaming
+- Production deployment
 - Trading signals or financial advice
 - Multi-class or regression targets
-- Cross-platform data fusion (single source dataset)
+- Cross-platform data fusion
 
 ---
 
