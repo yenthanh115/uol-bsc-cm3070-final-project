@@ -100,7 +100,7 @@ Preliminary analysis confirms viable surge definitions exist: at the target oper
 
 ### 3.1 Data Pipeline Stages
 
-1. **Data Loading** — Read static dataset from disk (CSV/Parquet)
+1. **Data Loading** — Read static dataset from disk (CSV)
 2. **Preprocessing** — Deduplicate, parse timestamps, normalise text, remove nulls
 3. **Feature Engineering** — Compute sentiment, temporal, activity-frequency, and text features
 4. **Target Labelling** — Compute composite surge target using 24-hour prediction window
@@ -118,60 +118,32 @@ Preliminary analysis confirms viable surge definitions exist: at the target oper
 
 ### 3.3 System Architecture
 
-The pipeline follows a linear staged architecture where each stage receives the output of its predecessor. All stages share a centralised configuration module and produce deterministic outputs via seeded randomness.
+The pipeline follows a linear staged architecture with a centralised configuration module. All stages produce deterministic outputs via seeded randomness.
 
 <figure align="center">
   <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
   <figcaption>Figure 2: Data Pipeline.</figcaption>
 </figure>
 
-
-The system is implemented as a Python package (`surge_pipeline`) with a corresponding CLI entry point (`run_pipeline.py`). Each module exposes a well-defined function interface, allowing both notebook-based exploration and script-based batch execution.
+The system is implemented as a Python package (`surge_pipeline`) with a CLI entry point, supporting both notebook-based exploration and script-based batch execution.
 
 ### 3.4 Feature Design
 
-The feature engineering module computes features for each discussion record. A critical design constraint is that **only information available at observation time *t*** may be used as a prediction feature. The Reddit Finance dataset provides engagement metrics (score, num_comments) as final snapshot values collected at crawl time, not as point-in-time values at post creation. Because these snapshot values incorporate all future engagement — including engagement generated *by* the surge being predicted — they cannot be used as features without introducing data leakage. Instead, the feature set relies on temporal, textual, and activity-frequency signals that are fully determined at observation time.
+Only information available at observation time *t* may be used as features. The dataset's engagement metrics (score, num_comments) are final snapshot values and are excluded to prevent data leakage.
 
-| Feature | Type | Description | Rationale |
-|---------|------|-------------|-----------|
-| `sentiment_score` | Continuous [-1, 1] | TextBlob polarity of post text | Captures emotional tone; strong sentiment may precede surges [4] |
-| `hour_of_day` | Discrete [0–23] | Hour when the post was created | Trading hours and after-hours activity show different surge patterns |
-| `day_of_week` | Discrete [0–6] | Day when the post was created | Weekend vs weekday discussion dynamics differ |
-| `time_since_previous` | Continuous ≥ 0 | Hours since previous post mentioning the same ticker | Rapid successive posting about the same ticker signals emerging activity [1] |
-| `ticker_post_rate_24h` | Continuous ≥ 0 | Number of posts mentioning this ticker in the 24 hours before time *t* | Measures current per-ticker discussion intensity using only historical data |
-| `ticker_post_acceleration` | Continuous | Ratio of post count in prior 12h to post count in prior 12–24h | Captures whether per-ticker discussion frequency is already increasing |
-| `word_count` | Discrete ≥ 0 | Number of whitespace-separated tokens in post text | Longer posts may carry more informational content [3] |
-| `title_length` | Discrete ≥ 0 | Number of whitespace-separated tokens in post title | Short urgent titles vs. detailed titles may signal different discussion types |
-| `num_tickers_mentioned` | Discrete ≥ 1 | Count of distinct ticker symbols in the post | Multi-ticker posts may indicate broader market discussion vs. focused analysis |
+| Feature | Type | Description |
+|---------|------|-------------|
+| `sentiment_score` | Continuous [-1, 1] | TextBlob polarity of post text |
+| `hour_of_day` | Discrete [0–23] | Hour when the post was created |
+| `day_of_week` | Discrete [0–6] | Day when the post was created |
+| `time_since_previous` | Continuous ≥ 0 | Hours since previous post mentioning the same ticker |
+| `ticker_post_rate_24h` | Continuous ≥ 0 | Posts mentioning this ticker in the prior 24 hours |
+| `ticker_post_acceleration` | Continuous | Ratio of post count in prior 12h to prior 12–24h |
+| `word_count` | Discrete ≥ 0 | Token count of post body text |
+| `title_length` | Discrete ≥ 0 | Token count of post title |
+| `num_tickers_mentioned` | Discrete ≥ 1 | Count of distinct tickers in the post |
 
-**Excluded features.** The dataset fields `score` and `num_comments` are explicitly excluded from the feature set because they represent final snapshot values that are not available at observation time. Using them would constitute temporal data leakage — the model would effectively "see" the outcome it is trying to predict. The previously considered `engagement_rate` (score / hours since posting) is excluded for the same reason. The previously considered `has_ticker` feature is excluded because all records in the modelling dataset are required to mention at least one identifiable ticker (see Section 1.4); the feature would be a constant of 1 with zero predictive value.
-
-These features combine temporal, activity-frequency, sentiment, and textual signals using only backward-looking or creation-time information, as supported by the literature [1][3][4][5].
-
-**Note on feature–target correlation.** The activity-frequency features (`time_since_previous`, `ticker_post_rate_24h`, `ticker_post_acceleration`) are correlated with the target by design — current posting momentum is expected to predict future posting momentum. This is analogous to using current temperature to predict tomorrow's temperature: the correlation is informative rather than circular, because the features are strictly backward-looking (computed from timestamps prior to *t*) while the target is strictly forward-looking (computed from timestamps after *t*). No future information leaks into the features. If these features dominate model importance rankings, this expected relationship will be discussed in the evaluation.
-
-**Candidate additional features.** The initial feature set of 9 is deliberately compact to establish a clear baseline. During implementation, the following low-cost additions will be evaluated if initial model performance suggests the hypothesis space is too constrained for tree-based models (RF, XGBoost) to exploit feature interactions effectively:
-
-- `sentiment_subjectivity` — TextBlob subjectivity score (computed alongside polarity at no additional cost)
-- `is_selftext` — binary indicator of whether the post contains body text or is a link-only submission
-- `ticker_7d_mean_rate` — mean daily post count for this ticker over the preceding 7 days (longer-term activity baseline)
-
-These will be added incrementally and their marginal contribution assessed via feature importance and ablation.
-
-### 3.5 Composite Target Design
-
-The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker (see Section 1.4 for the unit of analysis). Critically, the target uses **posting volume** (record counts derived from timestamps) rather than engagement scores, because score and num_comments in the dataset are snapshot values that are not available at observation time.
-
-1. For each record mentioning ticker $X at observation time *t*, identify all subsequent records **that also mention $X** within *(t, t + 24h]*
-2. Compute posting volume growth: *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*
-3. Compute sentiment change: *mean(future_sentiments) − current_sentiment*
-4. Standardise: *z_volume = (posting_volume_growth − μ_vol) / σ_vol*; *z_sentiment = (|sentiment_change| − μ_sent) / σ_sent* (using training-set statistics)
-5. Combine: *composite = (w₁ × z_volume) + (w₂ × z_sentiment)* where w₁ = w₂ = 0.5 by default
-6. Label: *1* if composite > threshold *τ* (configurable, in standard deviation units), else *0*
-
-**Rationale for volume-based engagement.** The dataset provides engagement metrics (score, num_comments) only as final snapshot values, not as point-in-time observations. Using these values in the target formula would create a circular dependency: posts that eventually surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than predicting its onset. Posting volume growth — the increase in the *number* of posts about a ticker — uses only timestamps, which are reliable creation-time values unaffected by future activity. A doubling in the number of posts about $X represents a genuine surge in community attention toward that stock.
-
-This approach measures whether the discussion around a specific stock exhibits a substantial combined shift in posting activity and sentiment following the observation point. It captures records that precede per-ticker surges — periods where a specific stock attracts simultaneous growth in both discussion frequency and emotional intensity — rather than detecting subreddit-wide activity spikes that may conflate unrelated events.
+All features use backward-looking or creation-time information only. Activity-frequency features are correlated with the target by design (current momentum predicts future momentum) but introduce no temporal leakage.
 
 ---
 
