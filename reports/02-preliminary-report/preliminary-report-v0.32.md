@@ -151,121 +151,52 @@ All features use backward-looking or creation-time information only. Activity-fr
 
 ### 4.1 Performance Metrics
 
-Each trained model will be evaluated on the temporally held-out test set using the following classification metrics:
-
 | Metric | Purpose |
 |--------|---------|
-| **Accuracy** | Overall proportion of correct predictions |
-| **Precision** | Proportion of predicted surges that are actual surges (minimises false alarms) |
-| **Recall** | Proportion of actual surges that are correctly predicted (minimises missed surges) |
-| **F1-Score** | Harmonic mean of precision and recall, balancing both concerns |
-| **AUC-ROC** | Area under the Receiver Operating Characteristic curve; measures discriminative ability across all classification thresholds |
+| Accuracy | Overall proportion of correct predictions |
+| Precision | Proportion of predicted surges that are actual surges |
+| Recall | Proportion of actual surges correctly predicted |
+| F1-Score | Harmonic mean of precision and recall |
+| AUC-ROC | Discriminative ability across all thresholds |
 
-Given the expected class imbalance (surges are rare events), precision-recall trade-offs and AUC-ROC will be prioritised over raw accuracy as primary evaluation criteria.
+Given expected class imbalance, AUC-ROC and F1-Score are prioritised over raw accuracy.
 
-### 4.2 Evaluation Artefacts
+### 4.2 Train-Test Split
 
-The evaluation module will produce the following artefacts for inclusion in the final report:
+The dataset is split using **temporal ordering** (not random sampling) to prevent data leakage:
 
-- **Confusion matrices** — One per model, visualising true positives, false positives, true negatives, and false negatives
-- **Combined ROC curve plot** — All models on a single figure with AUC values for direct comparison
-- **Metrics summary table** — Structured CSV/JSON file with all metrics per model, suitable for tabular inclusion in the report
-- **Feature importance rankings** — For tree-based models (Random Forest, XGBoost), documenting which features contribute most to predictions
+- Records sorted chronologically; first 80% for training, remaining 20% for testing
+- No future information leaks into training, reflecting realistic deployment conditions
 
-### 4.3 Train-Test Split Strategy
+### 4.3 Hyperparameter Tuning
 
-The dataset will be split using **temporal ordering** rather than random sampling to prevent data leakage:
-
-- Records are sorted chronologically by timestamp
-- The first 80% (configurable) form the training set
-- The remaining 20% form the test set
-- This ensures no future information leaks into training, reflecting realistic deployment conditions
-
-This approach is critical because random splitting would allow the model to observe future activity patterns during training, artificially inflating performance [5].
-
-**Temporal concept drift.** The dataset spans January–December 2021, a period of significant regime change in retail trading activity. The first quarter (GameStop short squeeze, meme-stock mania) exhibits fundamentally different engagement dynamics than Q3–Q4 (post-squeeze normalisation, declining retail participation). With an 80/20 temporal split, the training set covers approximately January–October and the test set covers November–December. These periods may differ in base surge rates, active ticker composition, and posting patterns — a form of temporal concept drift that could depress test performance regardless of model quality. To characterise this risk, the evaluation will:
-
-- Report the surge rate (positive class proportion) separately for the training and test partitions
-- If rates differ substantially (>50% relative difference), discuss the implications for model generalisation
-- Note this as a limitation inherent to the single temporal split design; a sliding-window evaluation across multiple time periods would provide a more complete picture but is deferred to future work due to computational scope
-
-### 4.4 Hyperparameter Tuning via Temporal Cross-Validation
-
-Hyperparameter selection for each model is conducted within the training partition using **expanding-window temporal cross-validation**. This ensures that tuning decisions respect chronological ordering and do not leak future information into model configuration.
-
-**Procedure:**
-
-1. The training set (first 80% of records by timestamp) is divided into *k* = 4 sequential folds of approximately equal size.
-2. For each fold *i* (i = 2, 3, 4):
-   - Training: all records from folds 1 through *i − 1* (expanding window)
-   - Validation: records from fold *i*
-3. This produces 3 train/validation splits, each progressively larger on the training side.
-4. Candidate hyperparameter configurations are evaluated by mean validation AUC-ROC across the 3 splits.
-5. The configuration with the highest mean validation AUC-ROC is selected and retrained on the full training partition before final evaluation on the held-out test set.
-
-**Scope of tuning per model:**
+Expanding-window temporal cross-validation (k=4 folds, 3 validation splits) within the training partition. Best configuration selected by mean validation AUC-ROC, then retrained on the full training set.
 
 | Model | Tuned hyperparameters |
 |-------|----------------------|
-| Logistic Regression | Regularisation strength (C), penalty type (L1/L2) |
+| Logistic Regression | C, penalty type (L1/L2) |
 | Random Forest | n_estimators, max_depth, min_samples_leaf |
 | XGBoost | n_estimators, max_depth, learning_rate, subsample, colsample_bytree |
 
-A small grid or randomised search (≤50 configurations per model) keeps computational cost manageable while preventing default-hyperparameter overfitting. Logistic Regression requires minimal tuning; the primary beneficiaries are the tree-based models where default settings rarely coincide with the optimal operating point for imbalanced binary classification.
+### 4.4 Baselines
 
-### 4.5 Baseline Comparison
+- **Random baseline** — AUC-ROC of 0.5
+- **Majority-class baseline** — always predicting "no surge"
+- **Single-feature baselines** — individual features as lone predictors
 
-Model performance will be compared against:
+A model demonstrates meaningful signal if AUC-ROC > 0.60 on the test set.
 
-- **Random baseline** — AUC-ROC of 0.5 (no discriminative power)
-- **Majority-class baseline** — Always predicting "no surge" (establishes the floor for accuracy)
-- **Single-feature baselines** — Individual features used alone as predictors to assess marginal contribution
+### 4.5 Statistical Robustness
 
-A model is considered to demonstrate meaningful predictive signal if it achieves AUC-ROC > 0.60 on the test set.
+- 95% confidence intervals via bootstrap resampling (1,000 iterations)
+- Multiple-seed evaluation (5 seeds) to assess initialisation sensitivity
+- McNemar's test for pairwise model comparison (α = 0.05, Bonferroni-corrected)
 
-### 4.6 Statistical Robustness
+### 4.6 Sensitivity Analysis
 
-Single-run point estimates are insufficient for drawing conclusions about model performance, particularly on imbalanced datasets where small changes in the test set composition can produce large metric fluctuations. The evaluation strategy therefore incorporates the following statistical procedures:
-
-**Confidence intervals.** All reported metrics (accuracy, precision, recall, F1, AUC-ROC) will be accompanied by 95% confidence intervals computed via bootstrap resampling (1,000 iterations) on the test set predictions. This quantifies the uncertainty around each estimate and allows meaningful comparison between models — two models are considered to differ meaningfully only if their confidence intervals do not overlap.
-
-**Multiple-seed evaluation.** To assess sensitivity to random initialisation, each model will be trained and evaluated across 5 different random seeds (42, 123, 256, 512, 1024). The temporal split is deterministic (order-based), so seed variation affects model initialisation (Random Forest bootstrap samples, XGBoost column subsampling) rather than the data split itself. Results will report the mean and standard deviation of each metric across seeds. If standard deviations exceed 0.05 for AUC-ROC, this signals instability warranting investigation.
-
-**Paired statistical tests.** To determine whether performance differences between models are statistically significant rather than due to chance, McNemar's test will be applied to paired predictions on the same test set. This is appropriate for comparing two classifiers on the same data without independence assumptions. A significance level of α = 0.05 will be used, with Bonferroni correction applied when comparing multiple model pairs.
-
-### 4.7 Threshold and Weight Sensitivity Analysis
-
-The composite surge threshold *τ* and weight parameters (w₁, w₂) directly control the class distribution and therefore influence model behaviour and evaluation. To characterise this sensitivity — identified as a key risk (Risk Register, Risk #6) — the following experiments will be conducted:
-
-**Threshold sweep.** The full pipeline will be executed at threshold values of *τ* ∈ {0.5, 1.0, 1.5, 2.0, 2.5} (in standard deviation units of the composite metric), producing five distinct labelling configurations. The pipeline is designed for parameterised batch execution, allowing all threshold × model × seed × phase combinations to run without manual intervention. For each threshold:
-
-- Record the resulting class distribution (surge rate, imbalance ratio)
-- Train all three models (LR, RF, XGBoost) on the relabelled data
-- Evaluate on the corresponding test set and report metrics with confidence intervals
-
-Because both components are z-score normalised, the threshold has a consistent statistical interpretation across all operating points: *τ* = 1.5 means "the combined signal exceeds 1.5 standard deviations above the training-set mean." This eliminates the interpretability problem of the previous raw additive formulation.
-
-**Expected outcomes and decision criteria:**
-
-| Threshold (τ) | Expected surge rate | Expected behaviour |
-|---------------|--------------------|--------------------|
-| 0.5 | ~20–30% | Many positives; high recall, low precision |
-| 1.0 | ~10–18% | Moderate imbalance; potentially best precision-recall balance |
-| 1.5 | ~5–10% | Target operating range; aligned with viability analysis |
-| 2.0 | ~2–5% | Sparse positives; models may struggle with minority class |
-| 2.5 | <2% | Extreme imbalance; likely below viable training threshold |
-
-The threshold producing the highest F1-score on the test set will be reported as the recommended operating point. If multiple thresholds produce similar F1 but different precision-recall trade-offs, both will be presented with guidance on which is preferable depending on the use case (surveillance favours recall; alert systems favour precision).
-
-**Weight sensitivity sweep.** To empirically assess the relative contribution of each component to predictive performance, the pipeline will be executed with w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} (where w₁ = 1 − w₂) at the recommended threshold *τ*. This produces a spectrum from pure volume (w₂ = 0, equivalent to Phase 1) through equal weighting (w₂ = 0.5, Phase 2 default) to pure sentiment (w₂ = 1.0). For each weight configuration:
-
-- Record the resulting class distribution
-- Train and evaluate all three models
-- Report metrics with confidence intervals
-
-This sweep directly answers whether the optimal weighting differs from the default equal split, and whether sentiment's contribution is monotonically positive or exhibits diminishing/negative returns at high weightings. The weight producing the highest F1-score will be reported alongside the default, with discussion of practical implications.
-
-**Interaction with phased approach.** Phase 1 corresponds to w₂ = 0 (volume only); Phase 2 corresponds to w₂ = 0.5 (equal composite). The weight sweep generalises this comparison across the full spectrum, providing a richer picture of how sentiment weight affects predictive performance. The threshold sweep is conducted independently at each phase's default weighting.
+- **Threshold sweep**: τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5} standard deviations — targeting 5–10% surge rate at the recommended operating point
+- **Weight sweep**: w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} to assess sentiment's marginal contribution
+- Phase 1 (w₂ = 0) vs Phase 2 (w₂ = 0.5) comparison quantifies the value of composite targets
 
 ---
 
