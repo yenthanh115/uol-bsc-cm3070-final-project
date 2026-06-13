@@ -6,6 +6,8 @@
 
 Predicting Engagement and Sentiment Surges in Stock-Related Social Media Discussions
 
+This project follows **Template 2: Predictive Modelling Prototype.**, focusing on the design, implementation, and evaluation of a machine learning system that predicts future surge events from historical social media discussions.
+
 ### 1.2 Objectives
 
 - Develop a predictive model using early-stage discussion features to forecast whether a stock-related social media discussion will experience a significant engagement and sentiment surge within 24 hours
