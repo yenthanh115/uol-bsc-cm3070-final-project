@@ -202,20 +202,20 @@ A model demonstrates meaningful signal if AUC-ROC > 0.60 on the test set.
 
 ## 5. Risk Register
 
-| # | Risk | Likelihood | Impact | Mitigation | Status |
-|---|------|-----------|--------|------------|--------|
-| 1 | Class imbalance (few surge events) | High | High | Use stratified evaluation, consider SMOTE/class weighting, report precision-recall curves | Open |
-| 2 | Sentiment analysis accuracy (TextBlob limitations) | Medium | Medium | Document limitations, consider FinBERT as alternative if time allows | Open |
-| 3 | Data quality issues (missing fields, noise) | Medium | Medium | Robust preprocessing with logging, document exclusion criteria | Open |
-| 4 | Temporal data leakage via train-test split | Medium | High | Strict temporal split, no future data in features or labels | Open |
-| 5 | Overfitting on small dataset | Medium | High | Temporal cross-validation (Section 4.4), regularisation, report train vs test gaps | Open |
-| 6 | Composite target threshold and weight sensitivity | Medium | Medium | Z-score normalisation ensures equal component contribution; sensitivity analysis across multiple thresholds and weight configurations | Open |
-| 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models | Open |
-| 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup | Open |
-| 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude or flag records where window contains 0–2 future records; report exclusion rate; conduct sensitivity analysis on minimum-N threshold during EDA | Open |
-| 10 | Snapshot engagement values as features (data leakage) | High | Critical | Dataset provides score/num_comments as final snapshot values, not point-in-time. Using them as features would leak future information. Eliminated entirely — features use only timestamps, text, and backward-looking post counts | Mitigated |
-| 11 | Snapshot engagement values in target formula (circular labelling) | High | Critical | Replaced score-based engagement growth with posting volume growth derived from timestamps only. Label interpretation paragraph acknowledges labels represent observed outcomes | Mitigated |
-| 12 | Temporal concept drift (Q1 meme-stock era vs Q3–Q4 normalisation) | Medium | Medium | Report train/test surge rate differences; acknowledge as limitation of single temporal split; sliding-window evaluation deferred to future work | Open |
+*L = Likelihood, I = Impact. H = High, M = Medium, L = Low, C = Critical.*
+
+| # | Risk | L | I | Mitigation | Status |
+|---|------|---|---|------------|--------|
+| 1 | Class imbalance (few surge events) | H | H | Stratified evaluation, SMOTE/class weighting, precision-recall curves | Open |
+| 2 | TextBlob sentiment accuracy | M | M | Document limitations; FinBERT as alternative if time allows | Open |
+| 3 | Data quality (missing fields, noise) | M | M | Robust preprocessing with logging; document exclusion criteria | Open |
+| 4 | Temporal data leakage | M | H | Strict temporal split; no future data in features or labels | Open |
+| 5 | Overfitting | M | H | Temporal CV, regularisation, report train vs test gaps | Open |
+| 6 | Threshold/weight sensitivity | M | M | Sensitivity analysis across τ and w₂ configurations | Open |
+| 7 | Per-ticker sparsity | H | H | Minimum record count (N ≥ 3) in ticker window; report exclusion rate | Open |
+| 8 | Temporal concept drift | M | M | Report train/test surge rate differences; acknowledge as limitation | Open |
+| 9 | Reproducibility failures | L | M | Pin dependencies, fixed random seeds, documented setup | Open |
+| 10 | Snapshot engagement values (leakage) | H | C | Eliminated — features and target use only timestamps and text | Mitigated |
 
 ---
 
