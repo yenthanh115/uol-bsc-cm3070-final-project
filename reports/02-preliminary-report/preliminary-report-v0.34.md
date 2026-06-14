@@ -1,4 +1,6 @@
-# Preliminary Report
+# Design Planning Report 
+
+Final Year Project (BSc in Computer Science)
 
 ## 1. Project Definition
 
@@ -6,7 +8,7 @@
 
 Predicting Engagement and Sentiment Surges in Stock-Related Social Media Discussions
 
-This project follows **Template 2: Predictive Modelling Prototype.**
+This project follows **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence**
 
 ### 1.2 Objectives
 
@@ -53,8 +55,6 @@ The threshold *τ* will be determined empirically during EDA, targeting a surge 
 - The 2021 GameStop event demonstrated real market impact from social media discussion surges [5]
 - Addresses a gap in short-term composite surge prediction integrating both engagement and sentiment signals
 
----
-
 ## 2. Scope and Boundaries
 
 ### 2.1 In Scope
@@ -68,7 +68,7 @@ The threshold *τ* will be determined empirically during EDA, targeting a surge 
 
 ### 2.2 Dataset
 
-The **Reddit Finance Data** dataset (Kaggle) contains submissions from nine stock-related subreddits over calendar year 2021, totalling ~1.38 million records. Each record includes post ID, timestamp, title, body text, engagement metrics (score, num_comments), subreddit, and extracted ticker symbols.
+The **Reddit Finance Data** dataset [9] (Kaggle) contains submissions from nine stock-related subreddits over calendar year 2021, totalling ~1.38 million records. Each record includes post ID, timestamp, title, body text, engagement metrics (score, num_comments), subreddit, and extracted ticker symbols.
 
 | Subreddit | Records | Tickers | Mean Score | Selftext Missing |
 |-----------|---------|---------|-----------|-----------------|
@@ -93,8 +93,6 @@ Preliminary analysis confirms viable surge definitions exist: at the target oper
 - Trading signals or financial advice
 - Multi-class or regression targets
 - Cross-platform data fusion
-
----
 
 ## 3. Proposed Methodology
 
@@ -144,8 +142,6 @@ Only information available at observation time *t* may be used as features. The 
 | `num_tickers_mentioned` | Discrete ≥ 1 | Count of distinct tickers in the post |
 
 All features use backward-looking or creation-time information only. Activity-frequency features are correlated with the target by design (current momentum predicts future momentum) but introduce no temporal leakage.
-
----
 
 ## 4. Evaluation Strategy
 
@@ -198,8 +194,6 @@ A model demonstrates meaningful signal if AUC-ROC > 0.60 on the test set.
 - **Weight sweep**: w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} to assess sentiment's marginal contribution
 - Phase 1 (w₂ = 0) vs Phase 2 (w₂ = 0.5) comparison quantifies the value of composite targets
 
----
-
 ## 5. Risk Register
 
 *L = Likelihood, I = Impact. H = High, M = Medium, L = Low, C = Critical.*
@@ -217,16 +211,12 @@ A model demonstrates meaningful signal if AUC-ROC > 0.60 on the test set.
 | 9 | Reproducibility failures | L | M | Pin dependencies, fixed random seeds, documented setup | Open |
 | 10 | Snapshot engagement values (leakage) | H | C | Eliminated — features and target use only timestamps and text | Mitigated |
 
----
-
 ## 6. Project Plan and Timeline
 
 <figure align="center">
   <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
   <figcaption>Figure 1: Project Timeline.</figcaption>
 </figure>
-
----
 
 ## 7. Initial Literature Review Summary
 
@@ -255,8 +245,6 @@ Three critical gaps remain:
 3. **Domain transfer** — Studies draw on general social media (YouTube, Facebook, Twitter) rather than finance-specific platforms with event-driven reactions, speculative behaviour, and domain-specific language.
 
 This project addresses all three gaps: a composite binary surge target within a 24-hour window, multi-signal features, applied specifically to stock-related discussions.
-
----
 
 ## 8. Success Criteria
 
@@ -288,8 +276,6 @@ Success is defined at three tiers to distinguish between a viable proof-of-conce
 - Report clearly articulates methodology, results, limitations, and threats to validity
 - All claims about model performance are supported by statistical evidence (confidence intervals, significance tests)
 
----
-
 ## 9. References
 
 [1] G. Szabo and B. A. Huberman, "Predicting the popularity of online content," *Communications of the ACM*, vol. 53, no. 8, pp. 80–88, 2010. doi: 10.1145/1787234.1787254
@@ -307,4 +293,6 @@ Success is defined at three tiers to distinguish between a viable proof-of-conce
 [7] Q. Kong, W. Mao, G. Chen, and D. Zeng, "Exploring trends and patterns of popularity stage evolution in social media," *IEEE Transactions on Systems, Man, and Cybernetics: Systems*, vol. 48, no. 12, pp. 2408–2420, 2018. doi: 10.1109/TSMC.2017.2719279
 
 [8] D. Yuan and Y. Li, "Discovering and early predicting popularity evolution patterns of social media emergency information," *Aslib Journal of Information Management*, vol. 77, no. 1, pp. 115–137, 2025. doi: 10.1108/AJIM-06-2024-0288
+
+[9] leukipp, "Reddit - Finance Posts (r/wallstreetbets, r/gme...)," Kaggle, 2021. [Online]. Available: https://www.kaggle.com/datasets/leukipp/reddit-finance-data
 
