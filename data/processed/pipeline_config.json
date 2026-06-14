@@ -1,0 +1,17 @@
+{
+  "file_path": "data/raw/submissions_reddit.csv",
+  "output_dir": "data/processed",
+  "temporal_split_ratio": 0.8,
+  "min_window_count": 3,
+  "threshold_tau": 1.5,
+  "weight_volume": 0.5,
+  "weight_sentiment": 0.5,
+  "thresholds": [
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    2.5
+  ],
+  "random_seed": 42
+}
