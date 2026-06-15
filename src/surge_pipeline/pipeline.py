@@ -283,7 +283,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(results["labelled_df"]))
 
     # ------------------------------------------------------------------
-    # 2. Summary statistics (JSON)
+    # 2. Pipeline summary (JSON)
     # ------------------------------------------------------------------
     stats = results["stats"]
     summary = {
@@ -315,7 +315,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
         excluded = int(labelled_df["excluded"].sum())
         summary["exclusion_rate"] = excluded / total * 100 if total > 0 else 0.0
 
-    stats_path = output_dir / "summary_statistics.json"
+    summary_path = output_dir / "pipeline_summary.json"
 
     def _json_serialise(obj):
         """Handle non-serialisable values like inf/nan."""
@@ -326,11 +326,11 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
                 return "NaN"
         return str(obj)
 
-    stats_path.write_text(
+    summary_path.write_text(
         json.dumps(summary, indent=2, default=_json_serialise), encoding="utf-8"
     )
-    output_paths["summary_statistics"] = str(stats_path)
-    logger.info("Summary statistics saved: %s", stats_path)
+    output_paths["pipeline_summary"] = str(summary_path)
+    logger.info("Pipeline summary saved: %s", summary_path)
 
     # ------------------------------------------------------------------
     # 3. Threshold sensitivity table (CSV) (R8-AC3)
