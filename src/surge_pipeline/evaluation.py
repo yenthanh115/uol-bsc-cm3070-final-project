@@ -777,3 +777,398 @@ def get_evaluation_summary(result: EvaluationResult) -> Dict[str, Any]:
         }
 
     return summary
+
+
+# =============================================================================
+# Bootstrap Confidence Intervals (R17)
+# =============================================================================
+
+
+def compute_bootstrap_ci(
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+    y_prob: np.ndarray,
+    n_iterations: int = 1000,
+    seed: int = 42,
+    confidence_level: float = 0.95,
+) -> BootstrapCI:
+    """Compute 95% bootstrap confidence intervals for all classification metrics (R17).
+
+    Resamples the test set with replacement for `n_iterations` iterations,
+    computing accuracy, precision, recall, F1, and AUC-ROC on each bootstrap
+    sample. Reports the lower bound, point estimate, and upper bound for
+    each metric based on the specified confidence level.
+
+    Parameters
+    ----------
+    y_test : np.ndarray
+        True labels for the test set.
+    y_pred : np.ndarray
+        Predicted binary labels for the test set.
+    y_prob : np.ndarray
+        Predicted probabilities (positive class) for the test set.
+    n_iterations : int, optional
+        Number of bootstrap resampling iterations (default: 1000, R17-AC1).
+    seed : int, optional
+        Fixed random seed for reproducible bootstrap sampling (R17-AC3).
+    confidence_level : float, optional
+        Confidence level for intervals (default: 0.95 for 95% CIs).
+
+    Returns
+    -------
+    BootstrapCI
+        Bootstrap confidence intervals for all metrics (R17-AC2).
+    """
+    rng = np.random.RandomState(seed)
+    n_samples = len(y_test)
+
+    # Storage for bootstrap metric distributions
+    boot_accuracy = np.zeros(n_iterations)
+    boot_precision = np.zeros(n_iterations)
+    boot_recall = np.zeros(n_iterations)
+    boot_f1 = np.zeros(n_iterations)
+    boot_auc_roc = np.zeros(n_iterations)
+
+    for i in range(n_iterations):
+        # Resample indices with replacement
+        indices = rng.randint(0, n_samples, size=n_samples)
+
+        y_test_boot = y_test[indices]
+        y_pred_boot = y_pred[indices]
+        y_prob_boot = y_prob[indices]
+
+        # Compute metrics on bootstrap sample
+        boot_accuracy[i] = accuracy_score(y_test_boot, y_pred_boot)
+        boot_precision[i] = precision_score(y_test_boot, y_pred_boot, zero_division=0.0)
+        boot_recall[i] = recall_score(y_test_boot, y_pred_boot, zero_division=0.0)
+        boot_f1[i] = f1_score(y_test_boot, y_pred_boot, zero_division=0.0)
+
+        # AUC-ROC requires both classes present
+        if len(np.unique(y_test_boot)) >= 2:
+            boot_auc_roc[i] = roc_auc_score(y_test_boot, y_prob_boot)
+        else:
+            boot_auc_roc[i] = 0.5
+
+    # Compute confidence interval bounds
+    alpha = 1 - confidence_level
+    lower_pct = (alpha / 2) * 100
+    upper_pct = (1 - alpha / 2) * 100
+
+    # Point estimates from original data
+    point_accuracy = accuracy_score(y_test, y_pred)
+    point_precision = precision_score(y_test, y_pred, zero_division=0.0)
+    point_recall = recall_score(y_test, y_pred, zero_division=0.0)
+    point_f1 = f1_score(y_test, y_pred, zero_division=0.0)
+    if len(np.unique(y_test)) >= 2:
+        point_auc_roc = roc_auc_score(y_test, y_prob)
+    else:
+        point_auc_roc = 0.5
+
+    ci = BootstrapCI(
+        accuracy=MetricCI(
+            lower=float(np.percentile(boot_accuracy, lower_pct)),
+            point_estimate=point_accuracy,
+            upper=float(np.percentile(boot_accuracy, upper_pct)),
+        ),
+        precision=MetricCI(
+            lower=float(np.percentile(boot_precision, lower_pct)),
+            point_estimate=point_precision,
+            upper=float(np.percentile(boot_precision, upper_pct)),
+        ),
+        recall=MetricCI(
+            lower=float(np.percentile(boot_recall, lower_pct)),
+            point_estimate=point_recall,
+            upper=float(np.percentile(boot_recall, upper_pct)),
+        ),
+        f1=MetricCI(
+            lower=float(np.percentile(boot_f1, lower_pct)),
+            point_estimate=point_f1,
+            upper=float(np.percentile(boot_f1, upper_pct)),
+        ),
+        auc_roc=MetricCI(
+            lower=float(np.percentile(boot_auc_roc, lower_pct)),
+            point_estimate=point_auc_roc,
+            upper=float(np.percentile(boot_auc_roc, upper_pct)),
+        ),
+        n_iterations=n_iterations,
+        bootstrap_seed=seed,
+    )
+
+    logger.info(
+        "Bootstrap CI (n=%d, seed=%d): AUC-ROC = [%.4f, %.4f, %.4f]",
+        n_iterations,
+        seed,
+        ci.auc_roc.lower,
+        ci.auc_roc.point_estimate,
+        ci.auc_roc.upper,
+    )
+
+    return ci
+
+
+# =============================================================================
+# Multi-Seed Evaluation (R18)
+# =============================================================================
+
+
+def run_multi_seed_evaluation(
+    df: pd.DataFrame,
+    config: PipelineConfig,
+    figures_dir: Optional[str] = None,
+    metrics_dir: Optional[str] = None,
+    skip_figures: bool = True,
+) -> MultiSeedResult:
+    """Train and evaluate each model across multiple seeds (R18).
+
+    Iterates over MULTI_SEED_LIST, training and evaluating all models at
+    each seed. The temporal split is deterministic (order-based) and remains
+    constant across seeds — seed variation affects only model initialisation
+    (R18-AC4).
+
+    Reports mean ± std for each metric across seeds (R18-AC2) and flags
+    models with std(AUC-ROC) > 0.05 as exhibiting initialisation instability
+    (R18-AC3).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Feature-engineered DataFrame with FEATURE_COLUMNS, `surge_label`,
+        `partition`, `excluded`, and `created_utc`.
+    config : PipelineConfig
+        Pipeline configuration. The `random_seed` field will be overridden
+        for each seed iteration.
+    figures_dir : str, optional
+        Directory for saving figures. Defaults to "figures/".
+    metrics_dir : str, optional
+        Directory for saving metrics JSON. Defaults to
+        "data/processed/evaluation/".
+    skip_figures : bool, optional
+        If True, skip figure generation for all but the last seed
+        (default: True for efficiency).
+
+    Returns
+    -------
+    MultiSeedResult
+        Complete multi-seed evaluation results with mean/std and
+        instability flags.
+    """
+    t_start = time.perf_counter()
+
+    logger.info("=" * 70)
+    logger.info("MULTI-SEED EVALUATION — Seeds: %s", MULTI_SEED_LIST)
+    logger.info("=" * 70)
+
+    # Set up output directories
+    fig_dir = Path(figures_dir) if figures_dir else Path("figures")
+    met_dir = Path(metrics_dir) if metrics_dir else Path("data/processed/evaluation")
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    met_dir.mkdir(parents=True, exist_ok=True)
+
+    # Storage for per-seed results
+    per_seed_results: Dict[int, EvaluationResult] = {}
+    per_seed_training: Dict[int, TrainingResult] = {}
+
+    for i, seed in enumerate(MULTI_SEED_LIST):
+        logger.info("-" * 70)
+        logger.info("Seed %d/%d: %d", i + 1, len(MULTI_SEED_LIST), seed)
+        logger.info("-" * 70)
+
+        # Create a config copy with the current seed (R18-AC4)
+        seed_config = copy.deepcopy(config)
+        seed_config.random_seed = seed
+
+        # Train models with this seed
+        training_result = train_models(df, seed_config)
+        per_seed_training[seed] = training_result
+
+        # Evaluate — generate figures only for the last seed (efficiency)
+        is_last_seed = (i == len(MULTI_SEED_LIST) - 1)
+        seed_skip_figures = skip_figures if not is_last_seed else skip_figures
+
+        eval_result = evaluate_models(
+            df=df,
+            training_result=training_result,
+            config=seed_config,
+            figures_dir=str(fig_dir),
+            metrics_dir=str(met_dir),
+            skip_figures=seed_skip_figures,
+        )
+        per_seed_results[seed] = eval_result
+
+    # ------------------------------------------------------------------
+    # Aggregate metrics across seeds (R18-AC2)
+    # ------------------------------------------------------------------
+    model_names = list(per_seed_results[MULTI_SEED_LIST[0]].model_metrics.keys())
+    model_seed_metrics: Dict[str, ModelSeedMetrics] = {}
+    unstable_models: List[str] = []
+
+    for model_name in model_names:
+        # Collect per-seed metrics for this model
+        seed_metrics_dict: Dict[int, ModelMetrics] = {}
+        accuracies = []
+        precisions = []
+        recalls = []
+        f1s = []
+        auc_rocs = []
+
+        for seed in MULTI_SEED_LIST:
+            metrics = per_seed_results[seed].model_metrics[model_name]
+            seed_metrics_dict[seed] = metrics
+            accuracies.append(metrics.accuracy)
+            precisions.append(metrics.precision)
+            recalls.append(metrics.recall)
+            f1s.append(metrics.f1)
+            auc_rocs.append(metrics.auc_roc)
+
+        # Compute mean and std
+        mean_accuracy = float(np.mean(accuracies))
+        std_accuracy = float(np.std(accuracies, ddof=1))
+        mean_precision = float(np.mean(precisions))
+        std_precision = float(np.std(precisions, ddof=1))
+        mean_recall = float(np.mean(recalls))
+        std_recall = float(np.std(recalls, ddof=1))
+        mean_f1 = float(np.mean(f1s))
+        std_f1 = float(np.std(f1s, ddof=1))
+        mean_auc_roc = float(np.mean(auc_rocs))
+        std_auc_roc = float(np.std(auc_rocs, ddof=1))
+
+        # Flag instability (R18-AC3)
+        is_unstable = std_auc_roc > INSTABILITY_THRESHOLD
+
+        if is_unstable:
+            unstable_models.append(model_name)
+            logger.warning(
+                "⚠ %s: UNSTABLE — std(AUC-ROC) = %.4f > %.2f threshold",
+                model_name,
+                std_auc_roc,
+                INSTABILITY_THRESHOLD,
+            )
+
+        model_seed_metrics[model_name] = ModelSeedMetrics(
+            model_name=model_name,
+            seed_metrics=seed_metrics_dict,
+            mean_accuracy=mean_accuracy,
+            std_accuracy=std_accuracy,
+            mean_precision=mean_precision,
+            std_precision=std_precision,
+            mean_recall=mean_recall,
+            std_recall=std_recall,
+            mean_f1=mean_f1,
+            std_f1=std_f1,
+            mean_auc_roc=mean_auc_roc,
+            std_auc_roc=std_auc_roc,
+            is_unstable=is_unstable,
+        )
+
+    result = MultiSeedResult(
+        model_seed_metrics=model_seed_metrics,
+        seeds=MULTI_SEED_LIST,
+        unstable_models=unstable_models,
+        per_seed_results=per_seed_results,
+    )
+
+    # ------------------------------------------------------------------
+    # Save multi-seed results and print summary
+    # ------------------------------------------------------------------
+    _save_multi_seed_json(result, met_dir)
+    _print_multi_seed_summary(result)
+
+    t_elapsed = time.perf_counter() - t_start
+    logger.info("=" * 70)
+    logger.info("MULTI-SEED EVALUATION COMPLETE (total: %.1fs)", t_elapsed)
+    logger.info("  Seeds evaluated: %s", MULTI_SEED_LIST)
+    logger.info("  Unstable models: %s", unstable_models if unstable_models else "None")
+    logger.info("  Results saved to: %s", met_dir)
+    logger.info("=" * 70)
+
+    return result
+
+
+def _save_multi_seed_json(result: MultiSeedResult, met_dir: Path) -> None:
+    """Save multi-seed evaluation results to JSON.
+
+    Parameters
+    ----------
+    result : MultiSeedResult
+        Complete multi-seed evaluation result.
+    met_dir : Path
+        Output directory for metrics files.
+    """
+    output = {
+        "seeds": result.seeds,
+        "unstable_models": result.unstable_models,
+        "instability_threshold": INSTABILITY_THRESHOLD,
+        "models": {},
+    }
+
+    for model_name, msm in result.model_seed_metrics.items():
+        per_seed_data = {}
+        for seed, metrics in msm.seed_metrics.items():
+            per_seed_data[str(seed)] = {
+                "accuracy": metrics.accuracy,
+                "precision": metrics.precision,
+                "recall": metrics.recall,
+                "f1": metrics.f1,
+                "auc_roc": metrics.auc_roc,
+            }
+
+        output["models"][model_name] = {
+            "mean_accuracy": msm.mean_accuracy,
+            "std_accuracy": msm.std_accuracy,
+            "mean_precision": msm.mean_precision,
+            "std_precision": msm.std_precision,
+            "mean_recall": msm.mean_recall,
+            "std_recall": msm.std_recall,
+            "mean_f1": msm.mean_f1,
+            "std_f1": msm.std_f1,
+            "mean_auc_roc": msm.mean_auc_roc,
+            "std_auc_roc": msm.std_auc_roc,
+            "is_unstable": msm.is_unstable,
+            "per_seed": per_seed_data,
+        }
+
+    filepath = met_dir / "multi_seed_evaluation.json"
+    filepath.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    logger.info("  Saved multi-seed results: %s", filepath)
+
+
+def _print_multi_seed_summary(result: MultiSeedResult) -> None:
+    """Print a formatted multi-seed evaluation summary table.
+
+    Parameters
+    ----------
+    result : MultiSeedResult
+        Complete multi-seed evaluation result.
+    """
+    logger.info("-" * 70)
+    logger.info("MULTI-SEED EVALUATION SUMMARY (mean ± std across %d seeds)", len(result.seeds))
+    logger.info("-" * 70)
+    logger.info(
+        "%-22s %14s %14s %14s %14s %14s %s",
+        "Model", "Accuracy", "Precision", "Recall", "F1", "AUC-ROC", "Stable?",
+    )
+    logger.info("-" * 70)
+
+    for model_name, msm in result.model_seed_metrics.items():
+        stability = "✗ UNSTABLE" if msm.is_unstable else "✓"
+        logger.info(
+            "%-22s %6.4f±%.4f %6.4f±%.4f %6.4f±%.4f %6.4f±%.4f %6.4f±%.4f %s",
+            _format_model_name(model_name),
+            msm.mean_accuracy, msm.std_accuracy,
+            msm.mean_precision, msm.std_precision,
+            msm.mean_recall, msm.std_recall,
+            msm.mean_f1, msm.std_f1,
+            msm.mean_auc_roc, msm.std_auc_roc,
+            stability,
+        )
+
+    logger.info("-" * 70)
+    if result.unstable_models:
+        logger.info(
+            "⚠ Unstable models (std AUC-ROC > %.2f): %s",
+            INSTABILITY_THRESHOLD,
+            ", ".join(result.unstable_models),
+        )
+    else:
+        logger.info("✓ All models are stable (std AUC-ROC ≤ %.2f)", INSTABILITY_THRESHOLD)
+    logger.info("-" * 70)
