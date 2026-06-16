@@ -1172,3 +1172,536 @@ def _print_multi_seed_summary(result: MultiSeedResult) -> None:
     else:
         logger.info("✓ All models are stable (std AUC-ROC ≤ %.2f)", INSTABILITY_THRESHOLD)
     logger.info("-" * 70)
+
+
+# =============================================================================
+# Statistical Significance Testing (R19)
+# =============================================================================
+
+
+@dataclass
+class McNemarResult:
+    """Result of a McNemar's test pairwise comparison (R19-AC1, AC4)."""
+
+    model_a: str
+    model_b: str
+    test_statistic: float
+    p_value: float
+    adjusted_alpha: float  # Bonferroni-corrected α
+    is_significant: bool
+
+
+@dataclass
+class BaselineComparison:
+    """Comparison of a trained model against baselines (R19-AC5)."""
+
+    model_name: str
+    model_auc_roc: float
+    random_baseline_auc: float  # Always 0.5
+    majority_class_accuracy: float
+    majority_class_auc: float
+    single_feature_aucs: Dict[str, float]  # feature_name -> AUC-ROC
+    beats_random: bool
+    beats_majority: bool
+    best_single_feature: str
+    best_single_feature_auc: float
+    beats_all_single_features: bool
+
+
+@dataclass
+class SuccessTierResult:
+    """Success tier validation result for a model (R21-AC1, AC2)."""
+
+    model_name: str
+    auc_roc: float
+    achieves_minimum: bool  # > 0.60
+    achieves_target: bool  # > 0.70
+    achieves_stretch: bool  # > 0.80
+    tier_achieved: str  # "stretch", "target", "minimum", or "below_minimum"
+
+
+@dataclass
+class FinalSummary:
+    """Final summary report with pass/fail determination (R21-AC5)."""
+
+    best_model: str
+    best_auc_roc: float
+    best_auc_roc_ci: Optional[Dict[str, float]]  # {lower, upper} if available
+    success_tier_achieved: str
+    overall_pass: bool  # At least one model > 0.60
+    model_tiers: Dict[str, SuccessTierResult]
+    mcnemar_results: List[McNemarResult]
+    baseline_comparisons: Dict[str, BaselineComparison]
+    phase1_vs_phase2: Optional[Dict[str, Any]]  # Optional comparison
+    recommended_config: Dict[str, Any]  # {threshold_tau, weight_w2}
+
+
+# Success tier thresholds (R21-AC1)
+SUCCESS_TIER_MINIMUM: float = 0.60
+SUCCESS_TIER_TARGET: float = 0.70
+SUCCESS_TIER_STRETCH: float = 0.80
+
+
+def mcnemar_pairwise_test(
+    y_test: np.ndarray,
+    model_predictions: Dict[str, np.ndarray],
+    alpha: float = 0.05,
+) -> List[McNemarResult]:
+    """Apply McNemar's test for pairwise model comparison (R19-AC1, AC3, AC4).
+
+    Compares all pairs of models using McNemar's test on paired predictions
+    from the same test set. Applies Bonferroni correction for multiple
+    comparisons to control the family-wise error rate.
+
+    Parameters
+    ----------
+    y_test : np.ndarray
+        True labels for the test set.
+    model_predictions : dict
+        Mapping of model_name -> predicted binary labels (np.ndarray).
+    alpha : float, optional
+        Significance level before correction (default: 0.05, R19-AC2).
+
+    Returns
+    -------
+    list of McNemarResult
+        McNemar's test results for each pair of models.
+    """
+    from itertools import combinations
+    from scipy.stats import chi2
+
+    model_names = list(model_predictions.keys())
+    n_comparisons = len(list(combinations(model_names, 2)))
+
+    # Bonferroni correction (R19-AC3)
+    adjusted_alpha = alpha / max(n_comparisons, 1)
+
+    results: List[McNemarResult] = []
+
+    for model_a, model_b in combinations(model_names, 2):
+        pred_a = model_predictions[model_a]
+        pred_b = model_predictions[model_b]
+
+        # Compute correct/incorrect for each model
+        correct_a = (pred_a == y_test).astype(int)
+        correct_b = (pred_b == y_test).astype(int)
+
+        # McNemar's contingency table
+        # b = A correct, B incorrect
+        # c = A incorrect, B correct
+        b = np.sum((correct_a == 1) & (correct_b == 0))
+        c = np.sum((correct_a == 0) & (correct_b == 1))
+
+        # McNemar's test statistic with continuity correction
+        if b + c == 0:
+            # No discordant pairs — models make identical predictions
+            statistic = 0.0
+            p_value = 1.0
+        else:
+            # Chi-squared statistic with continuity correction
+            statistic = (abs(b - c) - 1) ** 2 / (b + c)
+            p_value = 1.0 - chi2.cdf(statistic, df=1)
+
+        is_significant = bool(p_value < adjusted_alpha)
+
+        result = McNemarResult(
+            model_a=model_a,
+            model_b=model_b,
+            test_statistic=float(statistic),
+            p_value=float(p_value),
+            adjusted_alpha=adjusted_alpha,
+            is_significant=is_significant,
+        )
+        results.append(result)
+
+        logger.info(
+            "  McNemar %s vs %s: χ²=%.4f, p=%.6f, α_adj=%.6f → %s",
+            model_a,
+            model_b,
+            statistic,
+            p_value,
+            adjusted_alpha,
+            "SIGNIFICANT" if is_significant else "not significant",
+        )
+
+    return results
+
+
+def evaluate_baselines(
+    df: pd.DataFrame,
+    model_metrics: Dict[str, ModelMetrics],
+) -> Dict[str, BaselineComparison]:
+    """Compare trained models against baselines (R19-AC5).
+
+    Baselines:
+      1. Random baseline: AUC = 0.5
+      2. Majority-class: always predict no-surge (label=0)
+      3. Single-feature predictors: logistic regression with each feature alone
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Feature-engineered DataFrame with FEATURE_COLUMNS, `surge_label`,
+        `partition`, `excluded`.
+    model_metrics : dict
+        Mapping of model_name -> ModelMetrics from evaluation.
+
+    Returns
+    -------
+    dict
+        Mapping of model_name -> BaselineComparison for each trained model.
+    """
+    from sklearn.linear_model import LogisticRegression as LR
+
+    logger.info("=" * 70)
+    logger.info("BASELINE COMPARISONS (R19-AC5)")
+    logger.info("=" * 70)
+
+    # Extract test partition
+    test_mask = (
+        (df["partition"] == "test")
+        & (~df["excluded"].astype(bool))
+        & (df["surge_label"].notna())
+    )
+    train_mask = (
+        (df["partition"] == "train")
+        & (~df["excluded"].astype(bool))
+        & (df["surge_label"].notna())
+    )
+
+    df_test = df.loc[test_mask]
+    df_train = df.loc[train_mask]
+
+    X_test = df_test[FEATURE_COLUMNS].values.astype(np.float64)
+    y_test = df_test["surge_label"].values.astype(np.float64)
+    X_train = df_train[FEATURE_COLUMNS].values.astype(np.float64)
+    y_train = df_train["surge_label"].values.astype(np.float64)
+
+    n_test = len(y_test)
+
+    # Majority-class baseline: always predict 0 (no-surge)
+    majority_pred = np.zeros(n_test)
+    majority_accuracy = accuracy_score(y_test, majority_pred)
+    # AUC-ROC for constant predictor is 0.5
+    majority_auc = 0.5
+
+    logger.info("  Majority-class baseline: accuracy=%.4f, AUC=%.4f", majority_accuracy, majority_auc)
+
+    # Single-feature predictors (R19-AC5)
+    single_feature_aucs: Dict[str, float] = {}
+
+    for i, feature_name in enumerate(FEATURE_COLUMNS):
+        try:
+            X_train_single = X_train[:, i].reshape(-1, 1)
+            X_test_single = X_test[:, i].reshape(-1, 1)
+
+            # Simple logistic regression with one feature
+            lr = LR(max_iter=1000, random_state=42, solver="lbfgs")
+            lr.fit(X_train_single, y_train)
+
+            if hasattr(lr, "predict_proba"):
+                y_prob_single = lr.predict_proba(X_test_single)[:, 1]
+            else:
+                y_prob_single = lr.decision_function(X_test_single)
+
+            if len(np.unique(y_test)) >= 2:
+                auc_single = roc_auc_score(y_test, y_prob_single)
+            else:
+                auc_single = 0.5
+
+            single_feature_aucs[feature_name] = auc_single
+        except Exception as e:
+            logger.warning("  Single-feature %s failed: %s", feature_name, e)
+            single_feature_aucs[feature_name] = 0.5
+
+    # Find best single-feature predictor
+    best_single_feature = max(single_feature_aucs, key=single_feature_aucs.get)
+    best_single_feature_auc = single_feature_aucs[best_single_feature]
+
+    logger.info(
+        "  Best single-feature predictor: %s (AUC=%.4f)",
+        best_single_feature,
+        best_single_feature_auc,
+    )
+
+    # Compare each trained model against baselines
+    comparisons: Dict[str, BaselineComparison] = {}
+
+    for model_name, metrics in model_metrics.items():
+        beats_random = metrics.auc_roc > 0.5
+        beats_majority = metrics.auc_roc > majority_auc
+        beats_all_single = metrics.auc_roc > best_single_feature_auc
+
+        comparison = BaselineComparison(
+            model_name=model_name,
+            model_auc_roc=metrics.auc_roc,
+            random_baseline_auc=0.5,
+            majority_class_accuracy=majority_accuracy,
+            majority_class_auc=majority_auc,
+            single_feature_aucs=single_feature_aucs,
+            beats_random=beats_random,
+            beats_majority=beats_majority,
+            best_single_feature=best_single_feature,
+            best_single_feature_auc=best_single_feature_auc,
+            beats_all_single_features=beats_all_single,
+        )
+        comparisons[model_name] = comparison
+
+        logger.info(
+            "  %s (AUC=%.4f): beats_random=%s, beats_majority=%s, beats_single_feature=%s",
+            model_name,
+            metrics.auc_roc,
+            beats_random,
+            beats_majority,
+            beats_all_single,
+        )
+
+    return comparisons
+
+
+def validate_success_tiers(
+    model_metrics: Dict[str, ModelMetrics],
+) -> Dict[str, SuccessTierResult]:
+    """Validate model AUC-ROC against success tiers (R21-AC1, AC2, AC3).
+
+    Success tiers:
+      - Minimum: AUC-ROC > 0.60
+      - Target: AUC-ROC > 0.70
+      - Stretch: AUC-ROC > 0.80
+
+    Parameters
+    ----------
+    model_metrics : dict
+        Mapping of model_name -> ModelMetrics.
+
+    Returns
+    -------
+    dict
+        Mapping of model_name -> SuccessTierResult.
+    """
+    logger.info("=" * 70)
+    logger.info("SUCCESS TIER VALIDATION (R21)")
+    logger.info("=" * 70)
+
+    results: Dict[str, SuccessTierResult] = {}
+
+    for model_name, metrics in model_metrics.items():
+        auc = metrics.auc_roc
+        achieves_minimum = auc > SUCCESS_TIER_MINIMUM
+        achieves_target = auc > SUCCESS_TIER_TARGET
+        achieves_stretch = auc > SUCCESS_TIER_STRETCH
+
+        if achieves_stretch:
+            tier = "stretch"
+        elif achieves_target:
+            tier = "target"
+        elif achieves_minimum:
+            tier = "minimum"
+        else:
+            tier = "below_minimum"
+
+        result = SuccessTierResult(
+            model_name=model_name,
+            auc_roc=auc,
+            achieves_minimum=achieves_minimum,
+            achieves_target=achieves_target,
+            achieves_stretch=achieves_stretch,
+            tier_achieved=tier,
+        )
+        results[model_name] = result
+
+        logger.info(
+            "  %s: AUC=%.4f → tier=%s (min=%s, target=%s, stretch=%s)",
+            model_name,
+            auc,
+            tier,
+            "✓" if achieves_minimum else "✗",
+            "✓" if achieves_target else "✗",
+            "✓" if achieves_stretch else "✗",
+        )
+
+    # Overall pass/fail (R21-AC3)
+    any_achieves_minimum = any(r.achieves_minimum for r in results.values())
+    if any_achieves_minimum:
+        logger.info("  ✓ PASS: At least one model achieves minimum success (AUC > 0.60)")
+    else:
+        logger.info("  ✗ FAIL: No model achieves minimum success (AUC > 0.60)")
+
+    return results
+
+
+def produce_final_summary(
+    model_metrics: Dict[str, ModelMetrics],
+    mcnemar_results: List[McNemarResult],
+    baseline_comparisons: Dict[str, BaselineComparison],
+    tier_results: Dict[str, SuccessTierResult],
+    config: PipelineConfig,
+    bootstrap_ci: Optional[Dict[str, BootstrapCI]] = None,
+    phase1_vs_phase2: Optional[Dict[str, Any]] = None,
+    output_dir: Optional[str] = None,
+) -> FinalSummary:
+    """Produce the final summary report JSON with pass/fail determination (R21-AC5).
+
+    Generates a comprehensive summary containing:
+      - Best model identity and AUC-ROC with CI
+      - Success tier achieved
+      - Phase 1 vs Phase 2 comparison result (if available)
+      - Recommended operating configuration (threshold τ, weight w₂)
+      - Statistical significance test results
+      - Baseline comparison results
+
+    Parameters
+    ----------
+    model_metrics : dict
+        Mapping of model_name -> ModelMetrics.
+    mcnemar_results : list of McNemarResult
+        Pairwise McNemar's test results.
+    baseline_comparisons : dict
+        Mapping of model_name -> BaselineComparison.
+    tier_results : dict
+        Mapping of model_name -> SuccessTierResult.
+    config : PipelineConfig
+        Pipeline configuration for recommended operating point.
+    bootstrap_ci : dict, optional
+        Mapping of model_name -> BootstrapCI for confidence intervals.
+    phase1_vs_phase2 : dict, optional
+        Phase 1 vs Phase 2 comparison result (R21-AC4).
+    output_dir : str, optional
+        Directory for saving final_summary.json.
+        Defaults to "data/processed/evaluation/".
+
+    Returns
+    -------
+    FinalSummary
+        Complete final summary with pass/fail determination.
+    """
+    logger.info("=" * 70)
+    logger.info("PRODUCING FINAL SUMMARY REPORT (R21-AC5)")
+    logger.info("=" * 70)
+
+    # Identify best model by AUC-ROC (R21-AC1)
+    best_model = max(model_metrics, key=lambda m: model_metrics[m].auc_roc)
+    best_auc = model_metrics[best_model].auc_roc
+
+    # Get CI for best model if available
+    best_ci = None
+    if bootstrap_ci and best_model in bootstrap_ci:
+        ci = bootstrap_ci[best_model]
+        best_ci = {
+            "lower": ci.auc_roc.lower,
+            "point_estimate": ci.auc_roc.point_estimate,
+            "upper": ci.auc_roc.upper,
+        }
+
+    # Determine success tier (R21-AC1)
+    best_tier = tier_results[best_model].tier_achieved
+
+    # Overall pass/fail (R21-AC3)
+    overall_pass = any(r.achieves_minimum for r in tier_results.values())
+
+    # Recommended configuration
+    recommended_config = {
+        "threshold_tau": config.threshold_tau,
+        "weight_w2": config.weight_sentiment,
+    }
+
+    summary = FinalSummary(
+        best_model=best_model,
+        best_auc_roc=best_auc,
+        best_auc_roc_ci=best_ci,
+        success_tier_achieved=best_tier,
+        overall_pass=overall_pass,
+        model_tiers=tier_results,
+        mcnemar_results=mcnemar_results,
+        baseline_comparisons=baseline_comparisons,
+        phase1_vs_phase2=phase1_vs_phase2,
+        recommended_config=recommended_config,
+    )
+
+    # Save to JSON (R21-AC5)
+    out_dir = Path(output_dir) if output_dir else Path("data/processed/evaluation")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    summary_json = _build_final_summary_json(summary)
+    filepath = out_dir / "final_summary.json"
+    filepath.write_text(json.dumps(summary_json, indent=2), encoding="utf-8")
+
+    logger.info("  Best model: %s (AUC=%.4f)", best_model, best_auc)
+    if best_ci:
+        logger.info(
+            "  Best AUC-ROC CI: [%.4f, %.4f]", best_ci["lower"], best_ci["upper"]
+        )
+    logger.info("  Success tier achieved: %s", best_tier)
+    logger.info("  Overall pass: %s", "PASS" if overall_pass else "FAIL")
+    logger.info("  Final summary saved to: %s", filepath)
+    logger.info("=" * 70)
+
+    return summary
+
+
+def _build_final_summary_json(summary: FinalSummary) -> Dict[str, Any]:
+    """Build JSON-serialisable dict from FinalSummary.
+
+    Parameters
+    ----------
+    summary : FinalSummary
+        Complete final summary object.
+
+    Returns
+    -------
+    dict
+        JSON-serialisable dictionary.
+    """
+    # Model tiers
+    model_tiers_json = {}
+    for model_name, tier in summary.model_tiers.items():
+        model_tiers_json[model_name] = {
+            "auc_roc": tier.auc_roc,
+            "achieves_minimum": tier.achieves_minimum,
+            "achieves_target": tier.achieves_target,
+            "achieves_stretch": tier.achieves_stretch,
+            "tier_achieved": tier.tier_achieved,
+        }
+
+    # McNemar results
+    mcnemar_json = []
+    for r in summary.mcnemar_results:
+        mcnemar_json.append({
+            "model_a": r.model_a,
+            "model_b": r.model_b,
+            "test_statistic": r.test_statistic,
+            "p_value": r.p_value,
+            "adjusted_alpha": r.adjusted_alpha,
+            "is_significant": r.is_significant,
+        })
+
+    # Baseline comparisons
+    baselines_json = {}
+    for model_name, comp in summary.baseline_comparisons.items():
+        baselines_json[model_name] = {
+            "model_auc_roc": comp.model_auc_roc,
+            "random_baseline_auc": comp.random_baseline_auc,
+            "majority_class_accuracy": comp.majority_class_accuracy,
+            "majority_class_auc": comp.majority_class_auc,
+            "best_single_feature": comp.best_single_feature,
+            "best_single_feature_auc": comp.best_single_feature_auc,
+            "beats_random": comp.beats_random,
+            "beats_majority": comp.beats_majority,
+            "beats_all_single_features": comp.beats_all_single_features,
+            "single_feature_aucs": comp.single_feature_aucs,
+        }
+
+    output = {
+        "best_model": summary.best_model,
+        "best_auc_roc": summary.best_auc_roc,
+        "best_auc_roc_ci": summary.best_auc_roc_ci,
+        "success_tier_achieved": summary.success_tier_achieved,
+        "overall_pass": summary.overall_pass,
+        "model_tiers": model_tiers_json,
+        "mcnemar_pairwise_tests": mcnemar_json,
+        "baseline_comparisons": baselines_json,
+        "phase1_vs_phase2": summary.phase1_vs_phase2,
+        "recommended_config": summary.recommended_config,
+    }
+
+    return output
