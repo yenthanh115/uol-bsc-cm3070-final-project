@@ -24,6 +24,8 @@ from surge_pipeline.config import PipelineConfig  # noqa: E402
 from surge_pipeline.features import compute_features, FEATURE_COLUMNS  # noqa: E402
 from surge_pipeline.training import train_logistic_regression  # noqa: E402
 from surge_pipeline.evaluation import evaluate_model, save_evaluation_results  # noqa: E402
+from surge_pipeline.evaluation import generate_evaluation_figures  # noqa: E402
+from surge_pipeline.training import predict  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -53,6 +55,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Enable verbose (DEBUG) logging.",
+    )
+    parser.add_argument(
+        "--no-figures",
+        action="store_true",
+        default=False,
+        help="Skip evaluation figure generation.",
     )
     return parser.parse_args(argv)
 
@@ -130,7 +138,21 @@ def main(argv: list[str] | None = None) -> None:
     print("=" * 60)
 
     # ------------------------------------------------------------------
-    # 6. Save results
+    # 6. Generate evaluation figures (R16)
+    # ------------------------------------------------------------------
+    if not args.no_figures:
+        y_true, y_pred, y_prob = predict(result, df, partition="test")
+        figure_paths = generate_evaluation_figures(
+            y_true, y_pred, y_prob, model_name=result.model_name
+        )
+        print(f"\n  Evaluation figures saved:")
+        for p in figure_paths:
+            print(f"    {p}")
+    else:
+        logger.info("Skipping figure generation (--no-figures).")
+
+    # ------------------------------------------------------------------
+    # 7. Save results
     # ------------------------------------------------------------------
     out_path = save_evaluation_results([metrics], output_dir=args.output_dir)
     print(f"\nResults saved to: {out_path}")
