@@ -178,7 +178,7 @@ Statistical robustness measures include 95% bootstrap confidence intervals (1,00
 ### Project Timeline
 
 <figure align="center">
-  <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
+  <img src="figures/01-gantt-chart-v0.2.png" alt="Project Timeline" width="1000">
   <figcaption>Figure 2: Project Timeline (Gantt Chart).</figcaption>
 </figure>
 
