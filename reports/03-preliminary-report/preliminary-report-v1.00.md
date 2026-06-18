@@ -1,466 +1,263 @@
 # Preliminary Report
 
+**Predicting Engagement and Sentiment Surges in Stock-Related Social Media Discussions**
+
 Final Year Project (BSc in Computer Science)
 
-## 1. Project Definition
+---
 
-### 1.1 Title
+## Chapter 1: Introduction
 
-Predicting Engagement and Sentiment Surges in Stock-Related Social Media Discussions
+This project follows **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence**, focusing on a machine learning system that predicts future surge events in stock-related social media discussions.
 
-This project follows **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence** focusing on the design, implementation, and evaluation of a machine learning system that predicts future surge events from historical social media discussions.
+### Project Concept and Objectives
 
-### 1.2 Objectives
+The system predicts whether discussion about a specific stock ticker will experience a significant engagement and sentiment surge within 24 hours, using only information available at observation time. The objectives are:
 
-- Develop a predictive model using early-stage discussion features to forecast whether a stock-related social media discussion will experience a significant engagement and sentiment surge within 24 hours
-- Engineer meaningful features from raw social media discussion data including temporal, textual, activity-frequency, and sentiment signals
+- Develop a predictive model using early-stage discussion features (temporal, textual, activity-frequency, and sentiment signals) to forecast per-ticker surges
 - Compare traditional ML approaches (Logistic Regression, Random Forest, XGBoost) for binary surge classification
-- Evaluate model performance using standard classification metrics (accuracy, precision, recall, F1, AUC-ROC)
+- Evaluate performance using standard metrics (precision, recall, F1, AUC-ROC) with temporal train-test splits that prevent data leakage
 
-### 1.3 Problem Statement
+### Problem Statement and Motivation
 
-Financial discussions on social media platforms often experience sudden increases in public attention and emotional intensity. Discussions surrounding specific stocks can rapidly attract large numbers of comments, interactions, and strong sentiment, particularly following news events, earnings announcements, rumours, or speculative activity. These surges can develop within hours, making them difficult to anticipate through manual monitoring alone.
+Financial discussions on social media platforms experience sudden increases in posting activity and emotional intensity. Stock-related discussions can rapidly attract attention following news events, earnings announcements, or speculative activity. These surges develop within hours, making them difficult to anticipate through manual monitoring.
 
-This problem affects multiple stakeholder groups:
+This problem affects financial analysts who need early warning of discussions gaining momentum, market surveillance teams tracking potential manipulation, quantitative researchers studying social media dynamics, and platform operators allocating moderation resources. In large social media environments, thousands of stock-related discussions occur daily, making automated prediction essential.
 
-- **Financial analysts and portfolio managers** who monitor social sentiment as a supplementary signal for investment decisions and need early warning of discussions gaining momentum.
-- **Market surveillance teams and regulators** who track potential market manipulation, coordinated pump-and-dump activity, or rumour-driven volatility on social platforms.
-- **Quantitative researchers** studying the relationship between social media dynamics and market microstructure, who require reproducible methods for identifying surge events in historical data.
-- **Platform operators and content moderators** who allocate resources to discussions experiencing rapid growth in activity and emotional intensity.
+Existing research focuses on predicting overall popularity [1][3] or sentiment-to-market correlations [4] rather than forecasting whether a specific stock's discussion is about to surge. The 2021 GameStop short squeeze demonstrated how rapidly escalating social media discussion can translate into real market impact [5], underscoring the need for early detection systems.
 
-In large social media environments, thousands of stock-related discussions occur every day. The volume makes it impractical to manually assess which discussions are likely to experience substantial growth before that growth becomes obvious. Automated prediction allows these stakeholders to focus attention on the small subset of discussions showing early surge signals.
+### Prediction Scope and Surge Definition
 
-Existing research frequently focuses on predicting overall popularity or analysing already-popular content [1][3], providing less emphasis on forecasting whether a stock-related discussion is about to experience a significant surge within a clearly defined future time window. Studies that do address financial social media often focus on sentiment-to-market correlations [4] rather than on predicting the social media dynamics themselves.
+The prediction operates at the record level but measures surges scoped per-ticker. For a record mentioning ticker $X at time *t*, the system asks: *"Will discussion about $X experience a surge within the next 24 hours?"*
 
-### 1.4 Unit of Analysis and Prediction Scope
+A **surge** is defined using a composite metric combining z-score normalised posting volume growth and sentiment change:
 
-A central design question is: *what exactly is being predicted?* The project title refers to "surges in stock-related social media discussions," but this phrase is ambiguous — it could mean a surge within a single thread, a surge across all discussion about a specific ticker, or a surge across an entire subreddit. This section defines the prediction scope precisely.
-
-#### Terminology
-
-- **Record**: A single row in the dataset representing one Reddit submission (post). Each record has its own timestamp, title, body text, engagement counts (score, num_comments), and extracted ticker symbols. This is the atomic unit of the dataset.
-
-- **Ticker-window**: The set of all records mentioning the same stock ticker within a defined time interval. This is the primary analytical grouping.
-
-- **Discussion thread**: A Reddit post and its associated comments. Thread-level data is not available in the dataset (comments are not linked to parent submissions), so thread-level prediction is not feasible.
-
-#### Prediction target: Per-ticker surge detection
-
-**The prediction operates at the record level but measures surges scoped to the same ticker.** For a given record mentioning ticker $X observed at time *t*, the system asks:
-
-> *"Will discussion about ticker $X experience a surge in engagement and sentiment within the next 24 hours?"*
-
-Specifically, the "subsequent records within *(t, t + 24h]*" used in the composite surge computation are **records in the dataset that mention the same ticker** within that time window. This means:
-
-- A record about $TSLA is evaluated against future $TSLA activity, not against unrelated $AAPL posts
-- The prediction is per-ticker rather than per-subreddit — it detects whether a specific stock's discussion is about to surge
-- Records mentioning multiple tickers contribute to the window of each mentioned ticker independently
-
-This scoping is the most defensible interpretation because:
-
-1. **Conceptual coherence** — "A surge in stock-related discussion" most naturally refers to intensifying activity around a specific stock, not to an entire forum becoming more active. A subreddit-wide surge would conflate unrelated events (e.g., $GME and $AAPL surging simultaneously for different reasons).
-
-2. **Practical utility** — Stakeholders (analysts, surveillance teams) care about surges in discussion around specific securities, not about aggregate forum traffic. A per-ticker prediction directly answers: "Should I pay attention to what's happening with this stock right now?"
-
-3. **Data availability** — The dataset includes extracted ticker symbols per record, making ticker-scoped windowing feasible without requiring thread-linking metadata.
-
-4. **Alignment with the literature** — Early popularity prediction [1][5] and cascade prediction [5] both operate at the level of individual content items or topics, not at the level of entire platforms.
-
-#### Implications and limitations
-
-- Records that do not mention any identifiable ticker are excluded from surge labelling (they lack a grouping key).
-- **Ticker sparsity (Risk #9).** For tickers with very few records in the dataset, the 24-hour window may contain 0, 1, or 2 future records — too few to compute a stable posting volume growth ratio or meaningful mean sentiment. A single outlier post in a sparse window could flip the surge label arbitrarily. This is likely to affect the majority of the 2,912 tickers in the pennystocks dataset, as ticker frequency distributions in social media follow a heavy-tailed power law (a small number of tickers dominate discussion volume). Mitigation: enforce a minimum record count (default N ≥ 3) within each ticker's 24-hour window; records failing this threshold will be excluded from surge labelling. The exclusion rate and its effect on class distribution will be quantified during EDA.
-- Records mentioning multiple tickers receive a label based on the combined activity across all mentioned tickers — a simplification that could be refined by computing per-ticker labels independently.
-- The model still makes predictions at the record level (one prediction per record), but the target label reflects ticker-scoped dynamics rather than subreddit-wide dynamics.
-- If future work uses a single-ticker filtered dataset (e.g., only $GME posts), the ticker scoping becomes equivalent to global scoping within that subset.
-
-### 1.5 Surge Definition
-
-In this project, a **surge** is defined as a statistically significant increase in the composite posting-volume-and-sentiment metric for a specific stock ticker within a fixed 24-hour prediction window. Specifically, for a given record mentioning ticker $X observed at time *t*, the system computes:
-
-- **Posting volume growth**: the relative change in the number of posts mentioning ticker $X between the prior 24 hours and the subsequent 24 hours — specifically, *(count of $X posts in (t, t + 24h]) / max(count of $X posts in (t − 24h, t], 1)) − 1*.
-- **Sentiment change**: the absolute difference between the sentiment polarity at observation time and the mean sentiment polarity of subsequent $X-mentioning records within the window.
-
-The **composite surge metric** is defined using z-score normalisation to ensure both components contribute equally:
-
-> *z_volume = (posting_volume_growth − μ_vol) / σ_vol*
->
-> *z_sentiment = (|sentiment_change| − μ_sent) / σ_sent*
->
 > *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
-where μ and σ are the mean and standard deviation of each raw component computed from the training partition only, and w₁ = w₂ = 0.5 by default (equal weighting).
+where z-scores are computed using training-partition statistics only (preventing leakage), and a record is labelled surge (1) if composite exceeds threshold *τ*. The target uses posting volume (timestamp-derived record counts) rather than engagement scores (which are future-contaminated snapshot values). Default configuration: w₁ = w₂ = 0.5, τ = 1.5 standard deviations.
 
-A record is labelled as a surge (1) if the composite metric exceeds a configurable threshold *τ* (in standard deviation units), and no-surge (0) otherwise.
+A two-phase experimental approach validates the composite design: Phase 1 uses volume-only (w₂ = 0) as baseline; Phase 2 uses equal composite (w₂ = 0.5) to test whether sentiment adds predictive value.
 
-**Why z-score normalisation.** The two raw components operate on fundamentally different scales: posting volume growth is an unbounded ratio (where 1.0 represents doubling, but values of 10+ are common for tickers that go from 1–2 posts/day to 10+), while |sentiment_change| is bounded by approximately [0, 2.0] given TextBlob's polarity range of [−1, +1]. Without normalisation, the composite metric would be dominated by the volume component — rendering sentiment structurally unable to influence the surge label. Z-score normalisation places both components on a common zero-mean, unit-variance scale, ensuring that each contributes proportionally to the composite regardless of its raw magnitude. The threshold *τ* then has a clear statistical interpretation: "the combined signal exceeds *τ* standard deviations above the typical joint activity level."
+### Scope
 
-**Why posting volume rather than engagement scores.** The dataset provides engagement metrics (score, num_comments) as final snapshot values at crawl time, not as point-in-time values at post creation. Using these values in the surge formula would introduce a circular dependency: posts that eventually experience a surge accumulate high scores *because* of the surge, so measuring score growth would be measuring the surge's effect rather than detecting its onset. Posting volume growth — the increase in the number of posts about a ticker — is derived entirely from creation timestamps, which are fixed at post creation and uncontaminated by future activity.
+**In scope:** Pre-collected static Reddit dataset (pennystocks subreddit, 54,785 records, 2,912 tickers), feature engineering, binary classification, traditional ML models, reproducible pipeline with seeded randomness.
 
-**Normalisation statistics and data leakage prevention.** The mean (μ) and standard deviation (σ) for each component are computed exclusively from the training partition (the first 80% of records by timestamp). Test-set records are normalised using these training-set statistics, not their own. This prevents information about the test distribution from leaking into the labelling process. Because the normalisation is fitted on training data, the z-scores on test records may not be perfectly centred at zero — this is expected and mirrors realistic deployment conditions where future distributional shifts are unknown.
-
-**Threshold determination.** The composite threshold *τ* will be determined empirically during EDA rather than set a priori. Because both components are standardised, *τ* is expressed in units of standard deviations of the combined metric. The threshold sensitivity analysis (Section 4.7) will sweep a range of candidate values and select the operating point that balances class distribution against model trainability. The goal is to produce a surge rate of approximately 5–10% (imbalance ratio 10:1 to 18:1) as indicated by the preliminary viability analysis (Section 2.2).
-
-**Configurable weighting.** The default equal weighting (w₁ = w₂ = 0.5) reflects an agnostic prior about the relative importance of volume versus sentiment in defining a surge. The weight sensitivity analysis (Section 4.7) will sweep w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0} (with w₁ = 1 − w₂) to empirically assess how the relative contribution of each component affects class distribution and model performance.
-
-**Phased experimental approach.** To empirically validate the composite design, the project adopts a two-phase modelling strategy:
-
-- **Phase 1 (Baseline): Volume-only prediction.** The initial models will be trained using a posting-volume-only surge target — setting w₂ = 0 so that the composite reduces to z_volume alone.
-
-- **Phase 2 (Advanced): Composite volume + sentiment prediction.** The full composite target (w₁ × z_volume + w₂ × z_sentiment, with w₁ = w₂ = 0.5) will then be introduced, with models trained on the combined feature set including sentiment scores.
-
-This phased design strengthens the project's contribution by providing controlled evidence for (or against) the value of composite targets, rather than assuming that combining signals is inherently beneficial.
-
-### 1.6 Motivation
-
-- Discussions experiencing rapid posting volume growth and sentiment shifts often attract broader public attention and may influence information diffusion, investor behaviour, and market perception [4]
-- Platforms hosting financial discussions (e.g., Reddit, StockTwits) process thousands of new posts daily, making manual identification of emerging surges impractical for analysts and researchers
-- Early detection of surge-prone discussions enables proactive monitoring rather than reactive analysis, with applications in financial risk assessment, market surveillance, and social media analytics
-- The 2021 GameStop short squeeze demonstrated how rapidly escalating social media discussion can translate into real market impact, underscoring the need for early warning systems [5]
-- Addresses a gap in the academic literature around short-term composite surge prediction that integrates both engagement and sentiment signals within a clearly bounded time window
+**Out of scope:** Real-time ingestion, production deployment, trading signals, multi-class targets, cross-platform fusion.
 
 ---
 
-## 2. Scope and Boundaries
+## Chapter 2: Literature Review
 
-### 2.1 In Scope
-
-- Pre-collected static dataset of stock-related social media discussions (CSV/Parquet)
-- Feature engineering: temporal, textual, sentiment, and activity-frequency features
-- Binary classification: surge (1) vs no-surge (0) within 24-hour window
-- Traditional ML models: Logistic Regression, Random Forest, XGBoost
-- Optional deep learning baseline (LSTM/Transformer) for comparison
-- Standard evaluation metrics and visualisations
-- Reproducible pipeline with seeded randomness
-
-### 2.2 Dataset
-
-The primary data source is the **Reddit Finance Data** dataset published on Kaggle (https://www.kaggle.com/datasets/leukipp/reddit-finance-data). This dataset contains submissions from nine stock-related subreddits collected over the calendar year 2021, totalling approximately **1.38 million records**. The primary development dataset is `pennystocks/submissions_reddit.csv` (54,785 records, 2,912 tickers) selected for high data completeness (20.7% selftext missing), sufficient volume for model training, and diverse ticker coverage.
-
-### 2.3 Out of Scope
-
-- Real-time or live data ingestion from APIs
-- Deployment as a production service
-- Trading signals or financial advice
-- Multi-class or regression targets
-- Cross-platform data fusion (single source dataset)
-
----
-
-## 3. Proposed Methodology
-
-### 3.1 Data Pipeline Stages
-
-1. **Data Loading** — Read static dataset from disk (CSV/Parquet)
-2. **Preprocessing** — Deduplicate, parse timestamps, normalise text, remove nulls
-3. **Feature Engineering** — Compute sentiment, temporal, activity-frequency, and text features
-4. **Target Labelling** — Compute composite surge target using 24-hour prediction window
-5. **Model Training** — Train LR, RF, XGBoost with temporal train-test split
-6. **Evaluation** — Compute metrics, generate confusion matrices and ROC curves
-
-### 3.2 Tools and Technologies
-
-- Python 3.10+
-- pandas, numpy, scikit-learn, XGBoost
-- TextBlob (sentiment analysis)
-- matplotlib (visualisation)
-- Jupyter notebooks (exploration)
-- pytest + Hypothesis (testing)
-
-### 3.3 System Architecture
-
-The pipeline follows a linear staged architecture where each stage receives the output of its predecessor. All stages share a centralised configuration module and produce deterministic outputs via seeded randomness.
-
-<figure align="center">
-  <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
-  <figcaption>Figure 2: Data Pipeline.</figcaption>
-</figure>
-
-The system is implemented as a Python package (`surge_pipeline`) with a corresponding CLI entry point (`run_pipeline.py`). Each module exposes a well-defined function interface, allowing both notebook-based exploration and script-based batch execution.
-
-### 3.4 Feature Design
-
-The feature engineering module computes features for each discussion record. A critical design constraint is that **only information available at observation time *t*** may be used as a prediction feature.
-
-| Feature | Type | Description | Rationale |
-|---------|------|-------------|-----------|
-| `sentiment_score` | Continuous [-1, 1] | TextBlob polarity of post text | Captures emotional tone; strong sentiment may precede surges [4] |
-| `hour_of_day` | Discrete [0–23] | Hour when the post was created | Trading hours and after-hours activity show different surge patterns |
-| `day_of_week` | Discrete [0–6] | Day when the post was created | Weekend vs weekday discussion dynamics differ |
-| `time_since_previous` | Continuous ≥ 0 | Hours since previous post mentioning the same ticker | Rapid successive posting about the same ticker signals emerging activity [1] |
-| `ticker_post_rate_24h` | Continuous ≥ 0 | Number of posts mentioning this ticker in the 24 hours before time *t* | Measures current per-ticker discussion intensity using only historical data |
-| `ticker_post_acceleration` | Continuous | Ratio of post count in prior 12h to post count in prior 12–24h | Captures whether per-ticker discussion frequency is already increasing |
-| `word_count` | Discrete ≥ 0 | Number of whitespace-separated tokens in post text | Longer posts may carry more informational content [3] |
-| `title_length` | Discrete ≥ 0 | Number of whitespace-separated tokens in post title | Short urgent titles vs. detailed titles may signal different discussion types |
-| `num_tickers_mentioned` | Discrete ≥ 1 | Count of distinct ticker symbols in the post | Multi-ticker posts may indicate broader market discussion vs. focused analysis |
-
-**Excluded features.** The dataset fields `score` and `num_comments` are explicitly excluded from the feature set because they represent final snapshot values that are not available at observation time. Using them would constitute temporal data leakage.
-
-### 3.5 Composite Target Design
-
-The binary surge target is computed at the record level using a forward-looking 24-hour window, scoped to the same ticker. The target uses **posting volume** (record counts derived from timestamps) rather than engagement scores, because score and num_comments in the dataset are snapshot values that are not available at observation time.
-
----
-
-## 4. Evaluation Strategy
-
-### 4.1 Performance Metrics
-
-Each trained model will be evaluated on the temporally held-out test set using the following classification metrics:
-
-| Metric | Purpose |
-|--------|---------|
-| **Accuracy** | Overall proportion of correct predictions |
-| **Precision** | Proportion of predicted surges that are actual surges (minimises false alarms) |
-| **Recall** | Proportion of actual surges that are correctly predicted (minimises missed surges) |
-| **F1-Score** | Harmonic mean of precision and recall, balancing both concerns |
-| **AUC-ROC** | Area under the Receiver Operating Characteristic curve; measures discriminative ability across all classification thresholds |
-
-Given the expected class imbalance (surges are rare events), precision-recall trade-offs and AUC-ROC will be prioritised over raw accuracy as primary evaluation criteria.
-
-### 4.2 Train-Test Split Strategy
-
-The dataset will be split using **temporal ordering** rather than random sampling to prevent data leakage:
-
-- Records are sorted chronologically by timestamp
-- The first 80% (configurable) form the training set
-- The remaining 20% form the test set
-- This ensures no future information leaks into training, reflecting realistic deployment conditions
-
-### 4.3 Hyperparameter Tuning via Temporal Cross-Validation
-
-Hyperparameter selection for each model is conducted within the training partition using **expanding-window temporal cross-validation** with *k* = 4 sequential folds, producing 3 train/validation splits. Candidate hyperparameter configurations are evaluated by mean validation AUC-ROC across the 3 splits.
-
-### 4.4 Baseline Comparison
-
-Model performance will be compared against:
-
-- **Random baseline** — AUC-ROC of 0.5 (no discriminative power)
-- **Majority-class baseline** — Always predicting "no surge"
-- **Single-feature baselines** — Individual features used alone as predictors
-
-A model is considered to demonstrate meaningful predictive signal if it achieves AUC-ROC > 0.60 on the test set.
-
-### 4.5 Threshold and Weight Sensitivity Analysis
-
-The full pipeline will be executed at threshold values of *τ* ∈ {0.5, 1.0, 1.5, 2.0, 2.5} (in standard deviation units of the composite metric), producing five distinct labelling configurations to characterise threshold sensitivity.
-
----
-
-## 5. Risk Register
-
-| # | Risk | Likelihood | Impact | Mitigation | Status |
-|---|------|-----------|--------|------------|--------|
-| 1 | Class imbalance (few surge events) | High | High | Use stratified evaluation, consider SMOTE/class weighting, report precision-recall curves | Open |
-| 2 | Sentiment analysis accuracy (TextBlob limitations) | Medium | Medium | Document limitations, consider FinBERT as alternative if time allows | Open |
-| 3 | Data quality issues (missing fields, noise) | Medium | Medium | Robust preprocessing with logging, document exclusion criteria | Open |
-| 4 | Temporal data leakage via train-test split | Medium | High | Strict temporal split, no future data in features or labels | Open |
-| 5 | Overfitting on small dataset | Medium | High | Temporal cross-validation, regularisation, report train vs test gaps | Open |
-| 6 | Composite target threshold and weight sensitivity | Medium | Medium | Z-score normalisation ensures equal component contribution; sensitivity analysis across multiple thresholds | Open |
-| 7 | Time constraints for deep learning baseline | Medium | Low | Mark as optional, prioritise traditional ML models | Open |
-| 8 | Reproducibility failures across environments | Low | Medium | Pin all dependencies, use fixed random seeds, document setup | Open |
-| 9 | Per-ticker sparsity destabilises surge metric | High | High | Enforce minimum record count (N ≥ 3) within 24h ticker window; exclude records below threshold | Open |
-| 10 | Snapshot engagement values as features (data leakage) | High | Critical | Features use only timestamps, text, and backward-looking post counts | Mitigated |
-| 11 | Snapshot engagement values in target formula (circular labelling) | High | Critical | Target uses posting volume growth derived from timestamps only | Mitigated |
-| 12 | Temporal concept drift (Q1 meme-stock era vs Q3–Q4 normalisation) | Medium | Medium | Report train/test surge rate differences; acknowledge as limitation | Open |
-
----
-
-## 6. Project Plan and Timeline
-
-<figure align="center">
-  <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
-  <figcaption>Figure 1: Project Timeline.</figcaption>
-</figure>
-
----
-
-## 7. Initial Literature Review Summary
-
-### 7.1 Key Research Areas
+### Key Research Areas
 
 The project draws on four established research areas within social media prediction and computational finance:
 
-1. **Early popularity prediction** — Foundational work demonstrating that early engagement signals correlate strongly with future popularity [1][2].
-2. **Machine learning and content-based prediction** — Studies incorporating content metadata and structured classification pipelines to predict online attention [3].
-3. **NLP and sentiment analysis for financial prediction** — Research applying NLP to extract emotional signals from financial social media [4].
-4. **Information diffusion and cascade prediction** — Work using early propagation patterns to forecast content growth [5].
+1. **Early popularity prediction** — Foundational work demonstrating that early engagement signals (views, votes, reposts) correlate strongly with future popularity, establishing the feasibility of forecasting online attention from initial behavioural data.
+2. **Machine learning and content-based prediction** — Studies extending prediction beyond temporal signals by incorporating content metadata, source features, and structured classification pipelines to predict online attention before substantial engagement occurs.
+3. **NLP and sentiment analysis for financial prediction** — Research applying natural language processing to extract emotional and semantic signals from social media text, particularly in financial contexts where public mood may carry predictive value.
+4. **Information diffusion and cascade prediction** — Work examining how information spreads through social networks, using early propagation patterns and structural properties to forecast whether content will continue growing.
 
-### 7.2 Critical Evaluation of Foundational Works
+### Early Popularity Prediction
 
-Szabo and Huberman [1] demonstrated strong log-linear correlations between early and later popularity on YouTube and Digg. However, their model assumes a stationary growth process and relies on content that has already accumulated measurable engagement, limiting applicability to pre-engagement prediction.
+Szabo and Huberman [1] demonstrated strong log-linear correlations between early and later popularity on YouTube and Digg, showing that simple regression on early view counts can predict future attention with high accuracy. However, their model assumes a stationary growth process and relies on content that has already accumulated measurable engagement. This limits applicability to *pre-engagement* prediction — the model cannot make forecasts at or near the time of posting, which is precisely the regime of interest for early surge detection. Furthermore, their evaluation was limited to platforms with specific ranking algorithms (Digg's front-page mechanism), raising questions about generalisability to finance-focused forums where content discovery differs fundamentally.
 
-Bandari et al. [3] demonstrated that content metadata could predict popularity before engagement accumulates, achieving ~84% classification accuracy. However, the study used coarse popularity bins and features designed for news articles rather than user-generated financial discussion.
+Lerman and Hogg [2] modelled the interplay between social network structure and content discovery, highlighting that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach provided mechanistic insight but required detailed knowledge of platform-specific network topology — data rarely available for financial discussion platforms. The model also assumed homogeneous user behaviour, which is unrealistic in stock forums where institutional participants, retail traders, and bots exhibit very different engagement patterns.
 
-Bollen et al. [4] demonstrated that aggregate Twitter mood predicted Dow Jones movements with ~87.6% directional accuracy. However, the evaluation period was short, no out-of-sample validation was reported, and the lexicon-based tools lack domain specificity for financial language.
+### Machine Learning and Content-Based Prediction
 
-Cheng et al. [5] achieved ~79.5% accuracy (AUC 0.877) predicting whether Facebook photo cascades would double in size. The methodological rigour was strong but the study focused exclusively on image resharing on a platform with different characteristics to text-based financial forums.
+Bandari et al. [3] advanced the field by demonstrating that content metadata (source, category, subjectivity, named entities) could predict popularity *before* engagement accumulates, achieving ~84% classification accuracy. This was a methodologically important shift toward pre-publication prediction. However, the study used coarse popularity bins rather than continuous or binary surge targets, and the feature set was designed for news articles rather than user-generated financial discussion. Their reliance on manually engineered features also limits transferability — features like "news source reputation" have no direct analogue in anonymous forum posts. The 84% accuracy figure, while frequently cited, should also be interpreted cautiously: it was measured on a four-class classification task with uneven class sizes, meaning that majority-class baselines already achieve substantial accuracy.
 
-### 7.3 Synthesis and Identified Research Gap
+### NLP and Sentiment Analysis
+
+Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify. For this project, TextBlob shares similar lexicon-based limitations, which is acknowledged in the risk register and motivates the choice of a configurable sentiment component.
+
+### Information Diffusion and Cascade Prediction
+
+Cheng et al. [5] achieved ~79.5% accuracy (AUC 0.877) predicting whether Facebook photo cascades would double in size, using only early resharing observations. The methodological rigour was strong: large sample size (millions of cascades), temporal features derived from propagation speed, and structural virality metrics. However, the study focused exclusively on image resharing on Facebook — a platform with explicit social graph structure and algorithmic content distribution that differs markedly from text-based financial forums. The cascade framework also assumes discrete, traceable sharing events, whereas engagement on discussion platforms (upvotes, comments) often lacks explicit propagation chains. The concept of "early propagation speed" nevertheless informs this project's `time_since_previous` feature as a proxy for activity acceleration.
+
+Wang and Huberman [6] and Kong et al. [7] characterised popularity as following identifiable temporal lifecycles (emergence → growth → peak → decline). While these frameworks provide useful conceptual grounding, both studies are primarily descriptive rather than predictive — they identify patterns retrospectively but do not offer methods for real-time forecasting. Yuan and Li [8] extended this by suggesting that early-stage signals may predict later evolution, but their work focused on emergency information diffusion rather than financial contexts, and the temporal granularity (days to weeks) is coarser than the 24-hour window relevant to stock discussion surges.
+
+### Synthesis and Identified Research Gap
+
+The literature establishes three findings: (a) early behavioural signals contain predictive information about future online attention [1][5]; (b) multiple feature types (temporal, content, sentiment, structural) each contribute explanatory power [2][3][4]; and (c) popularity follows identifiable temporal dynamics that can theoretically be detected early [7][8].
 
 Three critical gaps remain:
 
-1. **Prediction target mismatch** — Most studies predict eventual outcomes rather than detecting the onset of rapid growth within a bounded time window.
-2. **Single-signal approaches** — Each research strand demonstrates the value of one feature category, yet few combine these signals into an integrated predictive framework.
-3. **Domain transfer problem** — Reviewed studies draw on general social media rather than finance-specific discussion platforms.
+1. **Prediction target mismatch** — Most studies predict *eventual outcomes* (final popularity, total cascade size, market direction) rather than detecting the *onset* of rapid growth within a bounded time window. An analyst needs to know a surge is developing *now*, within an actionable timeframe. No reviewed study defines or predicts a composite engagement-and-sentiment surge within a fixed short-term window.
 
-This project addresses all three gaps by defining a composite binary surge target within a fixed 24-hour window, combining temporal, engagement, sentiment, and textual features, and applying the framework to stock-related social media discussions.
+2. **Single-signal approaches** — Each research strand demonstrates one feature category's value (Szabo: temporal; Bandari: content; Bollen: sentiment; Cheng: structural), yet few combine signals into an integrated predictive framework. The literature suggests multiple signal types interact during trend formation [2][7], but empirical integration remains limited.
 
----
+3. **Domain transfer problem** — Reviewed studies draw on general social media (YouTube, Digg, Facebook, Twitter) rather than finance-specific discussion platforms. Financial discussions have distinctive characteristics — event-driven reactions, domain-specific language, speculative behaviour — that may invalidate assumptions from general popularity research. Bollen et al. [4] address financial context but predict market outcomes rather than social media dynamics themselves.
 
-## 8. Success Criteria
-
-| Tier | AUC-ROC | Interpretation |
-|------|---------|----------------|
-| **Minimum success** | > 0.60 | Demonstrates predictive signal above random |
-| **Target success** | > 0.70 | Moderate discriminative power; comparable to related literature [1][5] |
-| **Stretch goal** | > 0.80 | Strong predictive performance |
+This project addresses all three gaps by defining a composite binary surge target within a fixed 24-hour window, combining temporal, activity-frequency, sentiment, and textual features, and applying the framework specifically to stock-related social media discussions.
 
 ---
 
-## 9. Feature Prototype
+## Chapter 3: Design
 
-This chapter presents the working prototype of the project's most technically challenging component: the **end-to-end surge prediction pipeline** — from raw data ingestion through composite surge labelling, feature engineering, model training with temporal cross-validation, and evaluation on a held-out test set. The prototype demonstrates that the proposed methodology is feasible and produces meaningful predictive signal, achieving AUC-ROC of 0.733 on the temporally held-out test partition — exceeding the target success criterion of 0.70.
+### System Architecture and Pipeline Stages
 
-### 9.1 Prototype Scope and Technical Challenge
+The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_pipeline.py`):
 
-The prototype implements the full six-stage pipeline described in Section 3.1 as a modular Python package (`surge_pipeline`) comprising seven interconnected modules:
+1. **Data Loading** — CSV ingestion, regex-based ticker extraction from title/selftext, multi-ticker record explosion (one row per record-ticker pair)
+2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (O(n log n) per ticker)
+3. **Sentiment Computation** — TextBlob polarity per record with title-fallback for missing selftext; mean future sentiment from forward-window records
+4. **Target Labelling** — Temporal 80/20 split, z-score normalisation (training stats only), composite metric, binary thresholding
+5. **Feature Engineering** — Nine backward-only features (see below)
+6. **Model Training and Evaluation** — Temporal cross-validation, hyperparameter tuning, test-set evaluation
 
-| Module | Responsibility | Key Technical Challenge |
-|--------|---------------|------------------------|
-| `loader.py` | CSV ingestion, regex-based ticker extraction, multi-ticker record explosion | Extracting stock tickers from unstructured Reddit text while filtering 200+ false-positive stopwords |
-| `windowing.py` | Per-ticker temporal windowing with O(n log n) binary search | Vectorised `searchsorted` computation of forward/backward 24-hour posting counts across 2,912 tickers |
-| `sentiment.py` | TextBlob polarity computation and mean future sentiment derivation | Computing per-record polarity for 80,212 records with title-fallback handling for missing selftext |
-| `labelling.py` | Temporal split, z-score normalisation, composite metric, binary labelling | Fitting normalisation statistics on training partition only to prevent data leakage |
-| `features.py` | Nine backward-only prediction features | Ensuring strict temporal isolation — no feature uses information from after observation time *t* |
-| `training.py` | Logistic Regression with expanding-window temporal cross-validation | Grid search over 10 hyperparameter configurations with k=4 fold temporal CV |
-| `evaluation.py` | Precision, Recall, F1, ROC-AUC computation | Handling extreme class imbalance (50.9:1 ratio on test set) |
+<figure align="center">
+  <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
+  <figcaption>Figure 1: Data Pipeline Architecture.</figcaption>
+</figure>
 
-The pipeline is orchestrated by `pipeline.py` and executed via a CLI entry point (`run_pipeline.py`) supporting both full pipeline mode and threshold-sweep-only mode. All operations are deterministic with fixed random seed (default: 42), ensuring reproducibility.
+### Feature Design
 
-### 9.2 Prototype Execution Results
+All features use only information available at observation time *t*, preventing temporal leakage:
 
-The prototype was executed on the `r_pennystocks_submissions_reddit.csv` dataset (54,785 raw records) with the following configuration:
+| Feature | Type | Rationale |
+|---------|------|-----------|
+| `sentiment_score` | Continuous [-1, 1] | Emotional tone may precede surges [4] |
+| `hour_of_day` | Discrete [0–23] | Trading hours show different patterns |
+| `day_of_week` | Discrete [0–6] | Weekend vs weekday dynamics differ |
+| `time_since_previous` | Continuous ≥ 0 | Rapid posting signals emerging activity [1] |
+| `ticker_post_rate_24h` | Continuous ≥ 0 | Current per-ticker discussion intensity |
+| `ticker_post_acceleration` | Continuous | Whether frequency is already increasing |
+| `word_count` | Discrete ≥ 0 | Longer posts may carry more content [3] |
+| `title_length` | Discrete ≥ 0 | Short vs detailed titles signal type |
+| `num_tickers_mentioned` | Discrete ≥ 1 | Broad vs focused discussion |
 
-| Parameter | Value |
-|-----------|-------|
-| Composite threshold τ | 1.5 (standard deviations) |
-| Volume weight w₁ | 0.5 |
-| Sentiment weight w₂ | 0.5 |
-| Temporal split ratio | 0.8 (80% train / 20% test) |
-| Minimum window count | 3 (records in 24h forward window) |
-| Random seed | 42 |
+**Excluded:** `score` and `num_comments` (snapshot values contaminated by future engagement — temporal leakage).
 
-#### Data Flow Summary
+### Composite Target Design
 
-The pipeline processed the data through six stages with the following record counts:
+The binary surge target is computed per-record using a forward-looking 24-hour window scoped to the same ticker:
 
-1. **Loading**: 54,785 raw submissions → ticker extraction → multi-ticker explosion → **80,212 record-ticker pairs**
-2. **Windowing**: Computed forward/backward 24-hour posting counts per ticker. Applied minimum window count filter: **71,635 records excluded** (89.3% exclusion rate) due to ticker sparsity — the majority of the 2,912 tickers have fewer than 3 posts within any 24-hour window, confirming Risk #9 (ticker sparsity).
-3. **Sentiment**: TextBlob polarity computed for all 80,212 records; mean future sentiment derived from forward-window records of the same ticker.
-4. **Labelling**: Temporal split at the 80th percentile timestamp. Z-score normalisation fitted on training partition only (μ_vol = 1.437, σ_vol = 3.306, μ_sent = 0.136, σ_sent = 0.153). Composite metric computed and thresholded at τ = 1.5.
-5. **Feature engineering**: Nine backward-only features computed for all non-excluded records.
-6. **Training and evaluation**: Logistic Regression trained on 8,058 included training records with expanding-window temporal cross-validation.
+1. For record mentioning ticker $X at time *t*, count $X-mentioning posts in the forward window (t, t+24h] and backward window (t−24h, t]
+2. Compute posting volume growth: (forward_count / max(backward_count, 1)) − 1
+3. Compute sentiment change: |mean(future_sentiments) − current_sentiment|
+4. Z-score normalise both components using training-partition statistics only
+5. Compute composite: (w₁ × z_volume) + (w₂ × z_sentiment)
+6. Label surge (1) if composite > threshold τ, else no-surge (0)
 
-#### Class Distribution
+Records with fewer than 3 posts in their forward ticker window are excluded (insufficient data for stable metric computation). This addresses Risk #9 (ticker sparsity) but produces a high exclusion rate on sparse datasets.
 
-| Partition | Surge | No-Surge | Total | Surge Rate | Imbalance Ratio |
-|-----------|-------|----------|-------|------------|-----------------|
-| All (included) | 284 | 8,293 | 8,577 | 3.31% | 29.2:1 |
-| Training | 274 | 7,784 | 8,058 | 3.40% | 28.4:1 |
-| Test | 10 | 509 | 519 | 1.93% | 50.9:1 |
+### Evaluation Strategy
 
-The test set exhibits a notably lower surge rate (1.93%) than training (3.40%), confirming temporal concept drift (Risk #12): the later period (approximately August–December 2021) shows reduced surge activity compared to the earlier period characterised by heightened retail trading interest.
+Models are evaluated on a temporally held-out test set (last 20% by timestamp) using the following metrics:
 
-### 9.3 Model Evaluation
+| Metric | Purpose |
+|--------|---------|
+| **AUC-ROC** | Primary metric; threshold-independent discriminative ability |
+| **Precision** | Proportion of predicted surges that are actual surges |
+| **Recall** | Proportion of actual surges correctly detected |
+| **F1-Score** | Harmonic mean balancing precision and recall |
 
-The Logistic Regression baseline was trained using expanding-window temporal cross-validation (k=4 folds, 3 train/validation splits) with a grid search over 10 hyperparameter configurations (C ∈ {0.01, 0.1, 1.0, 10.0, 100.0} × penalty ∈ {L1, L2}). The model uses `class_weight='balanced'` to address the severe class imbalance.
+Given the expected class imbalance (surges are rare events), AUC-ROC is prioritised over raw accuracy. Hyperparameter tuning uses expanding-window temporal cross-validation (k=4 folds, 3 splits) within the training partition, ensuring no future information leaks into model configuration. The best configuration is selected by mean validation AUC-ROC and retrained on the full training partition.
 
-#### Test Set Performance
+Performance is compared against a random baseline (AUC 0.5), majority-class baseline, and single-feature baselines. Success criteria: minimum AUC-ROC > 0.60; target > 0.70; stretch > 0.80.
+
+A threshold sensitivity sweep (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) characterises how the surge definition affects class distribution and model viability. A weight sensitivity sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) assesses the relative contribution of sentiment versus volume to predictive performance, directly supporting the Phase 1 vs Phase 2 comparison.
+
+Statistical robustness measures include 95% bootstrap confidence intervals (1,000 iterations), multiple-seed evaluation (5 seeds), and McNemar's test for paired model comparisons (α = 0.05 with Bonferroni correction).
+
+### Risk Register
+
+| # | Risk | Likelihood | Impact | Mitigation | Status |
+|---|------|-----------|--------|------------|--------|
+| 1 | Class imbalance (few surge events) | High | High | Balanced class weighting, AUC-ROC evaluation, report precision-recall curves | Open |
+| 2 | TextBlob sentiment limitations | Medium | Medium | Document limitations; configurable component weight; FinBERT as future alternative | Open |
+| 3 | Data quality issues | Medium | Medium | Robust preprocessing with logging; document exclusion criteria | Open |
+| 4 | Temporal data leakage | Medium | High | Strict temporal split; backward-only features; engagement scores excluded | Mitigated |
+| 5 | Overfitting on small effective dataset | Medium | High | Temporal CV, L1/L2 regularisation, report train-test gaps | Open |
+| 9 | Per-ticker sparsity | High | High | Min window count (N≥3); report exclusion rate; test with larger datasets | Open |
+| 10 | Snapshot engagement as features | High | Critical | Eliminated — features use only timestamps and text | Mitigated |
+| 11 | Circular labelling from snapshot scores | High | Critical | Target uses posting volume growth from timestamps only | Mitigated |
+| 12 | Temporal concept drift | Medium | Medium | Report train/test rate differences; acknowledge as limitation | Open |
+
+### Project Timeline
+
+<figure align="center">
+  <img src="figures/01-gantt-chart-v0.1.png" alt="Project Timeline" width="1000">
+  <figcaption>Figure 2: Project Timeline (Gantt Chart).</figcaption>
+</figure>
+
+---
+
+## Chapter 4: Feature Prototype
+
+This chapter presents the working prototype: the **end-to-end surge prediction pipeline** from raw data through composite labelling, feature engineering, model training with temporal cross-validation, and evaluation. The prototype achieves AUC-ROC of 0.733 on the held-out test set — exceeding the target success criterion (0.70).
+
+### Prototype Implementation
+
+The prototype implements seven interconnected Python modules:
+
+| Module | Responsibility | Key Challenge |
+|--------|---------------|---------------|
+| `loader.py` | CSV ingestion, ticker extraction, record explosion | Filtering 200+ false-positive stopwords from ticker regex |
+| `windowing.py` | Per-ticker temporal windowing | Vectorised `searchsorted` across 2,912 tickers |
+| `sentiment.py` | TextBlob polarity + mean future sentiment | 80,212 records with title-fallback handling |
+| `labelling.py` | Temporal split, z-score normalisation, labelling | Training-only statistics to prevent leakage |
+| `features.py` | Nine backward-only features | Strict temporal isolation |
+| `training.py` | Logistic Regression + temporal CV | Grid search (10 configs) with k=4 expanding-window folds |
+| `evaluation.py` | Metrics computation | Handling 50.9:1 class imbalance |
+
+All operations are deterministic (seed=42). The pipeline supports both full execution and threshold-sweep-only mode via CLI.
+
+### Execution Results
+
+Dataset: `r_pennystocks_submissions_reddit.csv` (54,785 records). Configuration: τ=1.5, w₁=w₂=0.5, 80/20 temporal split, min_window_count=3.
+
+**Data flow:** 54,785 raw → 80,212 record-ticker pairs (after explosion) → 71,635 excluded (89.3%) due to ticker sparsity → **8,577 included** (8,058 train / 519 test).
+
+| Partition | Surge | No-Surge | Surge Rate | Imbalance |
+|-----------|-------|----------|------------|-----------|
+| Training | 274 | 7,784 | 3.40% | 28.4:1 |
+| Test | 10 | 509 | 1.93% | 50.9:1 |
+
+The test partition's lower surge rate confirms temporal concept drift (Risk #12): later months of 2021 show reduced surge activity versus the earlier meme-stock period.
+
+### Model Performance
 
 | Metric | Value | Interpretation |
 |--------|-------|----------------|
-| **ROC-AUC** | **0.733** | Exceeds target success criterion (>0.70); the model has moderate discriminative ability |
-| Precision | 0.028 | Very low — most predicted surges are false positives |
-| Recall | 0.900 | High — the model detects 9 of 10 actual surges |
-| F1-Score | 0.054 | Low due to precision-recall imbalance |
+| **ROC-AUC** | **0.733** | Exceeds target (>0.70); moderate discriminative ability |
+| Precision | 0.028 | Most predicted surges are false positives |
+| Recall | 0.900 | Detects 9 of 10 actual surges |
+| F1 | 0.054 | Low due to precision-recall imbalance |
 
-#### Confusion Matrix
+**Confusion Matrix:** TN=196, FP=313, FN=1, TP=9
 
-|  | Predicted No-Surge | Predicted Surge |
-|---|---|---|
-| **Actual No-Surge** | 196 (TN) | 313 (FP) |
-| **Actual Surge** | 1 (FN) | 9 (TP) |
+The AUC-ROC of 0.733 demonstrates meaningful discriminative signal — the model ranks surge-likely records higher than non-surge records across thresholds, substantially above the random baseline (0.50). This validates the hypothesis that early-stage features contain predictive information about future surges, aligning with Szabo and Huberman [1] and Cheng et al. [5]. The low precision reflects the model's aggressive positive prediction under `class_weight='balanced'` with extreme imbalance (50.9:1) — AUC-ROC, which evaluates across all thresholds, is the more appropriate metric at this prototype stage.
 
-**Interpretation.** The AUC-ROC of 0.733 demonstrates that the model has learned meaningful discriminative signal — it can rank surge-likely records higher than non-surge records across classification thresholds, substantially above the random baseline of 0.50. This validates the core hypothesis that early-stage features contain predictive information about future surges, aligning with findings from Szabo and Huberman [1] and Cheng et al. [5] regarding the predictive value of early behavioural signals.
+### Threshold Sensitivity
 
-However, the precision-recall trade-off reveals the challenge of operating at the default 0.5 classification threshold on severely imbalanced data. The model aggressively predicts surges (322 positive predictions out of 519 test records) to achieve high recall, resulting in many false alarms. This is a well-understood consequence of `class_weight='balanced'` with extreme imbalance ratios (50.9:1 on test data) — the model is incentivised to capture all positive instances at the cost of specificity. The AUC-ROC metric, which evaluates discriminative ability across *all* thresholds rather than at a single operating point, is therefore the more appropriate primary metric for this prototype stage.
+| τ | Surge Count | Surge Rate | Imbalance | Viable (5–10%) |
+|---|-------------|------------|-----------|----------------|
+| 0.5 | 1,303 | 15.19% | 5.6:1 | No |
+| **1.0** | **591** | **6.89%** | **13.5:1** | **Yes** |
+| 1.5 | 284 | 3.31% | 29.2:1 | No |
+| 2.0 | 167 | 1.95% | 50.4:1 | No |
+| 2.5 | 89 | 1.04% | 95.4:1 | No |
 
-### 9.4 Threshold Sensitivity Analysis
+Only τ=1.0 produces a viable surge rate (6.89%). The prototype's τ=1.5 creates extreme imbalance that challenges the model, motivating re-running at τ=1.0 for the full project.
 
-The pipeline's threshold sweep mode was executed across five candidate thresholds to characterise how the surge definition affects class distribution and model viability:
+### Evaluation and Improvements
 
-| Threshold (τ) | Surge Count | No-Surge Count | Surge Rate | Imbalance Ratio | Viable (5–10%) |
-|---------------|-------------|----------------|------------|-----------------|----------------|
-| 0.5 | 1,303 | 7,274 | 15.19% | 5.6:1 | No |
-| **1.0** | **591** | **7,986** | **6.89%** | **13.5:1** | **Yes** |
-| 1.5 | 284 | 8,293 | 3.31% | 29.2:1 | No |
-| 2.0 | 167 | 8,410 | 1.95% | 50.4:1 | No |
-| 2.5 | 89 | 8,488 | 1.04% | 95.4:1 | No |
+**What works:** The pipeline processes data end-to-end without errors, achieves AUC-ROC exceeding both minimum (0.60) and target (0.70) criteria, correctly prevents temporal leakage, and produces deterministic reproducible outputs. The prototype's 0.733 AUC with only 8,058 training samples (274 positive) on a constrained feature set compares favourably against the literature's results obtained with much larger datasets [5].
 
-<figure align="center">
-  <img src="../../figures/09_threshold_sensitivity_curve.png" alt="Threshold Sensitivity Curve" width="700">
-  <figcaption>Figure 3: Threshold sensitivity curve showing surge rate and imbalance ratio across threshold values.</figcaption>
-</figure>
+**Planned improvements:**
 
-**Key finding.** Only τ = 1.0 produces a surge rate within the target viability range (5–10%), yielding a 6.89% surge rate with 13.5:1 imbalance. The prototype's operating point (τ = 1.5) produces a more extreme imbalance (29.2:1) that challenges the model — particularly on the test set where temporal drift further reduces the surge rate to 1.93%. This empirical finding motivates re-running the final models at τ = 1.0 for the full project, where the less extreme imbalance may improve precision without sacrificing the discriminative signal demonstrated at τ = 1.5.
+| Limitation | Improvement |
+|------------|-------------|
+| Low precision (0.028) | Re-run at τ=1.0; probability calibration; tune classification threshold |
+| High exclusion rate (89.3%) | Test with wallstreetbets dataset (775K records, denser tickers) |
+| Single model type | Add Random Forest and XGBoost |
+| Small test positive class (n=10) | Lower threshold; bootstrap confidence intervals |
+| No Phase 1 vs Phase 2 comparison | Re-run with w₂=0 to test sentiment's contribution |
+| Single seed | 5-seed evaluation with mean±std reporting |
 
-### 9.5 Evaluation of Prototype Effectiveness
-
-The prototype successfully demonstrates the following:
-
-1. **Feasibility of composite surge prediction.** The pipeline processes 54,785 raw submissions through six stages, producing labelled data and trained models without errors. The AUC-ROC of 0.733 exceeds the minimum success threshold (0.60) and the target threshold (0.70), confirming that early-stage features carry genuine predictive signal about future surges.
-
-2. **Data leakage prevention is implemented correctly.** The temporal split ensures max(training timestamps) ≤ min(test timestamps). Z-score normalisation statistics are computed from training data only. All nine prediction features use exclusively backward-looking or creation-time information — no engagement scores (which are future-contaminated) are used.
-
-3. **The threshold sensitivity mechanism works as designed.** The sweep across five thresholds reveals the expected monotonic relationship between τ and surge rate, confirming that the z-score normalisation produces interpretable thresholds. The empirical identification of τ = 1.0 as the viable operating point validates the sensitivity analysis approach.
-
-4. **Ticker sparsity is the dominant data challenge.** The 89.3% exclusion rate (71,635 of 80,212 records) confirms that the pennystocks dataset's heavy-tailed ticker distribution severely limits the usable data. Only records where the mentioned ticker has ≥3 other posts within the forward 24-hour window can receive a stable surge label. This motivates exploring the larger `wallstreetbets` dataset (775,326 records) in the full project.
-
-5. **Temporal concept drift is present and quantifiable.** The test partition surge rate (1.93%) is 43% lower than the training rate (3.40%), confirming that the later months of 2021 exhibit different dynamics. This is consistent with the post-meme-stock normalisation period and informs the risk register (Risk #12).
-
-#### Connection to Background Literature
-
-The prototype's AUC-ROC of 0.733 is contextualised against the related literature:
-
-- Szabo and Huberman [1] achieved strong prediction from early engagement signals, but required content with existing engagement. This prototype operates at observation time with no engagement features — a more challenging regime — yet still demonstrates meaningful signal.
-- Cheng et al. [5] achieved AUC 0.877 for cascade prediction on Facebook with millions of training samples. The prototype's 0.733 with only 8,058 training samples (274 positive) on a more constrained feature set is a reasonable proof-of-concept for this domain.
-- Bandari et al. [3] achieved ~84% accuracy on a four-class task with larger training data. The binary imbalanced task in this prototype is structurally harder, making the above-random discriminative performance meaningful.
-
-### 9.6 Identified Limitations and Planned Improvements
-
-The prototype reveals several concrete areas for improvement in the full project:
-
-| Limitation | Root Cause | Planned Improvement |
-|------------|-----------|---------------------|
-| Low precision (0.028) at default threshold | Extreme class imbalance (50.9:1 on test) + balanced class weighting over-predicts surges | Re-run at τ = 1.0 (13.5:1 imbalance); implement probability calibration; tune classification threshold separately from labelling threshold |
-| High exclusion rate (89.3%) | Most tickers in pennystocks have <3 posts per 24h window | Test with wallstreetbets dataset (775K records, denser ticker coverage); consider lowering min_window_count to 2 with documented quality trade-off |
-| Only one model type evaluated | Prototype focused on Logistic Regression as baseline | Implement Random Forest and XGBoost with their respective hyperparameter grids; tree-based models may better capture non-linear feature interactions |
-| Small test set positive class (n=10) | Combination of strict threshold (τ=1.5) and temporal drift | Lower threshold to τ=1.0 to increase test positives; implement bootstrap confidence intervals to quantify metric uncertainty given small support |
-| No feature importance analysis | Single linear model provides limited interpretability | Extract LR coefficients; implement permutation importance for tree models; conduct ablation study removing one feature at a time |
-| Single random seed | Model stability not characterised | Implement 5-seed evaluation (42, 123, 256, 512, 1024) with mean±std reporting |
-| No Phase 1 vs Phase 2 comparison | Prototype used composite target only (w₂=0.5) | Re-run with w₂=0 (volume-only) and compare against w₂=0.5 to empirically test sentiment's contribution |
-
-### 9.7 Reproducibility
-
-The prototype achieves full deterministic reproducibility:
-
-- All random operations seeded via `numpy.random.seed(42)` and `random.seed(42)`
-- Pipeline configuration serialised to JSON (`pipeline_config.json`) for audit trail
-- Output artefacts (labelled dataset CSV, summary JSON, threshold sensitivity CSV, evaluation metrics JSON) enable result verification without re-execution
-- CLI supports `--config pipeline_config.json` to reproduce any run from its saved configuration
-
-The pipeline can be executed with:
+### Reproducibility
 
 ```bash
 python src/run_pipeline.py --file-path data/raw/r_pennystocks_submissions_reddit.csv --output-dir data/processed
@@ -469,7 +266,7 @@ python src/run_training.py --data-path data/processed/labelled_dataset.csv
 
 ---
 
-## 10. References
+## References
 
 [1] G. Szabo and B. A. Huberman, "Predicting the popularity of online content," *Communications of the ACM*, vol. 53, no. 8, pp. 80–88, 2010. doi: 10.1145/1787234.1787254
 
