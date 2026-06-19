@@ -16,6 +16,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -141,7 +143,7 @@ def evaluate_model(
     prec = precision_score(y_true, y_pred, zero_division=0.0)
     rec = recall_score(y_true, y_pred, zero_division=0.0)
     f1 = f1_score(y_true, y_pred, zero_division=0.0)
-    cm = confusion_matrix(y_true, y_pred).tolist()
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
 
     support_pos = int(y_true.sum())
     support_neg = int(len(y_true) - support_pos)
@@ -248,7 +250,7 @@ def plot_confusion_matrix(
     """
     _setup_plot_style()
 
-    cm = confusion_matrix(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     # Compute percentages for annotation
     cm_pct = cm.astype(float) / cm.sum() * 100
 
