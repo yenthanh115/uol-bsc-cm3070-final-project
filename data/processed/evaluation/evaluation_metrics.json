@@ -1,0 +1,29 @@
+{
+  "models": [
+    {
+      "model_name": "LogisticRegression",
+      "partition": "test",
+      "precision": 0.027950310559006212,
+      "recall": 0.9,
+      "f1": 0.05421686746987952,
+      "roc_auc": 0.7332023575638505,
+      "support_positive": 10,
+      "support_negative": 509,
+      "confusion_matrix": [
+        [
+          196,
+          313
+        ],
+        [
+          1,
+          9
+        ]
+      ]
+    }
+  ],
+  "summary": {
+    "num_models": 1,
+    "best_model_by_auc": "LogisticRegression",
+    "best_auc": 0.7332023575638505
+  }
+}
