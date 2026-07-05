@@ -6,28 +6,41 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 
 ```
 .
-├── data/
-│   ├── raw/                        # Raw Reddit submission CSVs
-│   └── processed/                  # Pipeline outputs (labelled dataset, metrics, configs)
-├── reports/                        # Literature review, design docs, preliminary report
+├── input/
+│   ├── raw/                            # Original Reddit submission CSV
+│   │   └── r_pennystocks_submissions_reddit.csv
+│   └── reference/                      # Static reference files (e.g., ticker list)
+├── output/
+│   ├── processed/                      # Pipeline stage outputs
+│   │   ├── labelled_dataset.csv
+│   │   ├── pipeline_summary.json
+│   │   ├── pipeline_config.json
+│   │   └── threshold_sensitivity.csv
+│   ├── models/                         # Serialised trained models
+│   ├── evaluation/                     # Metrics and final summary
+│   │   └── evaluation_metrics.json
+│   └── figures/                        # All generated figures
+│       ├── eda/                        # EDA figures (01–09)
+│       └── evaluation/                 # Model evaluation figures (10+)
+├── reports/                            # Literature review, design docs, preliminary report
 ├── src/
-│   ├── surge_pipeline/             # Core pipeline modules
-│   │   ├── config.py               # PipelineConfig dataclass (JSON-serialisable)
-│   │   ├── loader.py               # Data loading and ticker extraction
-│   │   ├── windowing.py            # Temporal windowed count computation
-│   │   ├── sentiment.py            # TextBlob sentiment scoring
-│   │   ├── labelling.py            # Surge labelling and threshold sweep
-│   │   ├── normalisation.py        # Z-score normalisation (train stats)
-│   │   ├── features.py             # Feature engineering for ML
-│   │   ├── training.py             # Logistic Regression with temporal CV
-│   │   ├── evaluation.py           # Precision, Recall, F1, ROC-AUC evaluation
-│   │   └── pipeline.py            # Orchestrator (load → window → sentiment → label)
+│   ├── surge_pipeline/                 # Core pipeline modules
+│   │   ├── config.py                   # PipelineConfig dataclass (JSON-serialisable)
+│   │   ├── loader.py                   # Data loading and ticker extraction
+│   │   ├── windowing.py                # Temporal windowed count computation
+│   │   ├── sentiment.py                # TextBlob sentiment scoring
+│   │   ├── labelling.py                # Surge labelling and threshold sweep
+│   │   ├── normalisation.py            # Z-score normalisation (train stats)
+│   │   ├── features.py                 # Feature engineering for ML
+│   │   ├── training.py                 # Model training with temporal CV
+│   │   ├── evaluation.py              # Precision, Recall, F1, ROC-AUC evaluation
+│   │   └── pipeline.py                # Orchestrator (load → window → sentiment → label)
 │   ├── eda/
-│   │   └── eda_pipeline.py         # Exploratory data analysis with figures
-│   ├── demo_scripts/               # Demo scripts for individual stages
-│   ├── tests/                      # Unit tests
-│   ├── run_pipeline.py             # CLI: run the labelling pipeline
-│   └── run_training.py             # CLI: train model and evaluate
+│   │   └── eda_pipeline.py             # Exploratory data analysis with figures
+│   ├── tests/                          # Unit tests
+│   ├── run_pipeline.py                 # CLI: run the labelling pipeline
+│   └── run_training.py                 # CLI: train model and evaluate
+├── admin/                              # Decision log and journals
 └── README.md
 ```
 
@@ -91,16 +104,16 @@ Process raw Reddit data through all stages (load, window, sentiment, label):
 
 ```bash
 # Using a data file
-python run_pipeline.py --file-path ../data/raw/r_pennystocks_submissions_reddit.csv --output-dir ../data/processed
+python run_pipeline.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --output-dir ../output/processed
 
 # Using a JSON config file
-python run_pipeline.py --config ../data/processed/pipeline_config.json
+python run_pipeline.py --config ../output/processed/pipeline_config.json
 
 # Run threshold sweep only (sensitivity analysis)
-python run_pipeline.py --file-path ../data/raw/r_pennystocks_submissions_reddit.csv --sweep-only
+python run_pipeline.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --sweep-only
 
 # Enable verbose logging
-python run_pipeline.py --file-path ../data/raw/r_pennystocks_submissions_reddit.csv --verbose
+python run_pipeline.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --verbose
 ```
 
 Key parameters:
@@ -108,7 +121,7 @@ Key parameters:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--file-path` | *(empty — uses synthetic data)* | Path to input CSV |
-| `--output-dir` | `output` | Directory for results |
+| `--output-dir` | `output/processed` | Directory for results |
 | `--threshold-tau` | `1.5` | Surge threshold (tau) |
 | `--temporal-split-ratio` | `0.8` | Train/test split ratio |
 | `--random-seed` | `42` | Seed for reproducibility |
@@ -119,10 +132,10 @@ Key parameters:
 Train a Logistic Regression baseline with temporal cross-validation:
 
 ```bash
-python run_training.py --data-path ../data/processed/labelled_dataset.csv --output-dir ../data/processed/evaluation
+python run_training.py --data-path ../output/processed/labelled_dataset.csv --output-dir ../output/evaluation
 
 # Skip figure generation
-python run_training.py --data-path ../data/processed/labelled_dataset.csv --no-figures
+python run_training.py --data-path ../output/processed/labelled_dataset.csv --no-figures
 ```
 
 ### Run Exploratory Data Analysis
@@ -144,8 +157,8 @@ The pipeline is configured via `PipelineConfig` (defined in `src/surge_pipeline/
 
 ```json
 {
-  "file_path": "../data/raw/r_pennystocks_submissions_reddit.csv",
-  "output_dir": "../data/processed",
+  "file_path": "../input/raw/r_pennystocks_submissions_reddit.csv",
+  "output_dir": "../output/processed",
   "temporal_split_ratio": 0.8,
   "min_window_count": 3,
   "threshold_tau": 1.5,
@@ -158,17 +171,21 @@ The pipeline is configured via `PipelineConfig` (defined in `src/surge_pipeline/
 
 ## Outputs
 
-After a full pipeline run, the following files are produced in the output directory:
+After a full pipeline run, the following files are produced in `output/processed/`:
 
 - `labelled_dataset.csv` — Full labelled dataset with features and surge labels
 - `pipeline_summary.json` — Normalisation parameters, class distributions, stage counts
 - `threshold_sensitivity.csv` — Surge rate and viability at each threshold
 - `pipeline_config.json` — Exact config used (audit trail)
 
-After training:
+After training (`output/evaluation/`):
 
-- `evaluation/evaluation_metrics.json` — Precision, Recall, F1, ROC-AUC results
-- `evaluation/` — Evaluation figures (confusion matrix, ROC curve)
+- `evaluation_metrics.json` — Precision, Recall, F1, ROC-AUC results
+
+Figures (`output/figures/`):
+
+- `eda/` — EDA figures (posting frequency, ticker distribution, feature distributions, etc.)
+- `evaluation/` — Model evaluation figures (confusion matrix, ROC curve, threshold sensitivity)
 
 ## License
 

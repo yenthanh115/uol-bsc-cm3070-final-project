@@ -1,7 +1,7 @@
 """CLI entry point for the surge-labelling pipeline.
 
 Usage:
-    python run_pipeline.py --file-path data/raw/dataset.csv
+    python run_pipeline.py --file-path ../input/raw/dataset.csv
     python run_pipeline.py --config pipeline_config.json
     python run_pipeline.py --sweep-only  # Run threshold sweep only
 """
@@ -36,7 +36,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # --- Individual parameters ---
     parser.add_argument("--file-path", type=str, default="", help="Input data file path.")
-    parser.add_argument("--output-dir", type=str, default="output", help="Output directory.")
+    parser.add_argument("--output-dir", type=str, default="output/processed", help="Output directory.")
     parser.add_argument(
         "--temporal-split-ratio", type=float, default=0.8, help="Train/test temporal split ratio."
     )

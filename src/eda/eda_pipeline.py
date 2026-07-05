@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 # Resolve paths relative to the project root (two levels up from this file)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-LABELLED_DATASET_PATH = _PROJECT_ROOT / "data" / "processed" / "labelled_dataset.csv"
-THRESHOLD_SENSITIVITY_PATH = _PROJECT_ROOT / "data" / "processed" / "threshold_sensitivity.csv"
-FIGURES_DIR = _PROJECT_ROOT / "figures"
+LABELLED_DATASET_PATH = _PROJECT_ROOT / "output" / "processed" / "labelled_dataset.csv"
+THRESHOLD_SENSITIVITY_PATH = _PROJECT_ROOT / "output" / "processed" / "threshold_sensitivity.csv"
+FIGURES_DIR = _PROJECT_ROOT / "output" / "figures" / "eda"
 
 # Publication defaults
 DPI = 300

@@ -219,6 +219,23 @@ __marimo__/
 
 .kiro/
 
-# Large data files
-data/raw/
-data/processed/labelled_dataset.csv
+# ============================================================
+# Project-specific: input/output data
+# ============================================================
+
+# Large raw input files (too big for git)
+input/raw/*.csv
+
+# Pipeline outputs — regenerable, large
+output/processed/*.csv
+output/models/*.joblib
+
+# Keep JSON configs and evaluation metrics (small, useful for audit)
+!output/processed/pipeline_config.json
+!output/processed/pipeline_summary.json
+!output/processed/threshold_sensitivity.csv
+!output/evaluation/*.json
+
+# Figures — keep tracked for report references
+# (remove this line if figures are too large for the repo)
+# output/figures/
