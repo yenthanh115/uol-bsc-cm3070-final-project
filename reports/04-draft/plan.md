@@ -4,7 +4,7 @@
 
 **Goal:** Establish clean project structure, implement the full multi-model training and evaluation interface, and get the test suite passing.
 
-#### 1.1 — Reorganise input/output folders
+#### ~~1.1 — Reorganise input/output folders~~ - DONE
 
 Move from the current scattered layout to:
 
@@ -57,7 +57,7 @@ Steps:
 - Add `.gitkeep` in empty tracked folders.
 - Update `.gitignore` (ignore large CSVs and model files, keep JSON configs tracked).
 
-#### 1.2 — Update all code path references
+#### ~~1.2 — Update all code path references~~ - DONE
 
 - `PipelineConfig` defaults: `file_path` → `input/raw/...`, `output_dir` → `output/processed`.
 - `evaluation.py` `FIGURES_DIR` → `output/figures/evaluation`.
@@ -65,7 +65,7 @@ Steps:
 - `run_pipeline.py` and `run_training.py` default CLI paths.
 - `README.md` project structure and usage examples.
 
-#### 1.3 — Refactor `training.py` to match test interface
+#### ~~1.3 — Refactor `training.py` to match test interface~~ - DONE
 
 - Expose: `create_temporal_folds`, `get_expanding_window_splits`, `N_FOLDS`, `_verify_temporal_ordering`, `_get_lr_param_grid`, `_get_rf_param_grid`, `_get_xgb_param_grid`, `train_models`, `get_training_summary`.
 - Introduce a `TrainedModel` dataclass (or similar) returned per model, with `.model`, `.scaler`, `.cv_scores`, `.best_params`.
