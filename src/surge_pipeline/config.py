@@ -18,7 +18,7 @@ class PipelineConfig:
 
     # --- Input / Output ---
     file_path: str = ""
-    output_dir: str = "output"
+    output_dir: str = "output/processed"
 
     # --- Temporal split ---
     temporal_split_ratio: float = 0.8

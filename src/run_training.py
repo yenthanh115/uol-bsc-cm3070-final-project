@@ -5,7 +5,7 @@ then evaluates on the held-out test set with Precision, Recall, F1, ROC-AUC.
 
 Usage:
     python run_training.py
-    python run_training.py --data-path ../data/processed/labelled_dataset.csv
+    python run_training.py --data-path ../output/processed/labelled_dataset.csv
 """
 
 from __future__ import annotations
@@ -35,13 +35,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=str,
-        default="../data/processed/labelled_dataset.csv",
+        default="../output/processed/labelled_dataset.csv",
         help="Path to the labelled dataset CSV.",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="../data/processed/evaluation",
+        default="../output/evaluation",
         help="Output directory for evaluation results.",
     )
     parser.add_argument(

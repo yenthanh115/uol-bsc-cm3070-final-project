@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-FIGURES_DIR = _PROJECT_ROOT / "figures"
+FIGURES_DIR = _PROJECT_ROOT / "output" / "figures" / "evaluation"
 DPI = 300
 FIG_FORMAT = "png"
 
@@ -182,7 +182,7 @@ def evaluate_model(
 
 def save_evaluation_results(
     metrics_list: List[EvaluationMetrics],
-    output_dir: str = "data/processed/evaluation",
+    output_dir: str = "output/evaluation",
 ) -> Path:
     """Save evaluation metrics to a JSON file.
 

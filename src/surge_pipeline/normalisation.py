@@ -8,7 +8,7 @@ the same parameters fitted during pipeline execution.
 Usage:
     from surge_pipeline.normalisation import load_normalisation_params
 
-    params = load_normalisation_params("data/processed/pipeline_summary.json")
+    params = load_normalisation_params("output/processed/pipeline_summary.json")
     z_vol = params.normalise_volume(raw_volume_growth)
     z_sent = params.normalise_sentiment(raw_sentiment_change)
 """
@@ -124,7 +124,7 @@ class NormalisationParams:
 
 
 def load_normalisation_params(
-    summary_path: str | Path = "data/processed/pipeline_summary.json",
+    summary_path: str | Path = "output/processed/pipeline_summary.json",
 ) -> NormalisationParams:
     """Load normalisation parameters from the pipeline summary JSON.
 

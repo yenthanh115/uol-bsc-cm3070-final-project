@@ -1,6 +1,6 @@
 """Exploratory Data Analysis pipeline for the surge-labelling dataset.
 
-Produces publication-ready figures (PNG, 300 DPI) saved to `figures/`.
+Produces publication-ready figures (PNG, 300 DPI) saved to `output/figures/eda/`.
 Five focus areas:
     1. Dataset overview — record counts, temporal coverage, ticker frequency
     2. Sparsity analysis — exclusion rate by ticker, min_window_count impact
@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 # Resolve paths relative to the project root (two levels up from this file)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-LABELLED_DATASET_PATH = _PROJECT_ROOT / "data" / "processed" / "labelled_dataset.csv"
-THRESHOLD_SENSITIVITY_PATH = _PROJECT_ROOT / "data" / "processed" / "threshold_sensitivity.csv"
-FIGURES_DIR = _PROJECT_ROOT / "figures"
+LABELLED_DATASET_PATH = _PROJECT_ROOT / "output" / "processed" / "labelled_dataset.csv"
+THRESHOLD_SENSITIVITY_PATH = _PROJECT_ROOT / "output" / "processed" / "threshold_sensitivity.csv"
+FIGURES_DIR = _PROJECT_ROOT / "output" / "figures" / "eda"
 
 # Publication defaults
 DPI = 300
