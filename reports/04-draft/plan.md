@@ -78,7 +78,7 @@ Steps:
 - Reuse the same temporal CV infrastructure (expanding-window splits, AUC-ROC selection, retrain on full training set).
 - Add `xgboost` to `requirements.txt`.
 
-#### 1.5 — Implement advanced evaluation functions in `evaluation.py`
+#### 1.5 — ~~Implement advanced evaluation functions in `evaluation.py`~~ - DONE
 
 - Add dataclasses: `ModelMetrics`, `McNemarResult`, `BaselineComparison`, `BootstrapCI`, `MetricCI`, `FinalSummary`, `SuccessTierResult`.
 - Add constants: `SUCCESS_TIER_MINIMUM = 0.60`, `SUCCESS_TIER_TARGET = 0.70`, `SUCCESS_TIER_STRETCH = 0.80`.
