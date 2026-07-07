@@ -71,7 +71,7 @@ Steps:
 - Introduce a `TrainedModel` dataclass (or similar) returned per model, with `.model`, `.scaler`, `.cv_scores`, `.best_params`.
 - The existing LR logic stays intact — wrap it into the new multi-model structure.
 
-#### 1.4 — Implement Random Forest and XGBoost training
+#### 1.4 — ~~Implement Random Forest and XGBoost training~~ - DONE
 
 - Add `RandomForestClassifier` with grid: `n_estimators(3) × max_depth(4) × min_samples_leaf(3) = 36` configs.
 - Add `XGBClassifier` with a grid ≤50 configs.
