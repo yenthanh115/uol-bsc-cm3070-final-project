@@ -25,7 +25,9 @@ This document records key design decisions made during the development of the En
 | DEC-017 | Temporal train/test split (80/20 by timestamp) | 2026-06-13 | Accepted |
 | DEC-018 | Expanding-window cross-validation for hyperparameter tuning | 2026-06-15 | Accepted |
 | DEC-019 | Feature set design (9 leakage-free features) | 2026-06-15 | Accepted |
-| DEC-020 | Hyperparameter grid sizing and search strategy | 2026-06-17 | Accepted |
+| DEC-020 | Hyperparameter grid sizing and search strategy | 2026-06-17 | Accepted (revised in implementation) |
+| DEC-021 | Class imbalance handling — balanced class weights | 2026-07-03 | Accepted |
+| DEC-022 | Feature scaling — uniform StandardScaler across all models | 2026-07-03 | Accepted |
 
 ---
 
@@ -448,4 +450,50 @@ This document records key design decisions made during the development of the En
   - Exhaustive grid for XGBoost — rejected: 4,096 fits is impractical for iterative development and the full sensitivity sweep
   - Smaller XGBoost sample (20 configs) — rejected: 20 samples over 5 dimensions gives sparse coverage; risk of missing good regions
   - Larger RF grid (include `max_features`) — deferred: with only 9 features, `max_features` variations (e.g., sqrt(9)=3 vs. all 9) have modest impact. Can be added if RF underperforms expectations
+- **Implementation revision (2026-07-03):** The grids were narrowed during implementation for practical runtime reasons:
+  - LR: changed from separate L1/L2 penalties with matched solvers to ElasticNet with `l1_ratio ∈ {0.0, 1.0}` using saga solver uniformly. Added `C=100.0` to the sweep → 10 configs (was 12).
+  - RF: `n_estimators` narrowed to [50, 100, 200] (was [100, 200, 500]); `max_depth` narrowed to [3, 5, 10, None] (was [5, 10, 20, None]); `min_samples_leaf` changed to [1, 2, 5] (was [1, 5, 10]). Total remains 36 configs.
+  - XGBoost: `colsample_bytree` dropped (minimal impact with 9 features); `learning_rate` changed to [0.01, 0.1, 0.3]; grid structure changed to 3×3×3×2 = 54, capped at 50.
+  - Rationale for changes: smaller estimator counts reduce per-config runtime; shallower RF depths better suit 9-feature data; ElasticNet with l1_ratio endpoints is functionally equivalent to pure L1/L2 while simplifying solver selection.
+- **Status:** Accepted (revised in implementation)
+
+---
+
+## DEC-021: Class imbalance handling — balanced class weights
+
+- **Date:** 2026-07-03
+- **Context:** The surge prediction task produces an imbalanced dataset — the majority of records are non-surge (negative class). Without mitigation, classifiers optimise for overall accuracy by predicting the majority class, producing high accuracy but near-zero recall on the minority (surge) class. A strategy for handling class imbalance during training is required.
+- **Decision:** Use `class_weight="balanced"` for Logistic Regression and Random Forest. XGBoost uses its default internal handling (no explicit `scale_pos_weight` set, relying on the boosting mechanism's sensitivity to misclassification).
+- **Rationale:**
+  1. **Simplicity** — `class_weight="balanced"` automatically adjusts sample weights inversely proportional to class frequency (`n_samples / (n_classes × n_samples_per_class)`). No manual calculation or separate resampling step required
+  2. **No synthetic data** — avoids introducing artificial samples that could distort feature distributions or create misleading patterns in temporal features (e.g., SMOTE interpolating between records from different time periods)
+  3. **Preserves temporal integrity** — resampling techniques (SMOTE, random oversampling) create new records that violate the temporal ordering assumptions of the expanding-window CV. Weighting adjusts the loss function without altering the data
+  4. **Consistent with evaluation metrics** — AUC-ROC (primary metric) is threshold-independent and rank-based, so it naturally accommodates the re-weighted decision boundary. The balanced weights ensure the model's internal threshold reflects the true task rather than the class ratio
+  5. **XGBoost robustness** — gradient boosting inherently focuses on hard-to-classify examples (high-loss samples), which in an imbalanced setting are predominantly minority-class records. Adding explicit `scale_pos_weight` on top of this focus risks over-correcting. If XGBoost underperforms on recall, `scale_pos_weight` can be added as a tuned hyperparameter
+- **Alternatives considered:**
+  - SMOTE (Synthetic Minority Over-sampling) — rejected: creates synthetic temporal records that break temporal ordering; interpolated features (e.g., `time_since_previous`, `ticker_post_rate_24h`) have no valid temporal interpretation
+  - Random oversampling — rejected: duplicates minority samples, inflating their influence without adding information; can cause overfitting in tree-based models (identical records appear in multiple leaves)
+  - Random undersampling — rejected: discards majority-class data, reducing training set size from ~43K to potentially <5K. Unacceptable loss of information for a modestly-sized dataset
+  - Threshold adjustment (post-hoc) — complementary, not alternative: the threshold sensitivity analysis (DEC-020) already sweeps classification thresholds. Balanced weights set the training objective; threshold sweep optimises the operating point
+  - `scale_pos_weight` for XGBoost — deferred: can be added to the hyperparameter grid if XGBoost shows poor minority-class performance during initial evaluation
+- **Status:** Accepted
+
+---
+
+## DEC-022: Feature scaling — uniform StandardScaler across all models
+
+- **Date:** 2026-07-03
+- **Context:** The 9 features have different scales: `sentiment_polarity` ∈ [-1, 1], `hour_of_day` ∈ [0, 23], `ticker_post_rate_24h` can be arbitrarily large. Logistic Regression requires feature scaling for proper regularisation behaviour (L1/L2 penalties are scale-sensitive). Tree-based models (RF, XGBoost) are scale-invariant — they split on rank order, not magnitude.
+- **Decision:** Apply StandardScaler (zero-mean, unit-variance) uniformly to all features for all three model types. The scaler is fit on training data only and applied to validation/test data using training statistics.
+- **Rationale:**
+  1. **LR requirement** — without scaling, LR's regularisation penalty disproportionately penalises features with larger raw magnitudes. `ticker_post_rate_24h` (potentially 0–100+) would be penalised far more heavily than `sentiment_polarity` (−1 to 1), distorting feature selection
+  2. **Uniform pipeline** — applying the same preprocessing to all models simplifies the training infrastructure. A single `StandardScaler` per fold/final-train means feature matrices are identical across models, ensuring fair comparison
+  3. **No harm to tree models** — StandardScaler is a monotonic transformation that preserves rank order. RF and XGBoost produce identical split decisions before and after scaling. The only cost is a negligible O(n×d) transform — acceptable for pipeline simplicity
+  4. **Consistent with temporal CV** — the scaler is fit within each CV fold's training portion and applied to the validation portion, then fit on the full training set for final model evaluation. This prevents leakage of test-set statistics into training
+  5. **Reproducibility** — storing a single scaler per trained model (alongside the model weights) fully specifies the inference pipeline. No ambiguity about whether a given model expects raw or scaled inputs
+- **Alternatives considered:**
+  - Scale only for LR, raw features for RF/XGBoost — rejected: complicates the training loop (separate preprocessing paths), increases risk of applying wrong features to wrong model, and provides no performance benefit since scaling doesn't harm tree models
+  - MinMaxScaler — rejected: sensitive to outliers in unbounded features (`ticker_post_rate_24h`, `ticker_post_acceleration`); would compress most values into a narrow range near 0
+  - RobustScaler (median/IQR) — considered: more robust to outliers, but StandardScaler is the conventional choice and the feature distributions are not heavily skewed after the minimum-window-count exclusion (DEC-011)
+  - No scaling (even for LR) — rejected: LR with regularisation produces unreliable coefficients when features differ by orders of magnitude
 - **Status:** Accepted
