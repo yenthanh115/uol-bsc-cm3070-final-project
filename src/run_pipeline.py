@@ -60,6 +60,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="List of threshold values for sweep (batch mode).",
     )
     parser.add_argument("--random-seed", type=int, default=42, help="Random seed for reproducibility.")
+    parser.add_argument(
+        "--sentiment-model",
+        type=str,
+        default="vader",
+        choices=["vader", "textblob"],
+        help="Sentiment model to use (default: vader).",
+    )
 
     # --- Mode flags ---
     parser.add_argument(
@@ -93,6 +100,7 @@ def build_config(args: argparse.Namespace) -> PipelineConfig:
         weight_sentiment=args.weight_sentiment,
         thresholds=args.thresholds,
         random_seed=args.random_seed,
+        sentiment_model=args.sentiment_model,
     )
 
 
@@ -117,6 +125,7 @@ def main(argv: list[str] | None = None) -> None:
     print("SURGE-LABELLING PIPELINE")
     print("=" * 60)
     print(f"  Random seed:       {config.random_seed}")
+    print(f"  Sentiment model:   {config.sentiment_model}")
     print(f"  Threshold τ:       {config.threshold_tau}")
     print(f"  Sweep thresholds:  {config.thresholds}")
     print(f"  Output directory:  {config.output_dir}")

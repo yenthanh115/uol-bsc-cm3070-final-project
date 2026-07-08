@@ -305,6 +305,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
             "temporal_split_ratio": config.temporal_split_ratio,
             "min_window_count": config.min_window_count,
             "random_seed": config.random_seed,
+            "sentiment_model": config.sentiment_model,
         },
     }
 

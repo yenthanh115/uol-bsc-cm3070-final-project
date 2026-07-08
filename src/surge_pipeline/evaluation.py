@@ -486,6 +486,137 @@ def produce_final_summary(
 
     return summary
 
+
+# ---------------------------------------------------------------------------
+# Bootstrap confidence intervals (Phase 2.3)
+# ---------------------------------------------------------------------------
+
+
+def compute_bootstrap_ci(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    y_prob: np.ndarray,
+    model_name: str,
+    n_resamples: int = 1000,
+    ci_level: float = 0.95,
+    random_seed: int = 42,
+) -> BootstrapCI:
+    """Compute bootstrap confidence intervals for evaluation metrics.
+
+    Resamples the test set with replacement and computes precision, recall,
+    F1, and AUC-ROC on each resample to estimate 95% confidence intervals.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True binary labels.
+    y_pred : np.ndarray
+        Predicted binary labels.
+    y_prob : np.ndarray
+        Predicted probabilities for the positive class.
+    model_name : str
+        Model identifier.
+    n_resamples : int
+        Number of bootstrap resamples (default 1000).
+    ci_level : float
+        Confidence interval level (default 0.95).
+    random_seed : int
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    BootstrapCI
+        Bootstrap confidence intervals for all metrics.
+    """
+    rng = np.random.RandomState(random_seed)
+    n = len(y_true)
+
+    alpha = 1.0 - ci_level
+    lower_pct = (alpha / 2) * 100
+    upper_pct = (1.0 - alpha / 2) * 100
+
+    # Storage for bootstrap metric distributions
+    precisions = np.zeros(n_resamples)
+    recalls = np.zeros(n_resamples)
+    f1_scores = np.zeros(n_resamples)
+    aucs = np.zeros(n_resamples)
+
+    for i in range(n_resamples):
+        idx = rng.randint(0, n, size=n)
+        y_true_boot = y_true[idx]
+        y_pred_boot = y_pred[idx]
+        y_prob_boot = y_prob[idx]
+
+        # Skip if only one class in bootstrap sample
+        if len(np.unique(y_true_boot)) < 2:
+            precisions[i] = 0.0
+            recalls[i] = 0.0
+            f1_scores[i] = 0.0
+            aucs[i] = 0.5
+            continue
+
+        precisions[i] = precision_score(y_true_boot, y_pred_boot, zero_division=0.0)
+        recalls[i] = recall_score(y_true_boot, y_pred_boot, zero_division=0.0)
+        f1_scores[i] = f1_score(y_true_boot, y_pred_boot, zero_division=0.0)
+        aucs[i] = roc_auc_score(y_true_boot, y_prob_boot)
+
+    # Point estimates from original data
+    point_prec = float(precision_score(y_true, y_pred, zero_division=0.0))
+    point_rec = float(recall_score(y_true, y_pred, zero_division=0.0))
+    point_f1 = float(f1_score(y_true, y_pred, zero_division=0.0))
+    if len(np.unique(y_true)) < 2:
+        point_auc = 0.5
+    else:
+        point_auc = float(roc_auc_score(y_true, y_prob))
+
+    metrics = [
+        MetricCI(
+            metric_name="precision",
+            point_estimate=point_prec,
+            ci_lower=float(np.percentile(precisions, lower_pct)),
+            ci_upper=float(np.percentile(precisions, upper_pct)),
+            ci_level=ci_level,
+        ),
+        MetricCI(
+            metric_name="recall",
+            point_estimate=point_rec,
+            ci_lower=float(np.percentile(recalls, lower_pct)),
+            ci_upper=float(np.percentile(recalls, upper_pct)),
+            ci_level=ci_level,
+        ),
+        MetricCI(
+            metric_name="f1",
+            point_estimate=point_f1,
+            ci_lower=float(np.percentile(f1_scores, lower_pct)),
+            ci_upper=float(np.percentile(f1_scores, upper_pct)),
+            ci_level=ci_level,
+        ),
+        MetricCI(
+            metric_name="auc_roc",
+            point_estimate=point_auc,
+            ci_lower=float(np.percentile(aucs, lower_pct)),
+            ci_upper=float(np.percentile(aucs, upper_pct)),
+            ci_level=ci_level,
+        ),
+    ]
+
+    logger.info(
+        "%s — Bootstrap CIs (%d resamples, %.0f%% level):",
+        model_name, n_resamples, ci_level * 100,
+    )
+    for m in metrics:
+        logger.info(
+            "  %s: %.4f [%.4f, %.4f]",
+            m.metric_name, m.point_estimate, m.ci_lower, m.ci_upper,
+        )
+
+    return BootstrapCI(
+        model_name=model_name,
+        n_resamples=n_resamples,
+        metrics=metrics,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Figure configuration — matches eda_pipeline.py style
 # ---------------------------------------------------------------------------

@@ -1,0 +1,51 @@
+{
+  "normalisation_params": {
+    "mu_volume": 1.4367661577258486,
+    "sigma_volume": 3.3056768403951597,
+    "mu_sentiment": 0.35971344794914134,
+    "sigma_sentiment": 0.2789923671750158,
+    "train_size": 8058,
+    "test_size": 519,
+    "split_timestamp": 1628120809.2
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 189,
+      "no_surge_count": 8388,
+      "total": 8577,
+      "surge_rate": 2.2035676810073452,
+      "imbalance_ratio": 44.38095238095238
+    },
+    "train": {
+      "surge_count": 182,
+      "no_surge_count": 7876,
+      "total": 8058,
+      "surge_rate": 2.2586249689749316,
+      "imbalance_ratio": 43.27472527472528
+    },
+    "test": {
+      "surge_count": 7,
+      "no_surge_count": 512,
+      "total": 519,
+      "surge_rate": 1.348747591522158,
+      "imbalance_ratio": 73.14285714285714
+    }
+  },
+  "stage_counts": {
+    "after_load": 80212,
+    "after_windowing": 80212,
+    "excluded_count": 71635,
+    "after_sentiment": 80212,
+    "after_labelling": 80212
+  },
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.5,
+    "weight_sentiment": 0.5,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 3,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 89.30708622151299
+}

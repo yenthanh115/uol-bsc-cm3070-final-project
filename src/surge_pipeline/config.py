@@ -29,6 +29,9 @@ class PipelineConfig:
     # --- Threshold ---
     threshold_tau: float = 1.5
 
+    # --- Sentiment model ---
+    sentiment_model: str = "vader"  # "vader" or "textblob"
+
     # --- Composite score weights ---
     weight_volume: float = 0.5
     weight_sentiment: float = 0.5

@@ -84,7 +84,7 @@ Steps:
 - Add constants: `SUCCESS_TIER_MINIMUM = 0.60`, `SUCCESS_TIER_TARGET = 0.70`, `SUCCESS_TIER_STRETCH = 0.80`.
 - Implement: `mcnemar_pairwise_test`, `evaluate_baselines`, `validate_success_tiers`, `produce_final_summary`.
 
-#### 1.6 — Run pytest and fix until green
+#### ~~1.6 — Run pytest and fix until green~~ - DONE
 
 - Resolve any import mismatches, type issues, or edge cases.
 - Target: all 5 test files pass.
@@ -135,7 +135,12 @@ Steps:
 - Use `transformers` + `ProsusAI/finbert` for batch inference.
 - Gate behind a config flag (`sentiment_model: "vader" | "finbert"`) so the default stays fast.
 
-**3.3 — Re-run and compare**
+**3.3 — Optimise sentiment computation (engineering hygiene)**
+- Deduplicate texts before scoring: exploded rows share the same post text (~80k rows from ~36k unique posts → 45% fewer VADER calls).
+- Vectorise text preparation with `np.where` instead of per-row `.iloc` + conditionals.
+- Expected improvement: sentiment stage from ~8 min → ~2 min. Not report-worthy on its own, but enables faster iteration during experimentation.
+
+**3.4 — Re-run and compare**
 - Run the full pipeline with VADER, compare surge rate and model AUC against TextBlob baseline.
 - Log which sentiment model was used in the pipeline summary for reproducibility.
 
@@ -157,7 +162,7 @@ Steps:
 
 ---
 
-### Phase 5: End-to-End Run & Artifact Generation (0.5 day)
+### Phase 5: End-to-End Run & Artifact Generation (0.5 day) - DONE
 
 **Goal:** Produce persisted results that prove the system works.
 
@@ -198,6 +203,122 @@ python src/run_training.py --data-path output/processed/labelled_dataset.csv --o
 
 ---
 
+### Phase 7: Report Writing (3–4 days)
+
+**Goal:** Produce a near-submission-quality academic report (90–95% complete) covering the full research lifecycle.
+
+---
+
+#### Input Data for Writing
+
+Each report section draws from specific artifacts produced by the earlier phases. This mapping ensures nothing is written from memory — every claim is backed by a generated file.
+
+| Report Section | Input Artifacts |
+|---|---|
+| Introduction & Problem Definition | `reports/01-literature-review/`, `admin/decision-log.md` |
+| Literature Review | `reports/01-literature-review/literature-review-v1.0.md` (already written) |
+| Dataset Description | `input/raw/r_pennystocks_submissions_reddit.csv`, `output/processed/pipeline_summary.json` |
+| Data Preprocessing | `src/surge_pipeline/loader.py`, `src/surge_pipeline/sentiment.py`, pipeline logs |
+| Feature Engineering | `src/surge_pipeline/features.py` (9 features), `output/figures/eda/01–09*.png` |
+| Surge Definition & Labelling | `src/surge_pipeline/labelling.py`, `src/surge_pipeline/normalisation.py`, `output/processed/threshold_sensitivity.csv` |
+| Model Development | `src/surge_pipeline/training.py`, `output/models/*.joblib`, `output/processed/pipeline_config.json` |
+| Experimental Setup | `src/surge_pipeline/config.py`, `output/processed/pipeline_config.json`, test files |
+| Results | `output/evaluation/evaluation_metrics.json`, `output/evaluation/final_summary.json`, `output/figures/evaluation/10–12*.png` |
+| Statistical Analysis | `output/evaluation/final_summary.json` (McNemar, bootstrap CIs, baselines) |
+| Discussion & Error Analysis | `output/evaluation/final_summary.json`, confusion matrices, misclassification examples |
+| Limitations & Future Work | `admin/decision-log.md`, `reports/04-draft/risk-and-challenges.md` |
+
+---
+
+#### 7.1 — Introduction & Problem Definition (0.5 day)
+
+- Research question: Can posting-volume surges on r/pennystocks be predicted from backward-looking features?
+- Motivation: early surge detection for market participants and researchers.
+- Scope: binary classification of ticker-level 24h posting-volume surges.
+- Contributions: composite surge metric, temporal CV methodology, multi-model comparison.
+
+**Input:** Literature review conclusions, decision log, preliminary report.
+
+#### 7.2 — Background & Literature Review (0.25 day)
+
+- Polish existing literature review (already written in `reports/01-literature-review/`).
+- Add 2–3 recent citations if needed to address reviewer feedback.
+- Tighten the research gap statement to directly motivate the methodology.
+
+**Input:** `reports/01-literature-review/literature-review-v1.0.md`, any new papers found during implementation.
+
+#### 7.3 — Methodology: Dataset & Preprocessing (0.5 day)
+
+- Dataset provenance: r/pennystocks submissions, collection period, size, schema.
+- Preprocessing steps: text cleaning, ticker extraction (regex + stopword filtering), temporal sorting.
+- Sentiment analysis: model used (VADER/TextBlob), scoring approach, justification.
+- Statistics: total posts, unique tickers, date range, class distribution.
+
+**Input:** `pipeline_summary.json`, `loader.py`, `sentiment.py`, EDA figures 01–04.
+
+#### 7.4 — Methodology: Feature Engineering & Surge Definition (0.5 day)
+
+- 9 features with formal definitions and leakage-prevention argument.
+- Composite surge metric formula: `S = w1 * z_volume + w2 * z_sentiment`.
+- Threshold τ selection via sensitivity sweep.
+- Temporal train/test split (80/20).
+- Exclusion criteria (min_window_count).
+
+**Input:** `features.py`, `labelling.py`, `normalisation.py`, `threshold_sensitivity.csv`, EDA figures 05–09.
+
+#### 7.5 — Methodology: Model Development & Experimental Setup (0.5 day)
+
+- Three models: Logistic Regression, Random Forest, XGBoost.
+- Hyperparameter grids (10, 36, ≤50 configs respectively).
+- Expanding-window temporal cross-validation (k=4 folds, 3 splits).
+- Selection criterion: mean validation AUC-ROC.
+- Final retraining on full training set with best params.
+- Reproducibility: fixed seeds, serialised models, config JSON.
+
+**Input:** `training.py`, `pipeline_config.json`, model `.joblib` files.
+
+#### 7.6 — Results (0.5 day)
+
+- Per-model metrics table: Precision, Recall, F1, AUC-ROC with 95% bootstrap CIs.
+- ROC curve figure (combined overlay).
+- Confusion matrices per model.
+- Best model identification and tier achieved (minimum/target/stretch).
+- McNemar's test pairwise significance table.
+- Baseline comparison table (random baseline, single-feature baselines).
+
+**Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures.
+
+#### 7.7 — Discussion & Critical Analysis (0.5 day)
+
+- Why did model X outperform Y? (feature importance, decision boundaries)
+- Where does the best model fail? (false positives/negatives analysis from confusion matrix)
+- Effect of class imbalance on metrics.
+- Phase 1 vs Phase 2 comparison (does sentiment improve predictions?).
+- Practical implications: how would this be deployed? What lead time does it provide?
+- Relate findings back to research question and literature.
+
+**Input:** `final_summary.json`, confusion matrices, feature importance (from RF), decision log.
+
+#### 7.8 — Limitations, Future Work & Conclusion (0.25 day)
+
+- Known limitations: ticker extraction precision, TextBlob/VADER ceiling, single subreddit, class imbalance.
+- Future work: FinBERT, graph-based diffusion, multi-subreddit, real-time inference.
+- Conclusion: restate findings, contribution, and tier achieved.
+
+**Input:** `risk-and-challenges.md`, decision log, final summary tier.
+
+#### 7.9 — Formatting & Polish (0.5 day)
+
+- ACM citation format.
+- Figure captions with numbering.
+- Table formatting (consistent decimal places).
+- Abstract (written last).
+- Proofread for grammar, flow, and consistency.
+- Check all figures are referenced in text.
+- Verify word count / page limit compliance.
+
+---
+
 ### Summary Timeline
 
 | Phase | Effort | Priority |
@@ -208,7 +329,8 @@ python src/run_training.py --data-path output/processed/labelled_dataset.csv --o
 | 4. Ticker hardening | 0.5 day | Low |
 | 5. End-to-end run | 0.5 day | Critical |
 | 6. CI & housekeeping | 0.5 day | Medium |
+| 7. Report writing | 3–4 days | Critical |
 
-**Total: ~6–8 days of focused work.**
+**Total: ~9–12 days of focused work.**
 
-Phase 1 is critical — it establishes the path conventions all subsequent code changes will use and makes the test suite functional. Phase 5 validates the entire system. Phase 2 adds the academic rigour needed for the final report. Phases 3–4 improve signal quality. Phase 6 is polish.
+Phase 1 is critical — it establishes the path conventions all subsequent code changes will use and makes the test suite functional. Phase 5 validates the entire system. Phase 2 adds the academic rigour needed for the final report. Phases 3–4 improve signal quality. Phase 6 is polish. Phase 7 is the final deliverable — it cannot begin until Phase 5 produces the evaluation artifacts, but sections 7.1–7.5 (methodology) can be drafted in parallel with Phases 2–4.
