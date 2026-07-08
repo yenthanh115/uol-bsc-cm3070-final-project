@@ -162,7 +162,7 @@ Steps:
 
 ---
 
-### Phase 5: End-to-End Run & Artifact Generation (0.5 day)
+### Phase 5: End-to-End Run & Artifact Generation (0.5 day) - DONE
 
 **Goal:** Produce persisted results that prove the system works.
 
