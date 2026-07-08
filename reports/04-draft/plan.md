@@ -84,7 +84,7 @@ Steps:
 - Add constants: `SUCCESS_TIER_MINIMUM = 0.60`, `SUCCESS_TIER_TARGET = 0.70`, `SUCCESS_TIER_STRETCH = 0.80`.
 - Implement: `mcnemar_pairwise_test`, `evaluate_baselines`, `validate_success_tiers`, `produce_final_summary`.
 
-#### 1.6 — Run pytest and fix until green
+#### ~~1.6 — Run pytest and fix until green~~ - DONE
 
 - Resolve any import mismatches, type issues, or edge cases.
 - Target: all 5 test files pass.
@@ -135,7 +135,12 @@ Steps:
 - Use `transformers` + `ProsusAI/finbert` for batch inference.
 - Gate behind a config flag (`sentiment_model: "vader" | "finbert"`) so the default stays fast.
 
-**3.3 — Re-run and compare**
+**3.3 — Optimise sentiment computation (engineering hygiene)**
+- Deduplicate texts before scoring: exploded rows share the same post text (~80k rows from ~36k unique posts → 45% fewer VADER calls).
+- Vectorise text preparation with `np.where` instead of per-row `.iloc` + conditionals.
+- Expected improvement: sentiment stage from ~8 min → ~2 min. Not report-worthy on its own, but enables faster iteration during experimentation.
+
+**3.4 — Re-run and compare**
 - Run the full pipeline with VADER, compare surge rate and model AUC against TextBlob baseline.
 - Log which sentiment model was used in the pipeline summary for reproducibility.
 

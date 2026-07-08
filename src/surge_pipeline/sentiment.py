@@ -1,11 +1,17 @@
 """Sentiment computation for the surge-labelling pipeline.
 
-Computes TextBlob polarity per record (title + selftext with fallback),
+Computes sentiment polarity per record (title + selftext with fallback),
 then derives mean future sentiment within each record's forward ticker
 window and sentiment change magnitude.
 
+Supports two sentiment backends:
+  - "vader" (default): VADER SentimentIntensityAnalyzer compound score.
+    Better for social media text (exclamation, capitalisation, slang).
+  - "textblob": TextBlob polarity. Simpler, general-purpose.
+
 Requirements: R4 (Sentiment Computation)
-Design Decision: D5 — TextBlob polarity on combined text with fallback logic.
+Design Decision: D5 — Sentiment on combined text with fallback logic.
+                 D13 — VADER as default sentiment model for Reddit text.
 """
 
 from __future__ import annotations
@@ -14,7 +20,6 @@ import logging
 
 import numpy as np
 import pandas as pd
-from textblob import TextBlob
 
 from surge_pipeline.config import PipelineConfig
 
@@ -24,23 +29,61 @@ logger = logging.getLogger(__name__)
 _WINDOW_SECONDS: int = 24 * 60 * 60
 
 
-def _compute_polarity(title: str, selftext: str) -> float:
+# ---------------------------------------------------------------------------
+# Sentiment backend functions
+# ---------------------------------------------------------------------------
+
+
+def _compute_polarity_vader(title: str, selftext: str) -> float:
+    """Compute VADER compound polarity for a single record.
+
+    Parameters
+    ----------
+    title : str
+        Post title.
+    selftext : str
+        Post body text (may be empty).
+
+    Returns
+    -------
+    float
+        Compound score in [-1.0, 1.0]. Returns 0.0 if text is empty.
+    """
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+    # Use module-level cache to avoid re-creating the analyzer per record
+    if not hasattr(_compute_polarity_vader, "_analyzer"):
+        _compute_polarity_vader._analyzer = SentimentIntensityAnalyzer()
+
+    analyzer = _compute_polarity_vader._analyzer
+
+    if selftext and str(selftext).strip():
+        text = f"{title} {selftext}"
+    elif title and str(title).strip():
+        text = title
+    else:
+        return 0.0
+
+    return analyzer.polarity_scores(text)["compound"]
+
+
+def _compute_polarity_textblob(title: str, selftext: str) -> float:
     """Compute TextBlob polarity for a single record.
 
     Parameters
     ----------
     title : str
-        Post title (required field, may still be empty in edge cases).
+        Post title.
     selftext : str
-        Post body text (may be empty/NaN).
+        Post body text (may be empty).
 
     Returns
     -------
     float
-        Polarity score in [-1.0, 1.0]. Returns 0.0 (neutral) if both
-        title and selftext are empty.
+        Polarity score in [-1.0, 1.0]. Returns 0.0 if text is empty.
     """
-    # Combine title + selftext when selftext is available
+    from textblob import TextBlob
+
     if selftext and str(selftext).strip():
         text = f"{title} {selftext}"
     elif title and str(title).strip():
@@ -55,7 +98,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     """Compute sentiment polarity and mean future sentiment for each record.
 
     Workflow:
-        1. Compute TextBlob polarity per record (AC1, AC4).
+        1. Compute polarity per record using the configured backend (AC1, AC4).
         2. For each record, compute mean sentiment of forward-window records
            mentioning the same ticker (AC2).
         3. Compute sentiment_change = |mean_future_sentiment - current| (AC3).
@@ -67,8 +110,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
         'created_utc' (datetime64[ns, UTC]), 'ticker', 'title', 'selftext'.
         May optionally have 'forward_count' and 'excluded' from windowing.
     config : PipelineConfig
-        Pipeline configuration (used for consistency; no sentiment-specific
-        params currently).
+        Pipeline configuration. Uses `sentiment_model` to select backend.
 
     Returns
     -------
@@ -86,10 +128,18 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
 
     n = len(df)
 
+    # Select sentiment backend
+    sentiment_model = getattr(config, "sentiment_model", "vader")
+    if sentiment_model == "textblob":
+        polarity_fn = _compute_polarity_textblob
+    else:
+        polarity_fn = _compute_polarity_vader
+
+    logger.info("Sentiment model: %s", sentiment_model)
+
     # ------------------------------------------------------------------
     # Step 1: Compute per-record polarity (AC1, AC4)
     # ------------------------------------------------------------------
-    # Normalise text columns: replace NaN/None with empty string
     titles = df["title"].fillna("").astype(str)
     selftexts = df["selftext"].fillna("").astype(str)
 
@@ -102,15 +152,11 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
         selftext = selftexts.iloc[i].strip()
 
         if selftext:
-            # Full text: title + selftext
-            text = f"{title} {selftext}"
-            polarities[i] = TextBlob(text).sentiment.polarity
+            polarities[i] = polarity_fn(title, selftext)
         elif title:
-            # Fallback: title only (AC4 graceful handling)
-            polarities[i] = TextBlob(title).sentiment.polarity
+            polarities[i] = polarity_fn(title, "")
             fallback_count += 1
         else:
-            # Both empty — assign neutral (D5 design decision)
             polarities[i] = 0.0
             neutral_count += 1
 
