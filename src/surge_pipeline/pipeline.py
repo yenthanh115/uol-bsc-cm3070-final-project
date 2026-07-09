@@ -316,6 +316,10 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
         excluded = int(labelled_df["excluded"].sum())
         summary["exclusion_rate"] = excluded / total * 100 if total > 0 else 0.0
 
+    # Include dataset fingerprint if available
+    if "dataset_fingerprint" in labelled_df.attrs:
+        summary["dataset_fingerprint"] = labelled_df.attrs["dataset_fingerprint"]
+
     summary_path = output_dir / "pipeline_summary.json"
 
     def _json_serialise(obj):
