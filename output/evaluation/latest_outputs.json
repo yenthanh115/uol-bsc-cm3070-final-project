@@ -1,0 +1,7 @@
+{
+  "prefix": "202607102127",
+  "outputs": {
+    "evaluation_metrics": "..\\output\\evaluation\\202607102127_evaluation_metrics.json",
+    "final_summary": "..\\output\\evaluation\\202607102127_final_summary.json"
+  }
+}
