@@ -163,7 +163,8 @@ def _compute_time_since_previous(
     n = len(df)
     result = np.full(n, -1.0, dtype=np.float64)
 
-    epoch_seconds = (created_utc.astype("int64") // 10**9).values
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = to_epoch_seconds(created_utc)
 
     for ticker, group in df.groupby("ticker", sort=False):
         idx = group.index.values
@@ -207,7 +208,8 @@ def _compute_ticker_post_acceleration(
     n = len(df)
     result = np.zeros(n, dtype=np.float64)
 
-    epoch_seconds = (created_utc.astype("int64") // 10**9).values
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = to_epoch_seconds(created_utc)
 
     for ticker, group in df.groupby("ticker", sort=False):
         idx = group.index.values

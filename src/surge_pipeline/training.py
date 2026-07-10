@@ -1,9 +1,9 @@
-"""Model training with temporal cross-validation.
+"""Model training with temporal cross-validation (multi-model).
 
-Implements expanding-window temporal cross-validation for a Logistic
-Regression baseline model. Divides the training partition into k=4
-sequential folds and selects the best hyperparameters by mean
-validation AUC-ROC.
+Implements expanding-window temporal cross-validation for Logistic
+Regression, Random Forest, and XGBoost models. Divides the training
+partition into k=4 sequential folds and selects the best hyperparameters
+by mean validation AUC-ROC.
 
 Requirements: R13 (Model Training with Temporal Cross-Validation),
               R14 (Model Training Reproducibility)
@@ -16,129 +16,533 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 from surge_pipeline.config import PipelineConfig
-from surge_pipeline.features import FEATURE_COLUMNS, compute_features, get_feature_matrix
+from surge_pipeline.features import FEATURE_COLUMNS
 
 logger = logging.getLogger(__name__)
 
-# Hyperparameter search space for Logistic Regression (R13-AC7)
-# C ∈ {0.01, 0.1, 1, 10, 100} × l1_ratio ∈ {0.0 (L2), 1.0 (L1)} = 10 configs (≤50, R13-AC6)
-# Uses l1_ratio API (sklearn ≥1.8): l1_ratio=0 → L2, l1_ratio=1 → L1.
-LR_PARAM_GRID: List[Dict[str, Any]] = [
-    {"C": c, "l1_ratio": l1_ratio, "solver": "saga"}
-    for c in [0.01, 0.1, 1.0, 10.0, 100.0]
-    for l1_ratio in [0.0, 1.0]
-]
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+N_FOLDS: int = 4
+"""Number of temporal folds (produces N_FOLDS - 1 expanding-window splits)."""
+
+
+# ---------------------------------------------------------------------------
+# Hyperparameter grids
+# ---------------------------------------------------------------------------
+
+
+def _get_lr_param_grid() -> List[Dict[str, Any]]:
+    """Logistic Regression grid: C(5) x l1_ratio(2) = 10 configs."""
+    return [
+        {"C": c, "l1_ratio": l1_ratio, "solver": "saga"}
+        for c in [0.01, 0.1, 1.0, 10.0, 100.0]
+        for l1_ratio in [0.0, 1.0]
+    ]
+
+
+def _get_rf_param_grid() -> List[Dict[str, Any]]:
+    """Random Forest grid: n_estimators(3) x max_depth(4) x min_samples_leaf(3) = 36 configs."""
+    return [
+        {
+            "n_estimators": n,
+            "max_depth": d,
+            "min_samples_leaf": m,
+        }
+        for n in [50, 100, 200]
+        for d in [3, 5, 10, None]
+        for m in [1, 2, 5]
+    ]
+
+
+def _get_xgb_param_grid(random_seed: int = 42) -> List[Dict[str, Any]]:
+    """XGBoost grid: ≤50 configurations.
+
+    n_estimators(3) x max_depth(3) x learning_rate(3) x subsample(2) = 54 → capped at 50.
+    """
+    grid = [
+        {
+            "n_estimators": n,
+            "max_depth": d,
+            "learning_rate": lr,
+            "subsample": s,
+            "random_state": random_seed,
+            "eval_metric": "logloss",
+            "use_label_encoder": False,
+        }
+        for n in [50, 100, 200]
+        for d in [3, 5, 7]
+        for lr in [0.01, 0.1, 0.3]
+        for s in [0.8, 1.0]
+    ]
+    return grid[:50]
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
 
 
 @dataclass
-class CVFold:
-    """Metadata for a single cross-validation fold."""
+class CVResult:
+    """Result from a single hyperparameter configuration evaluated over CV folds."""
 
-    fold_idx: int
-    train_indices: np.ndarray
-    val_indices: np.ndarray
-    train_max_ts: float
-    val_min_ts: float
+    params: Dict[str, Any]
+    fold_scores: List[float]
+    mean_score: float
+    std_score: float
 
 
 @dataclass
-class TrainingResult:
-    """Result from model training including best params and scores."""
+class TrainedModel:
+    """A single trained model with its metadata."""
 
-    model_name: str
+    name: str
+    model: Any
+    scaler: StandardScaler
     best_params: Dict[str, Any]
-    cv_scores: List[float]  # AUC-ROC per fold
-    mean_cv_score: float
-    std_cv_score: float
+    best_cv_auc: float
+    cv_results: List[CVResult]
     training_duration_seconds: float
-    model: Any  # trained sklearn model
-    scaler: StandardScaler  # fitted scaler for feature normalisation
+    n_configs_evaluated: int
     feature_columns: List[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
 
 
-def create_temporal_cv_folds(
-    df: pd.DataFrame, k: int = 4
-) -> List[CVFold]:
-    """Create k sequential folds from the training partition.
+@dataclass
+class TrainingPipelineResult:
+    """Result from the full multi-model training pipeline."""
 
-    Implements expanding-window temporal cross-validation (R13-AC2, AC3):
-    - Divide training data into k sequential folds by timestamp order
-    - For fold i (i=2,3,4): train on folds 1..i-1, validate on fold i
-    - This produces k-1=3 train/validation splits
+    models: Dict[str, TrainedModel]
+    phase: str
+    random_seed: int
+    n_folds: int = N_FOLDS
+
+
+# Backward-compatible alias used by evaluation.py and run_training.py
+@dataclass
+class TrainingResult:
+    """Result from single-model training (backward-compatible interface)."""
+
+    model_name: str
+    best_params: Dict[str, Any]
+    cv_scores: List[float]
+    mean_cv_score: float
+    std_cv_score: float
+    training_duration_seconds: float
+    model: Any
+    scaler: StandardScaler
+    feature_columns: List[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
+
+
+# ---------------------------------------------------------------------------
+# Temporal fold creation
+# ---------------------------------------------------------------------------
+
+
+def create_temporal_folds(
+    df: pd.DataFrame, n_folds: int = N_FOLDS
+) -> List[np.ndarray]:
+    """Create n_folds sequential groups from the dataframe by timestamp order.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Training partition only (partition == 'train', excluded == False).
-        Must have 'created_utc' column for temporal ordering.
-    k : int
-        Number of sequential folds (default 4, producing 3 splits).
+        Dataset with 'created_utc' column for temporal ordering.
+    n_folds : int
+        Number of sequential folds (default N_FOLDS=4).
 
     Returns
     -------
-    List[CVFold]
-        List of k-1 CVFold objects with train/val indices.
+    List[np.ndarray]
+        List of n_folds arrays, each containing positional indices for that fold.
+        Folds are in chronological order.
     """
-    # Sort by timestamp to ensure temporal ordering
-    epoch_seconds = pd.to_datetime(df["created_utc"], utc=True).astype("int64") // 10**9
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = pd.Series(to_epoch_seconds(df["created_utc"]), index=df.index)
     sorted_indices = epoch_seconds.values.argsort()
     n = len(sorted_indices)
 
-    # Divide into k approximately equal folds
-    fold_size = n // k
-    folds_indices: List[np.ndarray] = []
-    for i in range(k):
+    fold_size = n // n_folds
+    folds: List[np.ndarray] = []
+    for i in range(n_folds):
         start = i * fold_size
-        end = (i + 1) * fold_size if i < k - 1 else n
-        folds_indices.append(sorted_indices[start:end])
+        end = (i + 1) * fold_size if i < n_folds - 1 else n
+        folds.append(sorted_indices[start:end])
 
-    # Create expanding-window splits: train on 1..i-1, validate on fold i
-    cv_folds: List[CVFold] = []
-    for i in range(1, k):  # i = 1, 2, 3 (validate on folds 1, 2, 3)
-        train_idx = np.concatenate(folds_indices[:i])
-        val_idx = folds_indices[i]
+    return folds
 
-        # Get timestamps for validation
-        train_times = epoch_seconds.iloc[train_idx].values
-        val_times = epoch_seconds.iloc[val_idx].values
 
-        cv_folds.append(
-            CVFold(
-                fold_idx=i,
-                train_indices=train_idx,
-                val_indices=val_idx,
-                train_max_ts=float(train_times.max()),
-                val_min_ts=float(val_times.min()),
+def get_expanding_window_splits(
+    folds: List[np.ndarray],
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """Convert sequential folds into expanding-window train/val splits.
+
+    For k folds, produces k-1 splits where split i uses folds 0..i as
+    training and fold i+1 as validation.
+
+    Parameters
+    ----------
+    folds : List[np.ndarray]
+        Sequential fold indices from create_temporal_folds.
+
+    Returns
+    -------
+    List[Tuple[np.ndarray, np.ndarray]]
+        List of (train_indices, val_indices) tuples.
+    """
+    splits: List[Tuple[np.ndarray, np.ndarray]] = []
+    for i in range(1, len(folds)):
+        train_idx = np.concatenate(folds[:i])
+        val_idx = folds[i]
+        splits.append((train_idx, val_idx))
+    return splits
+
+
+def _verify_temporal_ordering(
+    df: pd.DataFrame,
+    folds: List[np.ndarray],
+    splits: List[Tuple[np.ndarray, np.ndarray]],
+) -> None:
+    """Verify that all splits respect chronological ordering.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataset with 'created_utc' column.
+    folds : List[np.ndarray]
+        Sequential fold indices.
+    splits : List[Tuple[np.ndarray, np.ndarray]]
+        Expanding-window splits.
+
+    Raises
+    ------
+    ValueError
+        If any split has max(train_ts) > min(val_ts).
+    """
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch = to_epoch_seconds(df["created_utc"])
+
+    for i, (train_idx, val_idx) in enumerate(splits):
+        max_train = epoch[train_idx].max()
+        min_val = epoch[val_idx].min()
+        if max_train > min_val:
+            raise ValueError(
+                f"Temporal ordering violated in split {i}: "
+                f"max(train_ts)={max_train} > min(val_ts)={min_val}"
             )
-        )
 
-    # Log fold info
-    for fold in cv_folds:
-        logger.info(
-            "CV Fold %d: train=%d samples, val=%d samples | "
-            "max(train_ts)=%.0f <= min(val_ts)=%.0f ✓",
-            fold.fold_idx,
-            len(fold.train_indices),
-            len(fold.val_indices),
-            fold.train_max_ts,
-            fold.val_min_ts,
-        )
-        # Verify temporal ordering (R13-AC3)
-        assert fold.train_max_ts <= fold.val_min_ts, (
-            f"Temporal violation in fold {fold.fold_idx}: "
-            f"max(train_ts)={fold.train_max_ts} > min(val_ts)={fold.val_min_ts}"
-        )
 
-    return cv_folds
+# ---------------------------------------------------------------------------
+# Model factory functions
+# ---------------------------------------------------------------------------
+
+
+def _make_lr(params: Dict[str, Any], random_seed: int) -> LogisticRegression:
+    """Create a LogisticRegression instance from params."""
+    return LogisticRegression(
+        C=params["C"],
+        penalty="elasticnet",
+        l1_ratio=params["l1_ratio"],
+        solver=params["solver"],
+        random_state=random_seed,
+        max_iter=2000,
+        class_weight="balanced",
+    )
+
+
+def _make_rf(params: Dict[str, Any], random_seed: int) -> RandomForestClassifier:
+    """Create a RandomForestClassifier instance from params."""
+    return RandomForestClassifier(
+        n_estimators=params["n_estimators"],
+        max_depth=params["max_depth"],
+        min_samples_leaf=params["min_samples_leaf"],
+        random_state=random_seed,
+        class_weight="balanced",
+        n_jobs=-1,
+    )
+
+
+def _make_xgb(params: Dict[str, Any], random_seed: int):
+    """Create an XGBClassifier instance from params."""
+    from xgboost import XGBClassifier
+
+    return XGBClassifier(
+        n_estimators=params["n_estimators"],
+        max_depth=params["max_depth"],
+        learning_rate=params["learning_rate"],
+        subsample=params["subsample"],
+        random_state=random_seed,
+        eval_metric=params.get("eval_metric", "logloss"),
+        use_label_encoder=False,
+        verbosity=0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-model training logic
+# ---------------------------------------------------------------------------
+
+
+def _train_single_model(
+    model_name: str,
+    param_grid: List[Dict[str, Any]],
+    X_train_full: np.ndarray,
+    y_train_full: np.ndarray,
+    splits: List[Tuple[np.ndarray, np.ndarray]],
+    random_seed: int,
+    make_model_fn,
+) -> TrainedModel:
+    """Train a single model type with temporal CV and grid search.
+
+    Parameters
+    ----------
+    model_name : str
+        Identifier for this model type.
+    param_grid : List[Dict]
+        Hyperparameter configurations to search.
+    X_train_full : np.ndarray
+        Full training feature matrix.
+    y_train_full : np.ndarray
+        Full training labels.
+    splits : List[Tuple[np.ndarray, np.ndarray]]
+        Expanding-window CV splits.
+    random_seed : int
+        Random seed for reproducibility.
+    make_model_fn : callable
+        Factory function (params, seed) -> sklearn estimator.
+
+    Returns
+    -------
+    TrainedModel
+        Trained model with metadata.
+    """
+    start_time = time.time()
+
+    best_mean_auc: float = -1.0
+    best_params: Dict[str, Any] = {}
+    best_fold_scores: List[float] = []
+    all_cv_results: List[CVResult] = []
+
+    for params in param_grid:
+        fold_aucs: List[float] = []
+
+        for train_idx, val_idx in splits:
+            scaler = StandardScaler()
+            X_fold_train = scaler.fit_transform(X_train_full[train_idx])
+            X_fold_val = scaler.transform(X_train_full[val_idx])
+            y_fold_train = y_train_full[train_idx]
+            y_fold_val = y_train_full[val_idx]
+
+            # Skip if validation set has only one class
+            if len(np.unique(y_fold_val)) < 2:
+                fold_aucs.append(0.5)
+                continue
+
+            model = make_model_fn(params, random_seed)
+            model.fit(X_fold_train, y_fold_train)
+
+            y_prob = model.predict_proba(X_fold_val)[:, 1]
+            auc = roc_auc_score(y_fold_val, y_prob)
+            fold_aucs.append(auc)
+
+        mean_auc = float(np.mean(fold_aucs))
+        std_auc = float(np.std(fold_aucs))
+
+        cv_result = CVResult(
+            params=params.copy(),
+            fold_scores=fold_aucs,
+            mean_score=mean_auc,
+            std_score=std_auc,
+        )
+        all_cv_results.append(cv_result)
+
+        if mean_auc > best_mean_auc:
+            best_mean_auc = mean_auc
+            best_params = params.copy()
+            best_fold_scores = fold_aucs.copy()
+
+    # Retrain on full training data with best params
+    final_scaler = StandardScaler()
+    X_train_scaled = final_scaler.fit_transform(X_train_full)
+    final_model = make_model_fn(best_params, random_seed)
+    final_model.fit(X_train_scaled, y_train_full)
+
+    duration = time.time() - start_time
+
+    logger.info(
+        "%s — best CV AUC: %.4f (± %.4f) | params: %s | %.2fs",
+        model_name, best_mean_auc, float(np.std(best_fold_scores)),
+        best_params, duration,
+    )
+
+    # Store only the best CV result for the summary
+    best_cv_result = CVResult(
+        params=best_params,
+        fold_scores=best_fold_scores,
+        mean_score=best_mean_auc,
+        std_score=float(np.std(best_fold_scores)),
+    )
+
+    return TrainedModel(
+        name=model_name,
+        model=final_model,
+        scaler=final_scaler,
+        best_params=best_params,
+        best_cv_auc=best_mean_auc,
+        cv_results=[best_cv_result],
+        training_duration_seconds=duration,
+        n_configs_evaluated=len(param_grid),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Multi-model training orchestrator
+# ---------------------------------------------------------------------------
+
+
+def train_models(
+    df: pd.DataFrame,
+    config: PipelineConfig,
+    output_dir: str | None = None,
+) -> TrainingPipelineResult:
+    """Train all models (LR, RF, XGBoost) with temporal cross-validation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full labelled dataset with features computed. Must contain
+        'partition', 'excluded', 'surge_label', and all FEATURE_COLUMNS.
+    config : PipelineConfig
+        Pipeline configuration (random_seed, weight_sentiment used).
+    output_dir : str, optional
+        Directory to serialise trained models. Defaults to config.output_dir.
+
+    Returns
+    -------
+    TrainingPipelineResult
+        Contains all trained models, phase info, and metadata.
+    """
+    random_seed = config.random_seed
+    phase = "phase1" if config.weight_sentiment == 0.0 else "phase2"
+    out_dir = Path(output_dir) if output_dir else Path(config.output_dir)
+
+    logger.info("=" * 60)
+    logger.info("MULTI-MODEL TRAINING (phase=%s, seed=%d)", phase, random_seed)
+    logger.info("=" * 60)
+
+    # Prepare training data
+    train_mask = (df["partition"] == "train") & (~df["excluded"].astype(bool))
+    train_df = df.loc[train_mask].copy()
+
+    X_train_full = train_df[FEATURE_COLUMNS].values.astype(np.float64)
+    y_train_full = train_df["surge_label"].values.astype(np.int64)
+
+    logger.info(
+        "Training data: %d samples, %d features | surge=%.1f%%",
+        X_train_full.shape[0], X_train_full.shape[1],
+        y_train_full.mean() * 100,
+    )
+
+    # Create temporal CV folds and splits
+    folds = create_temporal_folds(train_df, n_folds=N_FOLDS)
+    splits = get_expanding_window_splits(folds)
+    _verify_temporal_ordering(train_df, folds, splits)
+
+    # Train each model type
+    models: Dict[str, TrainedModel] = {}
+
+    # --- Logistic Regression ---
+    logger.info("Training Logistic Regression...")
+    models["logistic_regression"] = _train_single_model(
+        "logistic_regression", _get_lr_param_grid(),
+        X_train_full, y_train_full, splits, random_seed, _make_lr,
+    )
+
+    # --- Random Forest ---
+    logger.info("Training Random Forest...")
+    models["random_forest"] = _train_single_model(
+        "random_forest", _get_rf_param_grid(),
+        X_train_full, y_train_full, splits, random_seed, _make_rf,
+    )
+
+    # --- XGBoost ---
+    logger.info("Training XGBoost...")
+    models["xgboost"] = _train_single_model(
+        "xgboost", _get_xgb_param_grid(random_seed),
+        X_train_full, y_train_full, splits, random_seed, _make_xgb,
+    )
+
+    # Serialise models to disk
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, tm in models.items():
+        model_path = out_dir / f"{name}_{phase}_{random_seed}.joblib"
+        joblib.dump(
+            {"model": tm.model, "scaler": tm.scaler, "params": tm.best_params},
+            model_path,
+        )
+        logger.info("Saved model: %s", model_path)
+
+    result = TrainingPipelineResult(
+        models=models,
+        phase=phase,
+        random_seed=random_seed,
+    )
+
+    logger.info("=" * 60)
+    logger.info("TRAINING COMPLETE — %d models trained", len(models))
+    logger.info("=" * 60)
+
+    return result
+
+
+def get_training_summary(result: TrainingPipelineResult) -> Dict[str, Any]:
+    """Generate a summary dict of the training pipeline result.
+
+    Parameters
+    ----------
+    result : TrainingPipelineResult
+        Result from train_models.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Summary with per-model metrics and metadata.
+    """
+    summary: Dict[str, Any] = {
+        "phase": result.phase,
+        "random_seed": result.random_seed,
+        "n_folds": result.n_folds,
+        "models": {},
+    }
+
+    for name, tm in result.models.items():
+        best_cv = tm.cv_results[0] if tm.cv_results else None
+        summary["models"][name] = {
+            "best_params": tm.best_params,
+            "best_cv_auc": tm.best_cv_auc,
+            "fold_scores": best_cv.fold_scores if best_cv else [],
+            "training_duration_seconds": tm.training_duration_seconds,
+            "n_configs_evaluated": tm.n_configs_evaluated,
+        }
+
+    return summary
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible single-model training (used by run_training.py)
+# ---------------------------------------------------------------------------
 
 
 def train_logistic_regression(
@@ -148,156 +552,58 @@ def train_logistic_regression(
 ) -> TrainingResult:
     """Train Logistic Regression with temporal cross-validation.
 
-    Implements R13-AC1 (Logistic Regression), R13-AC4 (best by AUC-ROC),
-    R13-AC5 (retrain on full training partition), R14-AC1 (seeded).
+    Backward-compatible wrapper that returns a TrainingResult.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Full labelled dataset (with features computed). Must contain
-        'partition', 'excluded', 'surge_label', and all FEATURE_COLUMNS.
+        Full labelled dataset with features computed.
     config : PipelineConfig
         Pipeline configuration.
     seed : int | None
-        Random seed override. Uses config.random_seed if None.
+        Random seed override.
 
     Returns
     -------
     TrainingResult
         Training result with the best model, params, and CV scores.
     """
-    start_time = time.time()
     random_seed = seed if seed is not None else config.random_seed
 
-    logger.info("=" * 60)
-    logger.info("TRAINING: Logistic Regression (seed=%d)", random_seed)
-    logger.info("=" * 60)
-
-    # ------------------------------------------------------------------
-    # Prepare training data (non-excluded, training partition only)
-    # ------------------------------------------------------------------
+    # Prepare training data
     train_mask = (df["partition"] == "train") & (~df["excluded"].astype(bool))
     train_df = df.loc[train_mask].copy()
 
     X_train_full = train_df[FEATURE_COLUMNS].values.astype(np.float64)
     y_train_full = train_df["surge_label"].values.astype(np.int64)
 
-    logger.info(
-        "Training data: %d samples, %d features",
-        X_train_full.shape[0],
-        X_train_full.shape[1],
-    )
-    logger.info(
-        "Class distribution: surge=%d (%.1f%%), no-surge=%d (%.1f%%)",
-        y_train_full.sum(),
-        y_train_full.mean() * 100,
-        (1 - y_train_full).sum(),
-        (1 - y_train_full).mean() * 100,
+    # Create temporal CV folds and splits
+    folds = create_temporal_folds(train_df, n_folds=N_FOLDS)
+    splits = get_expanding_window_splits(folds)
+
+    # Train LR
+    trained = _train_single_model(
+        "LogisticRegression", _get_lr_param_grid(),
+        X_train_full, y_train_full, splits, random_seed, _make_lr,
     )
 
-    # ------------------------------------------------------------------
-    # Create temporal CV folds (R13-AC2, AC3)
-    # ------------------------------------------------------------------
-    cv_folds = create_temporal_cv_folds(train_df, k=4)
+    best_cv = trained.cv_results[0]
 
-    # ------------------------------------------------------------------
-    # Hyperparameter search (R13-AC4, AC6, AC7)
-    # ------------------------------------------------------------------
-    logger.info(
-        "Evaluating %d hyperparameter configurations...", len(LR_PARAM_GRID)
-    )
-
-    best_mean_auc: float = -1.0
-    best_params: Dict[str, Any] = {}
-    best_fold_scores: List[float] = []
-
-    for params in LR_PARAM_GRID:
-        fold_aucs: List[float] = []
-
-        for fold in cv_folds:
-            # Scale features (fit on fold training data only)
-            scaler = StandardScaler()
-            X_fold_train = scaler.fit_transform(X_train_full[fold.train_indices])
-            X_fold_val = scaler.transform(X_train_full[fold.val_indices])
-            y_fold_train = y_train_full[fold.train_indices]
-            y_fold_val = y_train_full[fold.val_indices]
-
-            # Skip if validation set has only one class
-            if len(np.unique(y_fold_val)) < 2:
-                fold_aucs.append(0.5)
-                continue
-
-            # Train model (using l1_ratio API for sklearn ≥1.8)
-            model = LogisticRegression(
-                C=params["C"],
-                penalty="elasticnet",
-                l1_ratio=params["l1_ratio"],
-                solver=params["solver"],
-                random_state=random_seed,
-                max_iter=2000,
-                class_weight="balanced",  # Handle imbalanced classes
-            )
-            model.fit(X_fold_train, y_fold_train)
-
-            # Predict probabilities for AUC-ROC
-            y_prob = model.predict_proba(X_fold_val)[:, 1]
-            auc = roc_auc_score(y_fold_val, y_prob)
-            fold_aucs.append(auc)
-
-        mean_auc = np.mean(fold_aucs)
-        if mean_auc > best_mean_auc:
-            best_mean_auc = mean_auc
-            best_params = params.copy()
-            best_fold_scores = fold_aucs.copy()
-
-    logger.info(
-        "Best hyperparameters: C=%.4f, l1_ratio=%.1f, solver=%s",
-        best_params["C"],
-        best_params["l1_ratio"],
-        best_params["solver"],
-    )
-    logger.info(
-        "Best mean CV AUC-ROC: %.4f (± %.4f) | Folds: %s",
-        best_mean_auc,
-        np.std(best_fold_scores),
-        [f"{s:.4f}" for s in best_fold_scores],
-    )
-
-    # ------------------------------------------------------------------
-    # Retrain on full training partition with best params (R13-AC5)
-    # ------------------------------------------------------------------
-    logger.info("Retraining on full training partition with best configuration...")
-
-    final_scaler = StandardScaler()
-    X_train_scaled = final_scaler.fit_transform(X_train_full)
-
-    final_model = LogisticRegression(
-        C=best_params["C"],
-        penalty="elasticnet",
-        l1_ratio=best_params["l1_ratio"],
-        solver=best_params["solver"],
-        random_state=random_seed,
-        max_iter=2000,
-        class_weight="balanced",
-    )
-    final_model.fit(X_train_scaled, y_train_full)
-
-    duration = time.time() - start_time
-    logger.info("Training complete in %.2f seconds.", duration)
-
-    # R14-AC3: Log selected hyperparams and training duration
-    result = TrainingResult(
+    return TrainingResult(
         model_name="LogisticRegression",
-        best_params=best_params,
-        cv_scores=best_fold_scores,
-        mean_cv_score=best_mean_auc,
-        std_cv_score=float(np.std(best_fold_scores)),
-        training_duration_seconds=duration,
-        model=final_model,
-        scaler=final_scaler,
+        best_params=trained.best_params,
+        cv_scores=best_cv.fold_scores,
+        mean_cv_score=trained.best_cv_auc,
+        std_cv_score=best_cv.std_score,
+        training_duration_seconds=trained.training_duration_seconds,
+        model=trained.model,
+        scaler=trained.scaler,
     )
 
-    return result
+
+# ---------------------------------------------------------------------------
+# Prediction helper
+# ---------------------------------------------------------------------------
 
 
 def predict(
@@ -310,7 +616,7 @@ def predict(
     Parameters
     ----------
     result : TrainingResult
-        Trained model result from train_logistic_regression.
+        Trained model result.
     df : pd.DataFrame
         Full dataset with features computed.
     partition : str

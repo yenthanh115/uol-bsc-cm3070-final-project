@@ -219,23 +219,26 @@ __marimo__/
 
 .kiro/
 
-# ============================================================
-# Project-specific: input/output data
-# ============================================================
+# ─── Project data & artifacts ───────────────────────────────────────────────────
 
-# Large raw input files (too big for git)
+# Large raw data (tracked via Git LFS or reproduced locally)
 input/raw/*.csv
 
-# Pipeline outputs — regenerable, large
+# Pipeline outputs (reproducible – regenerate with `make pipeline`)
 output/processed/*.csv
+output/processed/threshold_sensitivity.csv
+
+# Trained model files (large binaries)
 output/models/*.joblib
 
-# Keep JSON configs and evaluation metrics (small, useful for audit)
-!output/processed/pipeline_config.json
-!output/processed/pipeline_summary.json
-!output/processed/threshold_sensitivity.csv
-!output/evaluation/*.json
+# Generated figures (reproducible – regenerate with pipeline/training scripts)
+output/figures/
 
-# Figures — keep tracked for report references
-# (remove this line if figures are too large for the repo)
-# output/figures/
+# Keep JSON configs and summaries tracked
+!output/processed/pipeline_summary.json
+!output/processed/pipeline_config.json
+!output/evaluation/evaluation_metrics.json
+!output/evaluation/final_summary.json
+
+# Keep .gitkeep files tracked
+!**/.gitkeep

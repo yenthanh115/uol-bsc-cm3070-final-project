@@ -1,0 +1,86 @@
+{
+  "normalisation_params": {
+    "mu_volume": 1.4367661577258486,
+    "sigma_volume": 3.3056768403951597,
+    "mu_sentiment": 0.3055841044535207,
+    "sigma_sentiment": 0.309280964951674,
+    "train_size": 8058,
+    "test_size": 519,
+    "split_timestamp": 1628120809.2
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 208,
+      "no_surge_count": 8369,
+      "total": 8577,
+      "surge_rate": 2.4250903579340095,
+      "imbalance_ratio": 40.23557692307692
+    },
+    "train": {
+      "surge_count": 198,
+      "no_surge_count": 7860,
+      "total": 8058,
+      "surge_rate": 2.4571854058078926,
+      "imbalance_ratio": 39.696969696969695
+    },
+    "test": {
+      "surge_count": 10,
+      "no_surge_count": 509,
+      "total": 519,
+      "surge_rate": 1.9267822736030826,
+      "imbalance_ratio": 50.9
+    }
+  },
+  "stage_counts": {
+    "after_load": 80212,
+    "after_windowing": 80212,
+    "excluded_count": 71635,
+    "after_sentiment": 80212,
+    "after_labelling": 80212
+  },
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.5,
+    "weight_sentiment": 0.5,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 3,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 89.30708622151299,
+  "dataset_fingerprint": {
+    "sha256": "ad03dfd97283d03b9a4bf1fdcc20c681642d1a39e62dc365ff08a7f1218cf4b2",
+    "file_size_bytes": 39718787,
+    "columns": [
+      "archived",
+      "author",
+      "created",
+      "deleted",
+      "edited",
+      "gilded",
+      "id",
+      "is_original_content",
+      "is_self",
+      "is_video",
+      "link_flair_text",
+      "locked",
+      "num_comments",
+      "num_crossposts",
+      "pinned",
+      "removed",
+      "retrieved",
+      "score",
+      "selftext",
+      "shortlink",
+      "thumbnail",
+      "title",
+      "total_awards_received",
+      "upvote_ratio"
+    ],
+    "num_rows": 304524,
+    "timestamp_column": "created",
+    "timestamp_min": "2021-01-01 00:13:41",
+    "timestamp_max": "2021-12-31 23:30:46",
+    "has_tickers_column": false
+  }
+}

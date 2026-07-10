@@ -9,13 +9,14 @@ Requirements: R1 (Data Loading and Ticker Extraction)
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 import re
 import string
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd
@@ -207,6 +208,78 @@ def generate_synthetic_data(
 
 
 # ---------------------------------------------------------------------------
+# Dataset fingerprinting for cross-machine reproducibility
+# ---------------------------------------------------------------------------
+
+
+def compute_dataset_fingerprint(file_path: Path) -> Dict[str, object]:
+    """Compute a reproducibility fingerprint for the raw CSV.
+
+    Produces a SHA-256 hash of the file content plus structural metadata
+    (row count, column names, timestamp range) so that two machines can
+    verify they are working from identical source data.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the raw CSV file.
+
+    Returns
+    -------
+    dict
+        Fingerprint dictionary with keys: sha256, file_size_bytes, columns,
+        num_rows, timestamp_column, timestamp_min, timestamp_max,
+        has_tickers_column.
+    """
+    # File-level hash (detects any byte-level difference)
+    sha256 = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    file_size = file_path.stat().st_size
+
+    # Structural metadata (fast — only reads headers + first/last rows)
+    df_head = pd.read_csv(file_path, nrows=5)
+    columns = sorted(df_head.columns.tolist())
+    num_rows = sum(1 for _ in open(file_path, encoding="utf-8")) - 1  # minus header
+
+    # Timestamp column detection
+    ts_col = None
+    ts_min = None
+    ts_max = None
+    if "created_utc" in df_head.columns:
+        ts_col = "created_utc"
+        # Read just the timestamp column for min/max
+        ts_series = pd.read_csv(file_path, usecols=[ts_col])
+        ts_min = float(ts_series[ts_col].min())
+        ts_max = float(ts_series[ts_col].max())
+    elif "created" in df_head.columns:
+        ts_col = "created"
+        ts_series = pd.read_csv(file_path, usecols=[ts_col])
+        ts_min = str(ts_series[ts_col].min())
+        ts_max = str(ts_series[ts_col].max())
+
+    fingerprint = {
+        "sha256": sha256,
+        "file_size_bytes": file_size,
+        "columns": columns,
+        "num_rows": num_rows,
+        "timestamp_column": ts_col,
+        "timestamp_min": ts_min,
+        "timestamp_max": ts_max,
+        "has_tickers_column": "tickers" in columns,
+    }
+
+    logger.info(
+        "Dataset fingerprint — SHA256: %.16s... | rows: %d | ts_col: %s | "
+        "has_tickers: %s",
+        sha256,
+        num_rows,
+        ts_col,
+        "tickers" in columns,
+    )
+
+    return fingerprint
+
+
+# ---------------------------------------------------------------------------
 # Core loader
 # ---------------------------------------------------------------------------
 
@@ -242,6 +315,7 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
         logger.info("Loading data from %s", file_path)
         df = pd.read_csv(file_path)
         is_synthetic = False
+        fingerprint = compute_dataset_fingerprint(file_path)
     else:
         if file_path:
             logger.warning(
@@ -251,6 +325,7 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
             logger.info("No file_path configured — using synthetic data.")
         df = generate_synthetic_data(n_records=500, seed=config.random_seed)
         is_synthetic = True
+        fingerprint = {"sha256": "synthetic", "num_rows": len(df), "columns": sorted(df.columns.tolist())}
 
     total_loaded = len(df)
     logger.info("Records loaded: %d", total_loaded)
@@ -359,5 +434,8 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
         retained_before_explode,
         total_after_explode,
     )
+
+    # Attach fingerprint as DataFrame attribute for pipeline summary
+    df.attrs["dataset_fingerprint"] = fingerprint
 
     return df

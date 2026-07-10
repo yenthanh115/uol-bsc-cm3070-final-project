@@ -6,11 +6,12 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 
 ```
 .
-├── input/
-│   ├── raw/                            # Original Reddit submission CSV
+├── input/                              # Everything the pipeline READS (immutable)
+│   ├── raw/                            # Original Reddit CSV
 │   │   └── r_pennystocks_submissions_reddit.csv
 │   └── reference/                      # Static reference files (e.g., ticker list)
-├── output/
+│
+├── output/                             # Everything the pipeline WRITES (reproducible)
 │   ├── processed/                      # Pipeline stage outputs
 │   │   ├── labelled_dataset.csv
 │   │   ├── pipeline_summary.json
@@ -18,11 +19,12 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   │   └── threshold_sensitivity.csv
 │   ├── models/                         # Serialised trained models
 │   ├── evaluation/                     # Metrics and final summary
-│   │   └── evaluation_metrics.json
-│   └── figures/                        # All generated figures
+│   │   ├── evaluation_metrics.json
+│   │   └── final_summary.json
+│   └── figures/                        # ALL generated figures
 │       ├── eda/                        # EDA figures (01–09)
 │       └── evaluation/                 # Model evaluation figures (10+)
-├── reports/                            # Literature review, design docs, preliminary report
+│
 ├── src/
 │   ├── surge_pipeline/                 # Core pipeline modules
 │   │   ├── config.py                   # PipelineConfig dataclass (JSON-serialisable)
@@ -32,7 +34,7 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   │   ├── labelling.py                # Surge labelling and threshold sweep
 │   │   ├── normalisation.py            # Z-score normalisation (train stats)
 │   │   ├── features.py                 # Feature engineering for ML
-│   │   ├── training.py                 # Model training with temporal CV
+│   │   ├── training.py                 # Logistic Regression with temporal CV
 │   │   ├── evaluation.py              # Precision, Recall, F1, ROC-AUC evaluation
 │   │   └── pipeline.py                # Orchestrator (load → window → sentiment → label)
 │   ├── eda/
@@ -40,7 +42,9 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   ├── tests/                          # Unit tests
 │   ├── run_pipeline.py                 # CLI: run the labelling pipeline
 │   └── run_training.py                 # CLI: train model and evaluate
-├── admin/                              # Decision log and journals
+│
+├── reports/                            # Academic reports (literature review, design, etc.)
+├── admin/                              # Project admin (decision log, journal)
 └── README.md
 ```
 
@@ -121,7 +125,7 @@ Key parameters:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--file-path` | *(empty — uses synthetic data)* | Path to input CSV |
-| `--output-dir` | `output/processed` | Directory for results |
+| `--output-dir` | `../output/processed` | Directory for results |
 | `--threshold-tau` | `1.5` | Surge threshold (tau) |
 | `--temporal-split-ratio` | `0.8` | Train/test split ratio |
 | `--random-seed` | `42` | Seed for reproducibility |
@@ -178,14 +182,15 @@ After a full pipeline run, the following files are produced in `output/processed
 - `threshold_sensitivity.csv` — Surge rate and viability at each threshold
 - `pipeline_config.json` — Exact config used (audit trail)
 
-After training (`output/evaluation/`):
+After training, results are written to `output/evaluation/`:
 
 - `evaluation_metrics.json` — Precision, Recall, F1, ROC-AUC results
+- `final_summary.json` — Best model, tier achieved, statistical comparisons
 
-Figures (`output/figures/`):
+Generated figures are saved under `output/figures/`:
 
-- `eda/` — EDA figures (posting frequency, ticker distribution, feature distributions, etc.)
-- `evaluation/` — Model evaluation figures (confusion matrix, ROC curve, threshold sensitivity)
+- `output/figures/eda/` — EDA visualisations (posting frequency, ticker distributions, etc.)
+- `output/figures/evaluation/` — Model evaluation plots (confusion matrix, ROC curve, threshold sensitivity)
 
 ## License
 

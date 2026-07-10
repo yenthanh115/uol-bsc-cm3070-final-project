@@ -66,9 +66,9 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
 
     # Convert timestamps to epoch seconds for numeric binary search
     # This avoids datetime comparison overhead and works with searchsorted.
-    epoch_seconds = (
-        df["created_utc"].astype("int64") // 10**9
-    ).values
+    # Uses resolution-independent conversion (safe across pandas versions).
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = to_epoch_seconds(df["created_utc"])
 
     # Group by ticker and process each group with vectorised searchsorted
     for ticker, group in df.groupby("ticker", sort=False):

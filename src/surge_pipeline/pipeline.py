@@ -14,6 +14,7 @@ import json
 import logging
 import random
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
@@ -272,12 +273,15 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Timestamp prefix for experiment comparison (YYYYMMDDHHMM)
+    prefix = datetime.now().strftime("%Y%m%d%H%M")
+
     output_paths: Dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # 1. Labelled dataset (CSV)
     # ------------------------------------------------------------------
-    labelled_path = output_dir / "labelled_dataset.csv"
+    labelled_path = output_dir / f"{prefix}_labelled_dataset.csv"
     results["labelled_df"].to_csv(labelled_path, index=False)
     output_paths["labelled_dataset"] = str(labelled_path)
     logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(results["labelled_df"]))
@@ -305,6 +309,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
             "temporal_split_ratio": config.temporal_split_ratio,
             "min_window_count": config.min_window_count,
             "random_seed": config.random_seed,
+            "sentiment_model": config.sentiment_model,
         },
     }
 
@@ -315,7 +320,11 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
         excluded = int(labelled_df["excluded"].sum())
         summary["exclusion_rate"] = excluded / total * 100 if total > 0 else 0.0
 
-    summary_path = output_dir / "pipeline_summary.json"
+    # Include dataset fingerprint if available
+    if "dataset_fingerprint" in labelled_df.attrs:
+        summary["dataset_fingerprint"] = labelled_df.attrs["dataset_fingerprint"]
+
+    summary_path = output_dir / f"{prefix}_pipeline_summary.json"
 
     def _json_serialise(obj):
         """Handle non-serialisable values like inf/nan."""
@@ -353,7 +362,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
             )
 
         sweep_df = pd.DataFrame(sweep_rows)
-        sweep_path = output_dir / "threshold_sensitivity.csv"
+        sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
         sweep_df.to_csv(sweep_path, index=False)
         output_paths["threshold_sensitivity"] = str(sweep_path)
         logger.info("Threshold sensitivity table saved: %s", sweep_path)
@@ -361,9 +370,20 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     # ------------------------------------------------------------------
     # 4. Pipeline config for audit trail (R7-AC3)
     # ------------------------------------------------------------------
-    config_path = config.save_json()
+    config_path = output_dir / f"{prefix}_pipeline_config.json"
+    config_path.write_text(config.to_json(), encoding="utf-8")
     output_paths["pipeline_config"] = str(config_path)
     logger.info("Pipeline config saved: %s", config_path)
+
+    # ------------------------------------------------------------------
+    # 5. Latest outputs manifest (for downstream tool discovery)
+    # ------------------------------------------------------------------
+    manifest_path = output_dir / "latest_outputs.json"
+    manifest_path.write_text(
+        json.dumps({"prefix": prefix, "outputs": output_paths}, indent=2),
+        encoding="utf-8",
+    )
+    logger.info("Latest outputs manifest: %s", manifest_path)
 
     logger.info("All outputs saved to: %s", output_dir)
     return output_paths

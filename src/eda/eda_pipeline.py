@@ -1,6 +1,6 @@
 """Exploratory Data Analysis pipeline for the surge-labelling dataset.
 
-Produces publication-ready figures (PNG, 300 DPI) saved to `figures/`.
+Produces publication-ready figures (PNG, 300 DPI) saved to `output/figures/eda/`.
 Five focus areas:
     1. Dataset overview — record counts, temporal coverage, ticker frequency
     2. Sparsity analysis — exclusion rate by ticker, min_window_count impact
