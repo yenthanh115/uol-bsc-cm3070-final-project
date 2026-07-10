@@ -61,7 +61,8 @@ def _temporal_split(
         Array of partition labels ('train'/'test') and the split timestamp
         (epoch seconds).
     """
-    epoch_seconds = df["created_utc"].astype("int64") // 10**9
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = pd.Series(to_epoch_seconds(df["created_utc"]), index=df.index)
     split_ts = np.percentile(epoch_seconds.values, ratio * 100)
 
     partitions = np.where(epoch_seconds.values <= split_ts, "train", "test")

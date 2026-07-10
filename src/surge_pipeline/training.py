@@ -169,7 +169,8 @@ def create_temporal_folds(
         List of n_folds arrays, each containing positional indices for that fold.
         Folds are in chronological order.
     """
-    epoch_seconds = pd.to_datetime(df["created_utc"], utc=True).astype("int64") // 10**9
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = pd.Series(to_epoch_seconds(df["created_utc"]), index=df.index)
     sorted_indices = epoch_seconds.values.argsort()
     n = len(sorted_indices)
 
@@ -230,9 +231,8 @@ def _verify_temporal_ordering(
     ValueError
         If any split has max(train_ts) > min(val_ts).
     """
-    epoch = (
-        pd.to_datetime(df["created_utc"], utc=True).astype("int64") // 10**9
-    ).values
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch = to_epoch_seconds(df["created_utc"])
 
     for i, (train_idx, val_idx) in enumerate(splits):
         max_train = epoch[train_idx].max()

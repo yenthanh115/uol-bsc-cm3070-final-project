@@ -174,9 +174,8 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     mean_future = np.full(n, np.nan, dtype=np.float64)
 
     # Convert timestamps to epoch seconds for binary search
-    epoch_seconds = (
-        df["created_utc"].astype("int64") // 10**9
-    ).values
+    from surge_pipeline.timestamps import to_epoch_seconds
+    epoch_seconds = to_epoch_seconds(df["created_utc"])
 
     # Check if windowing columns are available
     has_excluded = "excluded" in df.columns

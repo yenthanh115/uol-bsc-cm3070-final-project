@@ -131,9 +131,9 @@ class TestTemporalOrdering:
         self, training_df: pd.DataFrame
     ):
         """Max timestamp in fold i must be ≤ min timestamp in fold i+1."""
+        from surge_pipeline.timestamps import to_epoch_seconds
         folds = create_temporal_folds(training_df, n_folds=N_FOLDS)
-        timestamps = pd.to_datetime(training_df["created_utc"], utc=True)
-        epoch = (timestamps.astype("int64") // 10**9).values
+        epoch = to_epoch_seconds(training_df["created_utc"])
 
         for i in range(len(folds) - 1):
             max_current = epoch[folds[i]].max()
@@ -146,10 +146,10 @@ class TestTemporalOrdering:
         self, training_df: pd.DataFrame
     ):
         """In each split, max train ts ≤ min val ts."""
+        from surge_pipeline.timestamps import to_epoch_seconds
         folds = create_temporal_folds(training_df, n_folds=N_FOLDS)
         splits = get_expanding_window_splits(folds)
-        timestamps = pd.to_datetime(training_df["created_utc"], utc=True)
-        epoch = (timestamps.astype("int64") // 10**9).values
+        epoch = to_epoch_seconds(training_df["created_utc"])
 
         for i, (train_idx, val_idx) in enumerate(splits):
             max_train = epoch[train_idx].max()
