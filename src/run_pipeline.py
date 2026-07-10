@@ -41,7 +41,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--temporal-split-ratio", type=float, default=0.8, help="Train/test temporal split ratio."
     )
     parser.add_argument(
-        "--min-window-count", type=int, default=3, help="Minimum window count for filtering."
+        "--min-window-count", type=int, default=1, help="Minimum window count for filtering."
     )
     parser.add_argument(
         "--threshold-tau", type=float, default=1.5, help="Surge threshold τ (tau)."
@@ -152,9 +152,11 @@ def main(argv: list[str] | None = None) -> None:
         print("-" * 70)
 
         # Save sweep table
+        from datetime import datetime
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        sweep_path = output_dir / "threshold_sensitivity.csv"
+        prefix = datetime.now().strftime("%Y%m%d%H%M")
+        sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
         sweep_df.to_csv(sweep_path, index=False)
         print(f"\nSweep table saved to: {sweep_path}")
 

@@ -24,7 +24,7 @@ class PipelineConfig:
     temporal_split_ratio: float = 0.8
 
     # --- Windowing ---
-    min_window_count: int = 3
+    min_window_count: int = 1
 
     # --- Threshold ---
     threshold_tau: float = 1.5
