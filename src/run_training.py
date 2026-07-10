@@ -18,8 +18,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Ensure the src directory is on the path so surge_pipeline is importable.
@@ -314,6 +316,9 @@ def main(argv: list[str] | None = None) -> None:
     print("FINAL SUMMARY")
     print("=" * 60)
 
+    # Timestamp prefix for experiment comparison (YYYYMMDDHHMM)
+    prefix = datetime.now().strftime("%Y%m%d%H%M")
+
     summary = produce_final_summary(
         model_metrics=model_metrics,
         mcnemar_results=mcnemar_results,
@@ -321,6 +326,7 @@ def main(argv: list[str] | None = None) -> None:
         tier_results=tier_results,
         config=config,
         output_dir=args.output_dir,
+        timestamp_prefix=prefix,
     )
 
     print(f"  Best model       : {summary.best_model}")
@@ -372,9 +378,26 @@ def main(argv: list[str] | None = None) -> None:
             confusion_matrix=mm.confusion_matrix,
         ))
 
-    out_path = save_evaluation_results(eval_metrics_list, output_dir=args.output_dir)
+    out_path = save_evaluation_results(eval_metrics_list, output_dir=args.output_dir, timestamp_prefix=prefix)
     print(f"\n  Evaluation metrics: {out_path}")
-    print(f"  Final summary    : {Path(args.output_dir) / 'final_summary.json'}")
+    print(f"  Final summary    : {Path(args.output_dir) / f'{prefix}_final_summary.json'}")
+
+    # ------------------------------------------------------------------
+    # 12. Latest outputs manifest (for downstream tool discovery)
+    # ------------------------------------------------------------------
+    eval_dir = Path(args.output_dir)
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    output_paths = {
+        "evaluation_metrics": str(out_path),
+        "final_summary": str(Path(args.output_dir) / f"{prefix}_final_summary.json"),
+    }
+    manifest_path = eval_dir / "latest_outputs.json"
+    manifest_path.write_text(
+        json.dumps({"prefix": prefix, "outputs": output_paths}, indent=2),
+        encoding="utf-8",
+    )
+    print(f"  Latest manifest  : {manifest_path}")
+
     print("\n" + "=" * 60)
     print("DONE")
     print("=" * 60)

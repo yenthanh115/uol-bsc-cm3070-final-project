@@ -394,6 +394,7 @@ def produce_final_summary(
     config: "PipelineConfig",
     output_dir: str = "output/evaluation",
     phase1_vs_phase2: Optional[Dict[str, Any]] = None,
+    timestamp_prefix: Optional[str] = None,
 ) -> FinalSummary:
     """Produce the final evaluation summary and save to JSON.
 
@@ -413,6 +414,9 @@ def produce_final_summary(
         Output directory for the summary JSON.
     phase1_vs_phase2 : Dict, optional
         Phase 1 vs Phase 2 comparison data.
+    timestamp_prefix : str, optional
+        YYYYMMDDHHMM prefix for the output filename. If provided, the file
+        is saved as ``<prefix>_final_summary.json``.
 
     Returns
     -------
@@ -466,7 +470,8 @@ def produce_final_summary(
     # Save to JSON
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "final_summary.json"
+    filename = f"{timestamp_prefix}_final_summary.json" if timestamp_prefix else "final_summary.json"
+    out_path = out_dir / filename
 
     json_data = {
         "best_model": summary.best_model,
@@ -766,6 +771,7 @@ def evaluate_model(
 def save_evaluation_results(
     metrics_list: List[EvaluationMetrics],
     output_dir: str = "output/evaluation",
+    timestamp_prefix: Optional[str] = None,
 ) -> Path:
     """Save evaluation metrics to a JSON file.
 
@@ -775,6 +781,9 @@ def save_evaluation_results(
         List of evaluation metric objects.
     output_dir : str
         Output directory for the results file.
+    timestamp_prefix : str, optional
+        YYYYMMDDHHMM prefix for the output filename. If provided, the file
+        is saved as ``<prefix>_evaluation_metrics.json``.
 
     Returns
     -------
@@ -795,7 +804,8 @@ def save_evaluation_results(
         },
     }
 
-    out_path = out_dir / "evaluation_metrics.json"
+    filename = f"{timestamp_prefix}_evaluation_metrics.json" if timestamp_prefix else "evaluation_metrics.json"
+    out_path = out_dir / filename
     out_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
     logger.info("Evaluation results saved to %s", out_path)
 
