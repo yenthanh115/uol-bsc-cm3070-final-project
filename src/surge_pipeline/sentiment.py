@@ -138,6 +138,26 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     logger.info("Sentiment model: %s", sentiment_model)
 
     # ------------------------------------------------------------------
+    # Determine which records need polarity computation.
+    # Excluded records (from windowing stage) will get sentiment_change=0
+    # regardless, so we skip expensive VADER/TextBlob calls for them.
+    # ------------------------------------------------------------------
+    has_excluded = "excluded" in df.columns
+    if has_excluded:
+        included_mask = ~df["excluded"].values.astype(bool)
+        n_included = int(included_mask.sum())
+        n_excluded = n - n_included
+        logger.info(
+            "Skipping sentiment for %d excluded records; computing for %d included.",
+            n_excluded,
+            n_included,
+        )
+    else:
+        included_mask = np.ones(n, dtype=bool)
+        n_included = n
+        n_excluded = 0
+
+    # ------------------------------------------------------------------
     # Step 1: Compute per-record polarity (AC1, AC4)
     # ------------------------------------------------------------------
     titles = df["title"].fillna("").astype(str)
@@ -147,7 +167,9 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     fallback_count = 0
     neutral_count = 0
 
-    for i in range(n):
+    # Only compute polarity for included records
+    included_indices = np.where(included_mask)[0]
+    for i in included_indices:
         title = titles.iloc[i].strip()
         selftext = selftexts.iloc[i].strip()
 
@@ -161,8 +183,9 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
             neutral_count += 1
 
     logger.info(
-        "Polarity computed — %d records | title-only fallback: %d | "
+        "Polarity computed — %d records (of %d total) | title-only fallback: %d | "
         "neutral (empty text): %d",
+        n_included,
         n,
         fallback_count,
         neutral_count,
@@ -173,40 +196,46 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     # ------------------------------------------------------------------
     mean_future = np.full(n, np.nan, dtype=np.float64)
 
+    # For excluded records, set mean_future = current polarity (=0.0)
+    # so sentiment_change = 0. This avoids expensive groupby iteration.
+    if has_excluded:
+        excluded_indices = np.where(~included_mask)[0]
+        mean_future[excluded_indices] = polarities[excluded_indices]
+
     # Convert timestamps to epoch seconds for binary search
     from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = to_epoch_seconds(df["created_utc"])
 
-    # Check if windowing columns are available
-    has_excluded = "excluded" in df.columns
+    # Only process included records in the forward-window computation.
+    # Build a lookup from DataFrame index label → positional index to
+    # correctly address the full-length arrays (epoch_seconds, polarities).
+    if n_included > 0:
+        index_to_pos = pd.Series(
+            np.arange(n), index=df.index
+        )
+        included_df = df.loc[included_mask]
 
-    # Group by ticker and compute mean forward-window sentiment
-    for ticker, group in df.groupby("ticker", sort=False):
-        idx = group.index.values
-        times = epoch_seconds[idx]
-        group_polarities = polarities[idx]
+        for ticker, group in included_df.groupby("ticker", sort=False):
+            idx = group.index.values
+            pos = index_to_pos.loc[idx].values.astype(int)
+            times = epoch_seconds[pos]
+            group_polarities = polarities[pos]
 
-        # Forward window: (t, t + 24h] — same logic as windowing.py
-        forward_left = np.searchsorted(times, times, side="right")
-        forward_right = np.searchsorted(times, times + _WINDOW_SECONDS, side="right")
+            # Forward window: (t, t + 24h] — same logic as windowing.py
+            forward_left = np.searchsorted(times, times, side="right")
+            forward_right = np.searchsorted(
+                times, times + _WINDOW_SECONDS, side="right"
+            )
 
-        for j, orig_idx in enumerate(idx):
-            fl = forward_left[j]
-            fr = forward_right[j]
+            for j, orig_pos in enumerate(pos):
+                fl = forward_left[j]
+                fr = forward_right[j]
 
-            if fl < fr:
-                # There are records in the forward window
-                mean_future[orig_idx] = group_polarities[fl:fr].mean()
-            else:
-                # No forward records: default to current sentiment
-                # (so sentiment_change = 0)
-                mean_future[orig_idx] = polarities[orig_idx]
-
-    # For excluded records (if windowing was applied), set mean_future
-    # to current sentiment so sentiment_change = 0
-    if has_excluded:
-        excluded_mask = df["excluded"].values.astype(bool)
-        mean_future[excluded_mask] = polarities[excluded_mask]
+                if fl < fr:
+                    mean_future[orig_pos] = group_polarities[fl:fr].mean()
+                else:
+                    # No forward records: default to current sentiment
+                    mean_future[orig_pos] = polarities[orig_pos]
 
     # ------------------------------------------------------------------
     # Step 3: Sentiment change (AC3)
