@@ -24,30 +24,22 @@ class PipelineConfig:
     temporal_split_ratio: float = 0.8
 
     # --- Windowing ---
-    # Minimum forward_count required for a record to be included in
-    # labelling. Records with forward_count < this value are flagged
-    # excluded=True (no meaningful future activity to measure).
+    # Surge method controls how the surge metric is computed:
+    #   "forward_growth" (default) — uses forward/backward ratio,
+    #       requires future posts to exist (excludes end-of-timeline).
+    #   "backward_only" — defines surge as backward_count exceeding
+    #       the ticker's historical average. No forward-looking data
+    #       needed, making every record with sufficient backward
+    #       history usable.
+    surge_method: str = "forward_growth"
+
+    # Minimum window count for exclusion filtering:
+    #   - forward_growth mode: excludes records with
+    #       forward_count < min_window_count.
+    #   - backward_only mode: excludes records with
+    #       backward_count < min_window_count (insufficient history).
     #
-    # Default is 1 (minimal filter: only excludes records with zero
-    # future posts). This maximises dataset coverage without injecting
-    # assumptions about what constitutes "enough" activity.
-    #
-    # Consider increasing (e.g. 3-5) when:
-    #   - The dataset is very high-frequency (thousands of posts/day per
-    #     ticker) and low forward_count records introduce noise that
-    #     degrades model precision.
-    #   - Evaluation shows many false positives originating from sparse
-    #     tail-end records.
-    #   - You want stricter data quality at the cost of reduced coverage
-    #     (fewer labelled samples).
-    #
-    # Keep at 1 when:
-    #   - The dataset has heterogeneous ticker activity (mix of popular
-    #     and niche tickers) — a higher value disproportionately excludes
-    #     low-activity tickers.
-    #   - Model performance (AUC, precision) is already satisfactory.
-    #   - Maximising labelled sample count is a priority (e.g. limited
-    #     positive examples for training).
+    # Default is 1 (minimal filter). Increase for stricter quality.
     min_window_count: int = 1
 
     # --- Threshold ---

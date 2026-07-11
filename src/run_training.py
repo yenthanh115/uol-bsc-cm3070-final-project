@@ -51,6 +51,34 @@ from surge_pipeline.evaluation import (  # noqa: E402
 )
 
 
+def _resolve_default_data_path() -> str:
+    """Resolve the latest labelled dataset path from latest_outputs.json."""
+    latest_file = Path(__file__).resolve().parent.parent / "output" / "processed" / "latest_outputs.json"
+    if latest_file.exists():
+        try:
+            data = json.loads(latest_file.read_text(encoding="utf-8"))
+            rel_path = data.get("outputs", {}).get("labelled_dataset", "")
+            if rel_path:
+                # The stored path may be relative to a different CWD.
+                # Try resolving from multiple bases:
+                # 1. Relative to latest_outputs.json directory
+                candidate = (latest_file.parent / rel_path).resolve()
+                if candidate.exists():
+                    return str(candidate)
+                # 2. Relative to the src/ directory (where pipeline runs)
+                candidate = (Path(__file__).resolve().parent / rel_path).resolve()
+                if candidate.exists():
+                    return str(candidate)
+                # 3. Just use the filename in the processed directory
+                filename = Path(rel_path).name
+                candidate = latest_file.parent / filename
+                if candidate.exists():
+                    return str(candidate.resolve())
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return str(Path(__file__).resolve().parent.parent / "output" / "processed" / "labelled_dataset.csv")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Multi-model training and advanced evaluation pipeline."
@@ -58,7 +86,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--data-path",
         type=str,
-        default="../output/processed/labelled_dataset.csv",
+        default=_resolve_default_data_path(),
         help="Path to the labelled dataset CSV.",
     )
     parser.add_argument(
@@ -267,7 +295,7 @@ def main(argv: list[str] | None = None) -> None:
     for name, comp in baseline_comparisons.items():
         print(f"    {name}: AUC={comp.model_auc:.4f} | "
               f"beats_random={'✓' if comp.beats_random else '✗'} | "
-              f"improvement_over_best_feature={comp.improvement_over_best_single_feature:+.4f}")
+              f"improvement_over_best_feature={comp.improvement_over_best_feature:+.4f}")
 
     # ------------------------------------------------------------------
     # 7. Bootstrap confidence intervals (Phase 2.3)
@@ -286,7 +314,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         bootstrap_results[name] = ci
         print(f"\n  {name}:")
-        for m in ci.metrics:
+        for m in ci.metric_cis:
             print(f"    {m.metric_name:12s}: {m.point_estimate:.4f} "
                   f"[{m.ci_lower:.4f}, {m.ci_upper:.4f}]")
 
@@ -326,7 +354,6 @@ def main(argv: list[str] | None = None) -> None:
         tier_results=tier_results,
         config=config,
         output_dir=args.output_dir,
-        timestamp_prefix=prefix,
     )
 
     print(f"  Best model       : {summary.best_model}")

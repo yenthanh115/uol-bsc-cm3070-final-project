@@ -580,28 +580,28 @@ def compute_bootstrap_ci(
             point_estimate=point_prec,
             ci_lower=float(np.percentile(precisions, lower_pct)),
             ci_upper=float(np.percentile(precisions, upper_pct)),
-            ci_level=ci_level,
+            confidence_level=ci_level,
         ),
         MetricCI(
             metric_name="recall",
             point_estimate=point_rec,
             ci_lower=float(np.percentile(recalls, lower_pct)),
             ci_upper=float(np.percentile(recalls, upper_pct)),
-            ci_level=ci_level,
+            confidence_level=ci_level,
         ),
         MetricCI(
             metric_name="f1",
             point_estimate=point_f1,
             ci_lower=float(np.percentile(f1_scores, lower_pct)),
             ci_upper=float(np.percentile(f1_scores, upper_pct)),
-            ci_level=ci_level,
+            confidence_level=ci_level,
         ),
         MetricCI(
             metric_name="auc_roc",
             point_estimate=point_auc,
             ci_lower=float(np.percentile(aucs, lower_pct)),
             ci_upper=float(np.percentile(aucs, upper_pct)),
-            ci_level=ci_level,
+            confidence_level=ci_level,
         ),
     ]
 
@@ -617,8 +617,8 @@ def compute_bootstrap_ci(
 
     return BootstrapCI(
         model_name=model_name,
-        n_resamples=n_resamples,
-        metrics=metrics,
+        n_bootstrap=n_resamples,
+        metric_cis=metrics,
     )
 
 

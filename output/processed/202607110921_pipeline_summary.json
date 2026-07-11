@@ -1,0 +1,86 @@
+{
+  "normalisation_params": {
+    "mu_volume": 0.4272575968468188,
+    "sigma_volume": 0.9648605422066739,
+    "mu_sentiment": 0.24223965135487918,
+    "sigma_sentiment": 0.32991812437159673,
+    "train_size": 21528,
+    "test_size": 3274,
+    "split_timestamp": 1628120809.2
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 973,
+      "no_surge_count": 23829,
+      "total": 24802,
+      "surge_rate": 3.9230707201032176,
+      "imbalance_ratio": 24.490236382322713
+    },
+    "train": {
+      "surge_count": 865,
+      "no_surge_count": 20663,
+      "total": 21528,
+      "surge_rate": 4.018023039762171,
+      "imbalance_ratio": 23.8878612716763
+    },
+    "test": {
+      "surge_count": 108,
+      "no_surge_count": 3166,
+      "total": 3274,
+      "surge_rate": 3.2987171655467313,
+      "imbalance_ratio": 29.314814814814813
+    }
+  },
+  "stage_counts": {
+    "after_load": 80212,
+    "after_windowing": 80212,
+    "excluded_count": 55410,
+    "after_sentiment": 80212,
+    "after_labelling": 80212
+  },
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.5,
+    "weight_sentiment": 0.5,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 1,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 69.07943948536378,
+  "dataset_fingerprint": {
+    "sha256": "ad03dfd97283d03b9a4bf1fdcc20c681642d1a39e62dc365ff08a7f1218cf4b2",
+    "file_size_bytes": 39718787,
+    "columns": [
+      "archived",
+      "author",
+      "created",
+      "deleted",
+      "edited",
+      "gilded",
+      "id",
+      "is_original_content",
+      "is_self",
+      "is_video",
+      "link_flair_text",
+      "locked",
+      "num_comments",
+      "num_crossposts",
+      "pinned",
+      "removed",
+      "retrieved",
+      "score",
+      "selftext",
+      "shortlink",
+      "thumbnail",
+      "title",
+      "total_awards_received",
+      "upvote_ratio"
+    ],
+    "num_rows": 304524,
+    "timestamp_column": "created",
+    "timestamp_min": "2021-01-01 00:13:41",
+    "timestamp_max": "2021-12-31 23:30:46",
+    "has_tickers_column": false
+  }
+}
