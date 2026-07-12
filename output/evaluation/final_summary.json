@@ -1,8 +1,8 @@
 {
-  "best_model": "random_forest",
-  "best_auc_roc": 0.7402565146984312,
+  "best_model": "logistic_regression",
+  "best_auc_roc": 0.6632822357113761,
   "overall_pass": true,
-  "success_tier_achieved": "target",
+  "success_tier_achieved": "minimum",
   "recommended_config": {
     "threshold_tau": 1.5,
     "weight_w2": 0.5
@@ -10,32 +10,32 @@
   "phase1_vs_phase2": null,
   "models": {
     "logistic_regression": {
-      "auc_roc": 0.6799328412330986,
-      "precision": 0.012812299807815503,
+      "auc_roc": 0.6632822357113761,
+      "precision": 0.012755102040816327,
       "recall": 0.6451612903225806,
-      "f1": 0.02512562814070352,
+      "f1": 0.025015634771732333,
       "tier": "minimum"
     },
     "random_forest": {
-      "auc_roc": 0.7402565146984312,
-      "precision": 0.05263157894736842,
-      "recall": 0.16129032258064516,
-      "f1": 0.07936507936507936,
-      "tier": "target"
+      "auc_roc": 0.6550264760523361,
+      "precision": 0.020522388059701493,
+      "recall": 0.3548387096774194,
+      "f1": 0.03880070546737213,
+      "tier": "minimum"
     },
     "xgboost": {
-      "auc_roc": 0.7208291524682833,
+      "auc_roc": 0.6575995708197144,
       "precision": 0.0,
       "recall": 0.0,
       "f1": 0.0,
-      "tier": "target"
+      "tier": "minimum"
     }
   },
   "mcnemar_tests": [
     {
       "model_a": "logistic_regression",
       "model_b": "random_forest",
-      "p_value": 4.0379439581549446e-304,
+      "p_value": 9.869793138235443e-194,
       "is_significant": true
     },
     {
@@ -47,7 +47,7 @@
     {
       "model_a": "random_forest",
       "model_b": "xgboost",
-      "p_value": 6.800402544894096e-18,
+      "p_value": 8.69091670682288e-109,
       "is_significant": true
     }
   ]
