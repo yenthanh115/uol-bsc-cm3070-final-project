@@ -273,8 +273,8 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Timestamp prefix for experiment comparison (YYYYMMDDHHMM)
-    prefix = datetime.now().strftime("%Y%m%d%H%M")
+    # Timestamp prefix for experiment comparison (YYYY-MM-DD_HH-MM)
+    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     output_paths: Dict[str, str] = {}
 

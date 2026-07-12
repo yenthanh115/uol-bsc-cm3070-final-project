@@ -351,8 +351,8 @@ def main(argv: list[str] | None = None) -> None:
     print("FINAL SUMMARY")
     print("=" * 60)
 
-    # Timestamp prefix for experiment comparison (YYYYMMDDHHMM)
-    prefix = datetime.now().strftime("%Y%m%d%H%M")
+    # Timestamp prefix for experiment comparison (YYYY-MM-DD_HH-MM)
+    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     summary = produce_final_summary(
         model_metrics=model_metrics,

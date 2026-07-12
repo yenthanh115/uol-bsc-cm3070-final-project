@@ -1,9 +1,9 @@
 {
-  "prefix": "202607120946",
+  "prefix": "2026-07-12_10-02",
   "outputs": {
-    "labelled_dataset": "..\\output\\processed\\202607120946_labelled_dataset.csv",
-    "pipeline_summary": "..\\output\\processed\\202607120946_pipeline_summary.json",
-    "threshold_sensitivity": "..\\output\\processed\\202607120946_threshold_sensitivity.csv",
-    "pipeline_config": "..\\output\\processed\\202607120946_pipeline_config.json"
+    "labelled_dataset": "..\\output\\processed\\2026-07-12_10-02_labelled_dataset.csv",
+    "pipeline_summary": "..\\output\\processed\\2026-07-12_10-02_pipeline_summary.json",
+    "threshold_sensitivity": "..\\output\\processed\\2026-07-12_10-02_threshold_sensitivity.csv",
+    "pipeline_config": "..\\output\\processed\\2026-07-12_10-02_pipeline_config.json"
   }
 }

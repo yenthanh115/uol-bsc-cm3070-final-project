@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
         from datetime import datetime
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        prefix = datetime.now().strftime("%Y%m%d%H%M")
+        prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
         sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
         sweep_df.to_csv(sweep_path, index=False)
         print(f"\nSweep table saved to: {sweep_path}")
@@ -230,7 +230,7 @@ def main(argv: list[str] | None = None) -> None:
 
         # Log experiment
         from datetime import datetime
-        prefix = datetime.now().strftime("%Y%m%d%H%M")
+        prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
         append_experiment(
             run_id=prefix,
             pipeline="labelling",
