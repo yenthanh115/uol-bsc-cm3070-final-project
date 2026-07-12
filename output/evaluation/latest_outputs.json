@@ -1,7 +1,7 @@
 {
-  "prefix": "202607120952",
+  "prefix": "2026-07-12_10-13",
   "outputs": {
-    "evaluation_metrics": "..\\output\\evaluation\\202607120952_evaluation_metrics.json",
-    "final_summary": "..\\output\\evaluation\\202607120952_final_summary.json"
+    "evaluation_metrics": "..\\output\\evaluation\\2026-07-12_10-13_evaluation_metrics.json",
+    "final_summary": "..\\output\\evaluation\\2026-07-12_10-13_final_summary.json"
   }
 }
