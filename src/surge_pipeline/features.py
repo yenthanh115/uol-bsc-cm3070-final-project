@@ -1,9 +1,9 @@
 """Feature engineering module — backward-only prediction features.
 
-Computes 9 prediction features from the labelled dataset using only
+Computes 11 prediction features from the labelled dataset using only
 backward-looking or creation-time information, preventing temporal leakage.
 
-Features:
+Base features (9):
   1. sentiment_score — reuse sentiment_polarity from sentiment stage
   2. hour_of_day — extract from created_utc (0–23)
   3. day_of_week — extract from created_utc (0–6, Monday=0)
@@ -13,6 +13,11 @@ Features:
   7. word_count — whitespace-separated tokens in title+selftext
   8. title_length — whitespace-separated tokens in title
   9. num_tickers_mentioned — count of distinct tickers per original record
+
+Interaction features (2, experiment B2):
+  10. word_count_x_hour — word_count × hour_of_day (long posts at peak hours)
+  11. accel_x_time_since_prev — ticker_post_acceleration × time_since_previous
+      (rapid acceleration after silence)
 
 Requirements: R11 (Prediction Feature Engineering), R12 (Feature Leakage Prevention)
 Design Decision: D8 — Backward-only feature computation with vectorised windowing.
@@ -31,7 +36,7 @@ logger = logging.getLogger(__name__)
 _12H_SECONDS: int = 12 * 60 * 60
 _24H_SECONDS: int = 24 * 60 * 60
 
-# The 9 feature columns produced by this module
+# The 11 feature columns produced by this module (9 base + 2 interactions)
 FEATURE_COLUMNS: list[str] = [
     "sentiment_score",
     "hour_of_day",
@@ -42,15 +47,19 @@ FEATURE_COLUMNS: list[str] = [
     "word_count",
     "title_length",
     "num_tickers_mentioned",
+    # Interaction features (B2)
+    "word_count_x_hour",
+    "accel_x_time_since_prev",
 ]
 
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute 9 prediction features from the labelled dataset.
+    """Compute 11 prediction features from the labelled dataset.
 
     All features use only information available at or before observation
     time t (R12-AC1). Engagement metrics (score, num_comments) are
-    explicitly excluded (R11-AC9, R12-AC3).
+    explicitly excluded (R11-AC9, R12-AC3). Includes 2 interaction
+    features (B2 experiment).
 
     Parameters
     ----------
@@ -131,6 +140,27 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     # ------------------------------------------------------------------
     num_tickers = _compute_num_tickers_mentioned(df)
     df = df.assign(num_tickers_mentioned=num_tickers)
+
+    # ------------------------------------------------------------------
+    # Feature 10: word_count_x_hour (B2 interaction)
+    # Long posts at peak hours — gives models an explicit interaction
+    # signal between content length and temporal posting pattern.
+    # ------------------------------------------------------------------
+    df = df.assign(
+        word_count_x_hour=(df["word_count"] * df["hour_of_day"]).values
+    )
+
+    # ------------------------------------------------------------------
+    # Feature 11: accel_x_time_since_prev (B2 interaction)
+    # Rapid acceleration after silence — combines ticker momentum with
+    # gap duration. For first-occurrence records (time_since_previous=-1),
+    # use 0 to avoid spurious negative products.
+    # ------------------------------------------------------------------
+    tsp = df["time_since_previous"].values.copy()
+    tsp_safe = np.where(tsp < 0, 0.0, tsp)
+    df = df.assign(
+        accel_x_time_since_prev=(df["ticker_post_acceleration"].values * tsp_safe)
+    )
 
     # ------------------------------------------------------------------
     # Log feature matrix shape and summary statistics (R12-AC5)
@@ -320,7 +350,7 @@ def _log_feature_summary(df: pd.DataFrame) -> None:
 def get_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     """Extract the feature matrix from a DataFrame with computed features.
 
-    Returns only the 9 feature columns, suitable for model training.
+    Returns only the 11 feature columns, suitable for model training.
 
     Parameters
     ----------
@@ -330,6 +360,6 @@ def get_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        DataFrame with only the 9 feature columns.
+        DataFrame with only the 11 feature columns.
     """
     return df[FEATURE_COLUMNS].copy()
