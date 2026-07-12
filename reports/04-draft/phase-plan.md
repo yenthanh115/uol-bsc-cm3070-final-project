@@ -203,7 +203,7 @@ python src/run_training.py --data-path output/processed/labelled_dataset.csv --o
 
 ---
 
-### Phase 7: Report Writing (3–4 days)
+### Phase 7: Report Writing (5 days)
 
 **Goal:** Produce a near-submission-quality academic report (90–95% complete) following the prescribed 6-section structure.
 
@@ -261,38 +261,43 @@ Include the revised literature review with improvements from previous feedback a
 
 #### 7.3 — Design (0.75 day)
 
-Present the system architecture, project design, technologies, and methods. Refine the design document developed earlier.
+Present the system architecture, project design, technologies, and methods. Focus on the *what* and *why* — design decisions, rationale, and justification. Refine the design document developed earlier.
 
 - System architecture: pipeline stages (loading → preprocessing → feature engineering → labelling → training → evaluation).
 - Data flow diagram: input sources → intermediate outputs → final artifacts.
-- Technology choices and justification: Python, scikit-learn, XGBoost, VADER, pandas.
-- Method design:
-  - 9 backward-looking features with leakage-prevention argument.
-  - Composite surge metric formula: `S = w1 * z_volume + w2 * z_sentiment`.
-  - Threshold τ selection via sensitivity sweep.
-  - Expanding-window temporal cross-validation (k=4 folds, 3 splits).
-  - Three models: Logistic Regression, Random Forest, XGBoost.
-- Reproducibility design: fixed seeds, serialised models, config JSON, temporal train/test split (80/20).
+- Technology choices and justification: Python, scikit-learn, XGBoost, VADER, pandas — why each was chosen over alternatives.
+- Method design rationale:
+  - Why backward-looking features (leakage prevention argument).
+  - Why a composite surge metric rather than raw volume threshold.
+  - Why expanding-window temporal CV rather than k-fold or random splits.
+  - Why three model families (linear, ensemble, boosting) for comparison.
+  - Why AUC-ROC as primary selection criterion given class imbalance.
+- Reproducibility design: why fixed seeds, serialised models, and config JSON matter for this project.
+- Threshold τ design: why sensitivity sweep, how the operating point was chosen.
 
 **Input:** `src/surge_pipeline/config.py`, `features.py`, `labelling.py`, `normalisation.py`, `training.py`, `pipeline_config.json`, EDA figures 05–09.
 
 #### 7.4 — Implementation (0.75 day)
 
-Describe features completed, algorithms, technical methods, and implementation progress. Expand the implementation write-up created during development.
+Describe the *how* — code structure, algorithms as implemented, challenges encountered, and deviations from design. Expand the implementation write-up created during development.
 
+- Code organisation and module structure (`src/surge_pipeline/` layout).
 - Features completed:
   - Data loading and preprocessing (text cleaning, ticker extraction, sentiment scoring).
   - Feature engineering (9 features with temporal windowing).
   - Surge labelling with composite metric and configurable threshold.
-  - Multi-model training with hyperparameter search (LR: 10, RF: 36, XGB: ≤50 configs).
+  - Multi-model training with hyperparameter search (LR: 10 configs, RF: 36 configs, XGB: ≤50 configs).
   - Evaluation pipeline with statistical tests.
-- Algorithms and technical methods:
-  - Ticker extraction: regex + stopword filtering + known-ticker validation.
-  - Sentiment analysis: VADER compound scoring.
-  - Temporal CV: expanding-window splits preserving chronological ordering.
-  - Model selection: mean validation AUC-ROC, final retraining on full training set.
+- Algorithms and technical detail:
+  - Ticker extraction: regex patterns, stopword filtering, known-ticker validation — specifics of implementation.
+  - Sentiment analysis: VADER compound scoring, deduplication optimisation.
+  - Temporal CV: expanding-window split logic, fold construction.
+  - Model selection: GridSearchCV with custom scorer, final retraining procedure.
+- Challenges encountered and how they were resolved:
+  - Any deviations from original design (reference decision log).
+  - Performance bottlenecks and optimisations applied.
+  - Edge cases discovered during development.
 - Implementation progress: all pipeline stages functional, end-to-end run producing artefacts.
-- Key implementation decisions and trade-offs (referencing decision log).
 
 **Input:** `src/surge_pipeline/` (all modules), `output/models/*.joblib`, `output/processed/pipeline_summary.json`, `admin/decision-log.md`.
 
@@ -329,6 +334,8 @@ Evaluate ALL major features and components, not just the successful parts:
 ---
 
 ##### 7.5.3 — Present Results Clearly
+
+Present raw results BEFORE analysis. Readers need to see the evidence before the argument.
 
 Use appropriate evidence for each claim:
 
@@ -402,14 +409,30 @@ Frame as contributions rather than "groundbreaking" — demonstrate awareness th
 
 **Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures, confusion matrices, `risk-and-challenges.md`, `pipeline_config.json`, feature importance data.
 
-#### 7.6 — Conclusion (0.25 day)
+#### 7.6 — Conclusion (0.5 day)
 
 Summarise current achievements, key findings, remaining work, and possible future developments.
 
-- Current achievements: functional end-to-end pipeline, multi-model comparison, statistical validation.
-- Key findings: best model performance, tier achieved, which features matter most.
-- Remaining work: sentiment model upgrade, ticker validation refinement, deployment considerations.
-- Possible future developments: FinBERT integration, graph-based diffusion, multi-subreddit, real-time inference system.
+- **Current achievements:**
+  - Functional end-to-end pipeline from raw Reddit data to trained classifiers.
+  - Multi-model comparison with statistical significance testing.
+  - Reproducible results via fixed seeds, serialised configs, and automated pipeline.
+  - Evaluation framework with bootstrap CIs, McNemar's test, and baseline comparisons.
+- **Key findings:**
+  - Best model performance and which tier was achieved.
+  - Which features contributed most to prediction (link to RF feature importance).
+  - Whether posting-volume surges are predictable from backward-looking features (answer to research question).
+  - Relationship between findings and existing literature.
+- **Remaining work** (tie back to limitations in 7.5.5):
+  - Sentiment model upgrade (VADER → FinBERT) to address financial language ceiling.
+  - Ticker validation refinement to reduce extraction false positives.
+  - Class imbalance handling (cost-sensitive learning, threshold optimisation).
+  - Multi-subreddit expansion for generalisability.
+- **Possible future developments:**
+  - Real-time inference system with streaming Reddit data.
+  - Graph-based diffusion features (cross-ticker mention networks).
+  - Multi-scale temporal windows (6h, 24h, 72h).
+  - Integration with market data for downstream trading signal validation.
 
 **Input:** `final_summary.json`, `admin/decision-log.md`, `risk-and-challenges.md`.
 
@@ -435,8 +458,19 @@ Summarise current achievements, key findings, remaining work, and possible futur
 | 4. Ticker hardening | 0.5 day | Low |
 | 5. End-to-end run | 0.5 day | Critical |
 | 6. CI & housekeeping | 0.5 day | Medium |
-| 7. Report writing | 3–4 days | Critical |
+| 7. Report writing | 5 days | Critical |
 
-**Total: ~9–12 days of focused work.**
+**Total: ~10–13 days of focused work.**
 
-Phase 1 is critical — it establishes the path conventions all subsequent code changes will use and makes the test suite functional. Phase 5 validates the entire system. Phase 2 adds the academic rigour needed for the final report. Phases 3–4 improve signal quality. Phase 6 is polish. Phase 7 is the final deliverable — it cannot begin until Phase 5 produces the evaluation artifacts, but sections 7.1–7.5 (methodology) can be drafted in parallel with Phases 2–4.
+Phase 1 is critical — it establishes the path conventions all subsequent code changes will use and makes the test suite functional. Phase 5 validates the entire system. Phase 2 adds the academic rigour needed for the final report. Phases 3–4 improve signal quality. Phase 6 is polish. Phase 7 is the final deliverable — it cannot begin until Phase 5 produces the evaluation artifacts, but sections 7.1–7.4 can be drafted in parallel with earlier phases.
+
+---
+
+#### Writing Order & Dependencies
+
+- **7.1–7.4** (Introduction, Literature Review, Design, Implementation) can be drafted while Phase 5 artifacts are being generated. These sections describe what was planned and built, not the final results.
+- **7.5** (Evaluation) requires final evaluation outputs from Phase 5 (`evaluation_metrics.json`, `final_summary.json`, all figures). This is the last major section to be written.
+- **7.6** (Conclusion) is written after 7.5 — it summarises findings that only exist once evaluation is complete.
+- **7.7** (Formatting & Polish) is done last, once all content is in place.
+
+Within 7.5 (Evaluation), follow this writing order: present raw results first (7.5.3 — "here's what happened"), then critically analyse them (7.5.4 — "here's what it means"). Do not interleave presentation with interpretation — readers need to see the evidence before the argument.
