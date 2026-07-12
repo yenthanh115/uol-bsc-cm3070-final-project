@@ -205,7 +205,20 @@ python src/run_training.py --data-path output/processed/labelled_dataset.csv --o
 
 ### Phase 7: Report Writing (3–4 days)
 
-**Goal:** Produce a near-submission-quality academic report (90–95% complete) covering the full research lifecycle.
+**Goal:** Produce a near-submission-quality academic report (90–95% complete) following the prescribed 6-section structure.
+
+---
+
+#### Report Structure
+
+| Section | Content Focus |
+|---|---|
+| 1. Introduction | Motivation, aims, concept |
+| 2. Literature Review | Revised review, feedback improvements, additional references |
+| 3. Design | Architecture, technologies, methods |
+| 4. Implementation | Features, algorithms, technical methods, progress |
+| 5. Evaluation | Strengths, weaknesses, performance, improvements needed |
+| 6. Conclusion | Achievements, findings, remaining work, future developments |
 
 ---
 
@@ -215,99 +228,115 @@ Each report section draws from specific artifacts produced by the earlier phases
 
 | Report Section | Input Artifacts |
 |---|---|
-| Introduction & Problem Definition | `reports/01-literature-review/`, `admin/decision-log.md` |
-| Literature Review | `reports/01-literature-review/literature-review-v1.0.md` (already written) |
-| Dataset Description | `input/raw/r_pennystocks_submissions_reddit.csv`, `output/processed/pipeline_summary.json` |
-| Data Preprocessing | `src/surge_pipeline/loader.py`, `src/surge_pipeline/sentiment.py`, pipeline logs |
-| Feature Engineering | `src/surge_pipeline/features.py` (9 features), `output/figures/eda/01–09*.png` |
-| Surge Definition & Labelling | `src/surge_pipeline/labelling.py`, `src/surge_pipeline/normalisation.py`, `output/processed/threshold_sensitivity.csv` |
-| Model Development | `src/surge_pipeline/training.py`, `output/models/*.joblib`, `output/processed/pipeline_config.json` |
-| Experimental Setup | `src/surge_pipeline/config.py`, `output/processed/pipeline_config.json`, test files |
-| Results | `output/evaluation/evaluation_metrics.json`, `output/evaluation/final_summary.json`, `output/figures/evaluation/10–12*.png` |
-| Statistical Analysis | `output/evaluation/final_summary.json` (McNemar, bootstrap CIs, baselines) |
-| Discussion & Error Analysis | `output/evaluation/final_summary.json`, confusion matrices, misclassification examples |
-| Limitations & Future Work | `admin/decision-log.md`, `reports/04-draft/risk-and-challenges.md` |
+| Introduction | `reports/01-literature-review/`, `admin/decision-log.md`, proposal, preliminary report |
+| Literature Review | `reports/01-literature-review/literature-review-v1.0.md`, previous feedback, new papers |
+| Design | `src/surge_pipeline/config.py`, `src/surge_pipeline/features.py`, `output/processed/pipeline_config.json`, EDA figures |
+| Implementation | `src/surge_pipeline/` (all modules), `output/models/*.joblib`, `output/processed/pipeline_summary.json` |
+| Evaluation | `output/evaluation/evaluation_metrics.json`, `output/evaluation/final_summary.json`, `output/figures/evaluation/10–12*.png` |
+| Conclusion | `admin/decision-log.md`, `reports/04-draft/risk-and-challenges.md`, `final_summary.json` |
 
 ---
 
-#### 7.1 — Introduction & Problem Definition (0.5 day)
+#### 7.1 — Introduction (0.5 day)
 
-- Research question: Can posting-volume surges on r/pennystocks be predicted from backward-looking features?
-- Motivation: early surge detection for market participants and researchers.
-- Scope: binary classification of ticker-level 24h posting-volume surges.
-- Contributions: composite surge metric, temporal CV methodology, multi-model comparison.
+Describe the project motivation, aims, and concept. Build directly on the proposal and preliminary report.
 
-**Input:** Literature review conclusions, decision log, preliminary report.
+- Project motivation: why predicting posting-volume surges on r/pennystocks matters for market participants and researchers.
+- Project aims: binary classification of ticker-level 24h posting-volume surges using backward-looking features.
+- Project concept: composite surge metric, temporal CV methodology, multi-model comparison approach.
+- Scope and research question.
 
-#### 7.2 — Background & Literature Review (0.25 day)
+**Input:** Proposal, preliminary report, literature review conclusions, `admin/decision-log.md`.
+
+#### 7.2 — Literature Review (0.5 day)
+
+Include the revised literature review with improvements from previous feedback and additional references.
 
 - Polish existing literature review (already written in `reports/01-literature-review/`).
-- Add 2–3 recent citations if needed to address reviewer feedback.
+- Address improvements based on previous feedback (reviewer comments, gaps identified).
+- Add additional references if needed (2–3 recent citations on social media prediction, penny stocks, NLP in finance).
 - Tighten the research gap statement to directly motivate the methodology.
 
-**Input:** `reports/01-literature-review/literature-review-v1.0.md`, any new papers found during implementation.
+**Input:** `reports/01-literature-review/literature-review-v1.0.md`, previous feedback, any new papers found during implementation.
 
-#### 7.3 — Methodology: Dataset & Preprocessing (0.5 day)
+#### 7.3 — Design (0.75 day)
 
-- Dataset provenance: r/pennystocks submissions, collection period, size, schema.
-- Preprocessing steps: text cleaning, ticker extraction (regex + stopword filtering), temporal sorting.
-- Sentiment analysis: model used (VADER/TextBlob), scoring approach, justification.
-- Statistics: total posts, unique tickers, date range, class distribution.
+Present the system architecture, project design, technologies, and methods. Refine the design document developed earlier.
 
-**Input:** `pipeline_summary.json`, `loader.py`, `sentiment.py`, EDA figures 01–04.
+- System architecture: pipeline stages (loading → preprocessing → feature engineering → labelling → training → evaluation).
+- Data flow diagram: input sources → intermediate outputs → final artifacts.
+- Technology choices and justification: Python, scikit-learn, XGBoost, VADER, pandas.
+- Method design:
+  - 9 backward-looking features with leakage-prevention argument.
+  - Composite surge metric formula: `S = w1 * z_volume + w2 * z_sentiment`.
+  - Threshold τ selection via sensitivity sweep.
+  - Expanding-window temporal cross-validation (k=4 folds, 3 splits).
+  - Three models: Logistic Regression, Random Forest, XGBoost.
+- Reproducibility design: fixed seeds, serialised models, config JSON, temporal train/test split (80/20).
 
-#### 7.4 — Methodology: Feature Engineering & Surge Definition (0.5 day)
+**Input:** `src/surge_pipeline/config.py`, `features.py`, `labelling.py`, `normalisation.py`, `training.py`, `pipeline_config.json`, EDA figures 05–09.
 
-- 9 features with formal definitions and leakage-prevention argument.
-- Composite surge metric formula: `S = w1 * z_volume + w2 * z_sentiment`.
-- Threshold τ selection via sensitivity sweep.
-- Temporal train/test split (80/20).
-- Exclusion criteria (min_window_count).
+#### 7.4 — Implementation (0.75 day)
 
-**Input:** `features.py`, `labelling.py`, `normalisation.py`, `threshold_sensitivity.csv`, EDA figures 05–09.
+Describe features completed, algorithms, technical methods, and implementation progress. Expand the implementation write-up created during development.
 
-#### 7.5 — Methodology: Model Development & Experimental Setup (0.5 day)
+- Features completed:
+  - Data loading and preprocessing (text cleaning, ticker extraction, sentiment scoring).
+  - Feature engineering (9 features with temporal windowing).
+  - Surge labelling with composite metric and configurable threshold.
+  - Multi-model training with hyperparameter search (LR: 10, RF: 36, XGB: ≤50 configs).
+  - Evaluation pipeline with statistical tests.
+- Algorithms and technical methods:
+  - Ticker extraction: regex + stopword filtering + known-ticker validation.
+  - Sentiment analysis: VADER compound scoring.
+  - Temporal CV: expanding-window splits preserving chronological ordering.
+  - Model selection: mean validation AUC-ROC, final retraining on full training set.
+- Implementation progress: all pipeline stages functional, end-to-end run producing artefacts.
+- Key implementation decisions and trade-offs (referencing decision log).
 
-- Three models: Logistic Regression, Random Forest, XGBoost.
-- Hyperparameter grids (10, 36, ≤50 configs respectively).
-- Expanding-window temporal cross-validation (k=4 folds, 3 splits).
-- Selection criterion: mean validation AUC-ROC.
-- Final retraining on full training set with best params.
-- Reproducibility: fixed seeds, serialised models, config JSON.
+**Input:** `src/surge_pipeline/` (all modules), `output/models/*.joblib`, `output/processed/pipeline_summary.json`, `admin/decision-log.md`.
 
-**Input:** `training.py`, `pipeline_config.json`, model `.joblib` files.
+#### 7.5 — Evaluation (0.75 day)
 
-#### 7.6 — Results (0.5 day)
+Evaluate the current implementation by discussing strengths, weaknesses, current performance, and improvements still required. Focus on the current project state rather than the finished system.
 
-- Per-model metrics table: Precision, Recall, F1, AUC-ROC with 95% bootstrap CIs.
-- ROC curve figure (combined overlay).
-- Confusion matrices per model.
-- Best model identification and tier achieved (minimum/target/stretch).
-- McNemar's test pairwise significance table.
-- Baseline comparison table (random baseline, single-feature baselines).
+- Current performance:
+  - Per-model metrics table: Precision, Recall, F1, AUC-ROC with 95% bootstrap CIs.
+  - ROC curve figure (combined overlay).
+  - Confusion matrices per model.
+  - Best model identification and tier achieved (minimum/target/stretch).
+- Statistical rigour:
+  - McNemar's test pairwise significance table.
+  - Baseline comparison table (random baseline, single-feature baselines).
+- Strengths:
+  - Temporal CV prevents data leakage.
+  - Multi-model comparison provides robust conclusions.
+  - Reproducibility via fixed seeds and serialised configs.
+- Weaknesses:
+  - Ticker extraction precision (false positives from common words).
+  - VADER ceiling for financial language understanding.
+  - Single subreddit scope limits generalisability.
+  - Class imbalance effects on metrics.
+- Improvements still required:
+  - FinBERT for better sentiment signal.
+  - Multi-subreddit expansion.
+  - Real-time inference capability.
+  - Graph-based diffusion features.
 
-**Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures.
+**Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures, confusion matrices, `risk-and-challenges.md`.
 
-#### 7.7 — Discussion & Critical Analysis (0.5 day)
+#### 7.6 — Conclusion (0.25 day)
 
-- Why did model X outperform Y? (feature importance, decision boundaries)
-- Where does the best model fail? (false positives/negatives analysis from confusion matrix)
-- Effect of class imbalance on metrics.
-- Phase 1 vs Phase 2 comparison (does sentiment improve predictions?).
-- Practical implications: how would this be deployed? What lead time does it provide?
-- Relate findings back to research question and literature.
+Summarise current achievements, key findings, remaining work, and possible future developments.
 
-**Input:** `final_summary.json`, confusion matrices, feature importance (from RF), decision log.
+- Current achievements: functional end-to-end pipeline, multi-model comparison, statistical validation.
+- Key findings: best model performance, tier achieved, which features matter most.
+- Remaining work: sentiment model upgrade, ticker validation refinement, deployment considerations.
+- Possible future developments: FinBERT integration, graph-based diffusion, multi-subreddit, real-time inference system.
 
-#### 7.8 — Limitations, Future Work & Conclusion (0.25 day)
+**Input:** `final_summary.json`, `admin/decision-log.md`, `risk-and-challenges.md`.
 
-- Known limitations: ticker extraction precision, TextBlob/VADER ceiling, single subreddit, class imbalance.
-- Future work: FinBERT, graph-based diffusion, multi-subreddit, real-time inference.
-- Conclusion: restate findings, contribution, and tier achieved.
-
-**Input:** `risk-and-challenges.md`, decision log, final summary tier.
-
-#### 7.9 — Formatting & Polish (0.5 day)
+#### 7.7 — Formatting & Polish (0.5 day)
 
 - ACM citation format.
 - Figure captions with numbering.
