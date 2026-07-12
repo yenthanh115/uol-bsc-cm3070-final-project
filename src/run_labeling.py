@@ -1,9 +1,9 @@
 """CLI entry point for the surge-labelling pipeline.
 
 Usage:
-    python run_pipeline.py --file-path ../input/raw/dataset.csv
-    python run_pipeline.py --config pipeline_config.json
-    python run_pipeline.py --sweep-only  # Run threshold sweep only
+    python run_labeling.py --file-path ../input/raw/dataset.csv
+    python run_labeling.py --config pipeline_config.json
+    python run_labeling.py --sweep-only  # Run threshold sweep only
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from surge_pipeline.config import PipelineConfig  # noqa: E402
+from surge_pipeline.experiment_log import append_experiment  # noqa: E402
 from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs  # noqa: E402
 
 
@@ -80,6 +81,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Enable verbose (DEBUG) logging.",
+    )
+    parser.add_argument(
+        "--notes",
+        type=str,
+        default="",
+        help="Free-text annotation for the experiment log.",
     )
 
     return parser.parse_args(argv)
@@ -160,6 +167,26 @@ def main(argv: list[str] | None = None) -> None:
         sweep_df.to_csv(sweep_path, index=False)
         print(f"\nSweep table saved to: {sweep_path}")
 
+        # Log experiment
+        viable_count = int(sweep_df["viable"].sum())
+        append_experiment(
+            run_id=prefix,
+            pipeline="sweep",
+            config={
+                "thresholds": config.thresholds,
+                "sentiment_model": config.sentiment_model,
+                "weight_volume": config.weight_volume,
+                "weight_sentiment": config.weight_sentiment,
+                "random_seed": config.random_seed,
+            },
+            outputs=[str(sweep_path)],
+            summary={
+                "n_thresholds": len(config.thresholds),
+                "viable_thresholds": viable_count,
+            },
+            notes=args.notes,
+        )
+
     else:
         # Full pipeline mode
         print("\n[MODE] Full pipeline execution\n")
@@ -200,6 +227,32 @@ def main(argv: list[str] | None = None) -> None:
         print(f"\n  Output files:")
         for key, path in output_paths.items():
             print(f"    {key}: {path}")
+
+        # Log experiment
+        from datetime import datetime
+        prefix = datetime.now().strftime("%Y%m%d%H%M")
+        append_experiment(
+            run_id=prefix,
+            pipeline="labelling",
+            config={
+                "threshold_tau": config.threshold_tau,
+                "weight_volume": config.weight_volume,
+                "weight_sentiment": config.weight_sentiment,
+                "sentiment_model": config.sentiment_model,
+                "min_window_count": config.min_window_count,
+                "surge_method": config.surge_method,
+                "temporal_split_ratio": config.temporal_split_ratio,
+                "random_seed": config.random_seed,
+            },
+            outputs=list(output_paths.values()),
+            summary={
+                "train_size": results.get("class_distributions", {}).get("train", {}).get("total", 0),
+                "test_size": results.get("class_distributions", {}).get("test", {}).get("total", 0),
+                "surge_rate": results.get("class_distributions", {}).get("all", {}).get("surge_rate", 0.0),
+                "exclusion_rate": results.get("exclusion_rate", 0.0),
+            },
+            notes=args.notes,
+        )
 
         print("\n" + "=" * 60)
         print("DONE")

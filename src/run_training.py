@@ -31,6 +31,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from surge_pipeline.config import PipelineConfig  # noqa: E402
+from surge_pipeline.experiment_log import append_experiment  # noqa: E402
 from surge_pipeline.features import compute_features, FEATURE_COLUMNS  # noqa: E402
 from surge_pipeline.training import (  # noqa: E402
     train_models,
@@ -136,6 +137,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=1000,
         help="Number of bootstrap resamples for confidence intervals.",
+    )
+    parser.add_argument(
+        "--notes",
+        type=str,
+        default="",
+        help="Free-text annotation for the experiment log.",
     )
     return parser.parse_args(argv)
 
@@ -424,6 +431,29 @@ def main(argv: list[str] | None = None) -> None:
         encoding="utf-8",
     )
     print(f"  Latest manifest  : {manifest_path}")
+
+    # ------------------------------------------------------------------
+    # 13. Append to consolidated experiment log
+    # ------------------------------------------------------------------
+    append_experiment(
+        run_id=prefix,
+        pipeline="training",
+        config={
+            "seed": args.seed,
+            "weight_sentiment": args.weight_sentiment,
+            "threshold_tau": args.threshold_tau,
+            "n_bootstrap": args.n_bootstrap,
+            "data_path": str(Path(args.data_path).name),
+        },
+        outputs=list(output_paths.values()),
+        summary={
+            "best_model": summary.best_model,
+            "best_auc_roc": summary.best_auc_roc,
+            "tier_achieved": summary.success_tier_achieved,
+            "overall_pass": summary.overall_pass,
+        },
+        notes=args.notes,
+    )
 
     print("\n" + "=" * 60)
     print("DONE")

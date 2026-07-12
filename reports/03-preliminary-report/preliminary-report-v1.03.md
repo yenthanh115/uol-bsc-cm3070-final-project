@@ -97,7 +97,7 @@ This project addresses all three gaps by defining a composite binary surge targe
 
 ### System Architecture and Pipeline Stages
 
-The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_pipeline.py`):
+The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_labeling.py`):
 
 1. **Data Loading** — CSV ingestion, regex-based ticker extraction from title/selftext, multi-ticker record explosion (one row per record-ticker pair)
 2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (O(n log n) per ticker)
@@ -215,7 +215,7 @@ In addition to the core prediction pipeline, the prototype includes an automated
 4. **Phase 1 vs Phase 2 comparison** — label agreement between volume-only and composite labelling, quantifying sentiment's marginal contribution (Figure 10)
 5. **Threshold sensitivity** — surge rate curve across τ values with viable region identification (Figure 14)
 
-This module operates on the outputs of `run_pipeline.py` and is invoked separately from the training pipeline. It ensures that all exploratory analysis is deterministic, reproducible, and consistent with the labelled dataset used for modelling — satisfying requirement R2 (Exploratory Data Analysis). The figures inform key design decisions documented in this chapter, including the choice of τ=1.5 and the observation that sentiment adds marginal discriminative value beyond volume alone.
+This module operates on the outputs of `run_labeling.py` and is invoked separately from the training pipeline. It ensures that all exploratory analysis is deterministic, reproducible, and consistent with the labelled dataset used for modelling — satisfying requirement R2 (Exploratory Data Analysis). The figures inform key design decisions documented in this chapter, including the choice of τ=1.5 and the observation that sentiment adds marginal discriminative value beyond volume alone.
 
 <figure align="center">
   <img src="../../figures/01_posting_frequency_over_time.png" alt="Posting Frequency Over Time" width="700">
@@ -333,7 +333,7 @@ Only τ=1.0 produces a viable surge rate (6.89%). The prototype's τ=1.5 creates
 ### Reproducibility
 
 ```bash
-python src/run_pipeline.py --file-path data/raw/r_pennystocks_submissions_reddit.csv --output-dir data/processed
+python src/run_labeling.py --file-path data/raw/r_pennystocks_submissions_reddit.csv --output-dir data/processed
 python -m src.eda.eda_pipeline
 python src/run_training.py --data-path data/processed/labelled_dataset.csv
 ```

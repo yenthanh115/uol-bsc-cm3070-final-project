@@ -97,7 +97,7 @@ This project addresses all three gaps by defining a composite binary surge targe
 
 ### System Architecture and Pipeline Stages
 
-The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_pipeline.py`):
+The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_labeling.py`):
 
 1. **Data Loading** — CSV ingestion, regex-based ticker extraction from title/selftext, multi-ticker record explosion (one row per record-ticker pair)
 2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (O(n log n) per ticker)
@@ -260,7 +260,7 @@ Only τ=1.0 produces a viable surge rate (6.89%). The prototype's τ=1.5 creates
 ### Reproducibility
 
 ```bash
-python src/run_pipeline.py --file-path data/raw/r_pennystocks_submissions_reddit.csv --output-dir data/processed
+python src/run_labeling.py --file-path data/raw/r_pennystocks_submissions_reddit.csv --output-dir data/processed
 python src/run_training.py --data-path data/processed/labelled_dataset.csv
 ```
 

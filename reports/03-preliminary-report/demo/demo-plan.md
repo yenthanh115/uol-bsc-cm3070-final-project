@@ -34,7 +34,7 @@
 **Action:** Run the full pipeline.
 
 ```bash
-python run_pipeline.py --file-path ../data/raw/r_pennystocks_submissions_reddit.csv --output-dir ../output/demo --verbose
+python run_labeling.py --file-path ../data/raw/r_pennystocks_submissions_reddit.csv --output-dir ../output/demo --verbose
 ```
 
 **Dialogue:**

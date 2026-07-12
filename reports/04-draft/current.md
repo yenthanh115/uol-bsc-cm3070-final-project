@@ -14,7 +14,7 @@ Here's my evaluation of the project:
 - Clean separation of concerns: 10 focused modules (loader, windowing, sentiment, labelling, normalisation, features, training, evaluation, pipeline, config).
 - Well-defined pipeline orchestrator (`pipeline.py`) that chains stages deterministically.
 - JSON-serialisable `PipelineConfig` dataclass with full audit trail support.
-- Two CLI entry points (`run_pipeline.py`, `run_training.py`) with sensible argument parsing.
+- Two CLI entry points (`run_labeling.py`, `run_training.py`) with sensible argument parsing.
 
 **2. Data Science Methodology (Strong)**
 - Temporal train/test split (not random) — prevents data leakage.

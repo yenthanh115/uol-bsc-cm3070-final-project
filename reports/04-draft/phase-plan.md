@@ -62,7 +62,7 @@ Steps:
 - `PipelineConfig` defaults: `file_path` → `input/raw/...`, `output_dir` → `output/processed`.
 - `evaluation.py` `FIGURES_DIR` → `output/figures/evaluation`.
 - `eda_pipeline.py` figure output → `output/figures/eda`.
-- `run_pipeline.py` and `run_training.py` default CLI paths.
+- `run_labeling.py` and `run_training.py` default CLI paths.
 - `README.md` project structure and usage examples.
 
 #### ~~1.3 — Refactor `training.py` to match test interface~~ - DONE
@@ -168,7 +168,7 @@ Steps:
 
 **5.1 — Full pipeline run on real data**
 ```
-python src/run_pipeline.py --file-path input/raw/r_pennystocks_submissions_reddit.csv --output-dir output/processed
+python src/run_labeling.py --file-path input/raw/r_pennystocks_submissions_reddit.csv --output-dir output/processed
 ```
 - Verify outputs: `labelled_dataset.csv`, `pipeline_summary.json`, `threshold_sensitivity.csv`, `pipeline_config.json`.
 
