@@ -296,34 +296,111 @@ Describe features completed, algorithms, technical methods, and implementation p
 
 **Input:** `src/surge_pipeline/` (all modules), `output/models/*.joblib`, `output/processed/pipeline_summary.json`, `admin/decision-log.md`.
 
-#### 7.5 — Evaluation (0.75 day)
+#### 7.5 — Evaluation (1.5 days) ⭐ KEY SECTION
 
-Evaluate the current implementation by discussing strengths, weaknesses, current performance, and improvements still required. Focus on the current project state rather than the finished system.
+This is the most important section of the report. It must evaluate the project against its stated objectives, provide comprehensive coverage of all major components, present results clearly with appropriate evidence, and critically analyse outcomes.
 
-- Current performance:
-  - Per-model metrics table: Precision, Recall, F1, AUC-ROC with 95% bootstrap CIs.
-  - ROC curve figure (combined overlay).
-  - Confusion matrices per model.
-  - Best model identification and tier achieved (minimum/target/stretch).
-- Statistical rigour:
-  - McNemar's test pairwise significance table.
-  - Baseline comparison table (random baseline, single-feature baselines).
-- Strengths:
-  - Temporal CV prevents data leakage.
-  - Multi-model comparison provides robust conclusions.
-  - Reproducibility via fixed seeds and serialised configs.
-- Weaknesses:
-  - Ticker extraction precision (false positives from common words).
-  - VADER ceiling for financial language understanding.
-  - Single subreddit scope limits generalisability.
-  - Class imbalance effects on metrics.
-- Improvements still required:
-  - FinBERT for better sentiment signal.
-  - Multi-subreddit expansion.
-  - Real-time inference capability.
-  - Graph-based diffusion features.
+---
 
-**Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures, confusion matrices, `risk-and-challenges.md`.
+##### 7.5.1 — Evaluate Against Project Objectives
+
+Directly measure whether the project achieved its intended goals:
+
+- **Objective 1: Predict posting-volume surges** — Did the models beat random and single-feature baselines? What tier was achieved (minimum 0.60 / target 0.70 / stretch 0.80)?
+- **Objective 2: Compare multiple ML approaches** — Did the multi-model comparison reveal meaningful differences? Were differences statistically significant (McNemar's test)?
+- **Objective 3: Demonstrate temporal validity** — Did the expanding-window CV and temporal train/test split prevent data leakage? Is there evidence the model generalises to unseen time periods?
+- **Objective 4: Build a reproducible pipeline** — Can results be recreated from config JSON and fixed seeds? Are all artifacts traceable?
+
+For each objective: state the goal, present the measured outcome, and give a clear verdict (met / partially met / not met).
+
+---
+
+##### 7.5.2 — Comprehensive Coverage
+
+Evaluate ALL major features and components, not just the successful parts:
+
+- **Data pipeline:** loading reliability, preprocessing quality, ticker extraction precision.
+- **Feature engineering:** which of the 9 features contributed most? Feature importance from RF. Any features that added noise?
+- **Surge labelling:** is the composite metric definition valid? Threshold sensitivity analysis — how sensitive are results to τ?
+- **Model training:** convergence, hyperparameter sensitivity, training time.
+- **Model performance:** all three models, not just the best one. Where each model succeeds and fails.
+- **Statistical validation:** bootstrap CIs, McNemar comparisons, baseline comparisons.
+
+---
+
+##### 7.5.3 — Present Results Clearly
+
+Use appropriate evidence for each claim:
+
+- **Tables:**
+  - Per-model metrics table (Precision, Recall, F1, AUC-ROC) with 95% bootstrap CIs.
+  - McNemar's pairwise significance table (test statistic, p-value, significance after Bonferroni correction).
+  - Baseline comparison table (random baseline AUC, best single-feature baseline AUC, improvement margin).
+  - Success tier mapping table (model → tier achieved).
+- **Figures:**
+  - ROC curves (combined overlay showing all models + random baseline).
+  - Confusion matrices per model (with actual counts, not just percentages).
+  - Threshold sensitivity curve (metrics vs. classification threshold).
+  - Feature importance bar chart (from Random Forest).
+- **Clear narrative:**
+  - For every table/figure: state what was measured, what the results show, and how conclusions were reached.
+  - Cross-reference figures in the text — no orphaned visuals.
+
+---
+
+##### 7.5.4 — Critical Analysis
+
+Go beyond reporting numbers. For each result, discuss WHY:
+
+- **Why did the best model outperform others?**
+  - Feature importance differences between models.
+  - Decision boundary complexity (linear vs. tree-based).
+  - Sensitivity to class imbalance.
+- **What worked well?**
+  - Temporal CV preventing overly optimistic estimates.
+  - Composite surge metric capturing multi-dimensional signal.
+  - Backward-looking features avoiding look-ahead bias.
+- **What did NOT work?**
+  - False positive patterns in confusion matrices — what types of records are misclassified?
+  - Features with low importance — were they worth including?
+  - VADER limitations on financial/Reddit slang.
+- **Unexpected outcomes:**
+  - Any model performing surprisingly well or poorly?
+  - Threshold sensitivity — did small τ changes cause large performance shifts?
+  - Class imbalance impact — precision vs. recall trade-off.
+- **Relationship to objectives:**
+  - Map each finding back to the stated research question.
+  - If a model fails to reach minimum tier: explain why and what this means.
+
+---
+
+##### 7.5.5 — Limitations & Improvement Proposals
+
+Identify limitations honestly, then propose concrete improvements:
+
+| Limitation | Impact | Proposed Improvement |
+|---|---|---|
+| Ticker extraction false positives | Noisy labels reduce model signal | Known-ticker validation list, $-prefix confidence weighting |
+| VADER ceiling for financial text | Sentiment feature underperforms | FinBERT fine-tuned on financial Reddit |
+| Single subreddit scope | Limited generalisability | Multi-subreddit expansion (r/wallstreetbets, r/stocks) |
+| Class imbalance (~15% positive) | Precision-recall trade-off | SMOTE, cost-sensitive learning, threshold tuning |
+| Static feature window (24h) | May miss longer-term patterns | Multi-scale windows (6h, 24h, 72h) |
+
+---
+
+##### 7.5.6 — Originality & Contribution
+
+Highlight what is novel (without overclaiming):
+
+- Composite surge metric combining volume z-score and sentiment z-score — not found in prior literature for penny stock forums.
+- Expanding-window temporal CV applied to social media prediction — addresses a common leakage mistake in similar studies.
+- Multi-model comparison with statistical significance testing — goes beyond single-model reporting common in undergraduate projects.
+
+Frame as contributions rather than "groundbreaking" — demonstrate awareness that these are incremental advances with clear academic value.
+
+---
+
+**Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures, confusion matrices, `risk-and-challenges.md`, `pipeline_config.json`, feature importance data.
 
 #### 7.6 — Conclusion (0.25 day)
 
