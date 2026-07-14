@@ -223,6 +223,17 @@ def main(argv: list[str] | None = None) -> None:
             print(f"    Surge rate:   {class_dist.get('surge_rate', 0.0):.2f}%")
             print(f"    Imbalance:    {class_dist.get('imbalance_ratio', 0.0):.2f}:1")
 
+        # Stage durations
+        stage_durations = results.get("stage_durations", {})
+        total_duration = results.get("total_duration_seconds")
+        if stage_durations:
+            print(f"\n  Stage Durations:")
+            for stage_name, duration in stage_durations.items():
+                label = stage_name.replace("_", " ").capitalize()
+                print(f"    {label:20s}: {duration:>7.2f}s")
+            print(f"    {'─' * 30}")
+            print(f"    {'Total':20s}: {total_duration:>7.2f}s")
+
         # Output paths
         print(f"\n  Output files:")
         for key, path in output_paths.items():
@@ -250,6 +261,7 @@ def main(argv: list[str] | None = None) -> None:
                 "test_size": results.get("class_distributions", {}).get("test", {}).get("total", 0),
                 "surge_rate": results.get("class_distributions", {}).get("all", {}).get("surge_rate", 0.0),
                 "exclusion_rate": results.get("exclusion_rate", 0.0),
+                "total_duration_seconds": total_duration,
             },
             notes=args.notes,
         )

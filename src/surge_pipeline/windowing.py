@@ -19,6 +19,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
 
@@ -83,7 +84,8 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
     epoch_seconds = to_epoch_seconds(df["created_utc"])
 
     # Group by ticker and process each group with vectorised searchsorted
-    for ticker, group in df.groupby("ticker", sort=False):
+    ticker_groups = df.groupby("ticker", sort=False)
+    for ticker, group in tqdm(ticker_groups, desc="Windowing", unit="ticker", leave=True):
         idx = group.index.values  # Original DataFrame indices for this group
         times = epoch_seconds[idx]  # Already sorted (loader guarantees chrono order)
 

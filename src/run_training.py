@@ -21,6 +21,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -161,6 +162,8 @@ def main(argv: list[str] | None = None) -> None:
     print("=" * 60)
     print("MULTI-MODEL TRAINING & ADVANCED EVALUATION")
     print("=" * 60)
+
+    pipeline_start = time.perf_counter()
 
     # ------------------------------------------------------------------
     # 1. Load labelled dataset
@@ -435,6 +438,10 @@ def main(argv: list[str] | None = None) -> None:
     # ------------------------------------------------------------------
     # 13. Append to consolidated experiment log
     # ------------------------------------------------------------------
+    total_duration = time.perf_counter() - pipeline_start
+
+    print(f"\n  Total pipeline duration: {total_duration:.2f}s")
+
     append_experiment(
         run_id=prefix,
         pipeline="training",
@@ -451,6 +458,7 @@ def main(argv: list[str] | None = None) -> None:
             "best_auc_roc": summary.best_auc_roc,
             "tier_achieved": summary.success_tier_achieved,
             "overall_pass": summary.overall_pass,
+            "total_duration_seconds": round(total_duration, 2),
         },
         notes=args.notes,
     )

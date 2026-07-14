@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import time
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Dict, List
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.labelling import apply_labelling, sweep_thresholds
@@ -65,6 +67,11 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("Random seeds set to %d for deterministic execution.", config.random_seed)
 
     stage_counts: Dict[str, int] = {}
+    stage_durations: Dict[str, float] = {}
+    pipeline_start = time.perf_counter()
+
+    stages = ["Load", "Windowing", "Sentiment", "Labelling", "Threshold sweep"]
+    stage_progress = tqdm(stages, desc="Pipeline", unit="stage", leave=True)
 
     # ------------------------------------------------------------------
     # Stage 1: Load data
@@ -73,9 +80,13 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("STAGE 1: Loading data")
     logger.info("=" * 60)
 
+    t0 = time.perf_counter()
     df = load_data(config)
+    stage_durations["load"] = time.perf_counter() - t0
     stage_counts["after_load"] = len(df)
-    logger.info("After load: %d records", len(df))
+    logger.info("After load: %d records (%.2fs)", len(df), stage_durations["load"])
+    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['load']:.1f}s")
+    stage_progress.update(1)
 
     # ------------------------------------------------------------------
     # Stage 2: Windowing
@@ -84,9 +95,13 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("STAGE 2: Computing windowed counts")
     logger.info("=" * 60)
 
+    t0 = time.perf_counter()
     df = compute_windowed_counts(df, config)
+    stage_durations["windowing"] = time.perf_counter() - t0
     stage_counts["after_windowing"] = len(df)
-    logger.info("After windowing: %d records", len(df))
+    logger.info("After windowing: %d records (%.2fs)", len(df), stage_durations["windowing"])
+    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['windowing']:.1f}s")
+    stage_progress.update(1)
 
     # Log exclusion summary
     if "excluded" in df.columns:
@@ -106,9 +121,13 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("STAGE 3: Computing sentiment")
     logger.info("=" * 60)
 
+    t0 = time.perf_counter()
     df = compute_sentiment(df, config)
+    stage_durations["sentiment"] = time.perf_counter() - t0
     stage_counts["after_sentiment"] = len(df)
-    logger.info("After sentiment: %d records", len(df))
+    logger.info("After sentiment: %d records (%.2fs)", len(df), stage_durations["sentiment"])
+    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['sentiment']:.1f}s")
+    stage_progress.update(1)
 
     # ------------------------------------------------------------------
     # Stage 4: Labelling
@@ -117,10 +136,14 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("STAGE 4: Applying labelling (τ=%.2f)", config.threshold_tau)
     logger.info("=" * 60)
 
+    t0 = time.perf_counter()
     labelling_result = apply_labelling(df, config)
+    stage_durations["labelling"] = time.perf_counter() - t0
     df = labelling_result.df
     stage_counts["after_labelling"] = len(df)
-    logger.info("After labelling: %d records", len(df))
+    logger.info("After labelling: %d records (%.2fs)", len(df), stage_durations["labelling"])
+    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['labelling']:.1f}s")
+    stage_progress.update(1)
 
     # ------------------------------------------------------------------
     # Stage 5: Threshold sweep (R8)
@@ -129,16 +152,24 @@ def run_pipeline(config: PipelineConfig) -> dict:
     logger.info("STAGE 5: Threshold sweep")
     logger.info("=" * 60)
 
+    t0 = time.perf_counter()
     sweep_results = sweep_thresholds(df, config)
-    logger.info("Threshold sweep complete — %d thresholds evaluated.", len(sweep_results))
+    stage_durations["threshold_sweep"] = time.perf_counter() - t0
+    logger.info("Threshold sweep complete — %d thresholds evaluated (%.2fs).",
+                len(sweep_results), stage_durations["threshold_sweep"])
+    stage_progress.set_postfix_str(f"{len(sweep_results)} thresholds, {stage_durations['threshold_sweep']:.1f}s")
+    stage_progress.update(1)
+    stage_progress.close()
 
     # ------------------------------------------------------------------
     # Pipeline complete
     # ------------------------------------------------------------------
+    total_duration = time.perf_counter() - pipeline_start
     logger.info("=" * 60)
     logger.info("PIPELINE COMPLETE")
     logger.info("=" * 60)
     logger.info("Final record count: %d", len(df))
+    logger.info("Total pipeline duration: %.2fs", total_duration)
 
     return {
         "labelled_df": df,
@@ -146,6 +177,8 @@ def run_pipeline(config: PipelineConfig) -> dict:
         "class_distributions": labelling_result.class_distributions,
         "sweep_results": sweep_results,
         "stage_counts": stage_counts,
+        "stage_durations": stage_durations,
+        "total_duration_seconds": total_duration,
     }
 
 
@@ -302,6 +335,8 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
         },
         "class_distributions": results["class_distributions"],
         "stage_counts": results["stage_counts"],
+        "stage_durations": results.get("stage_durations", {}),
+        "total_duration_seconds": results.get("total_duration_seconds"),
         "config": {
             "threshold_tau": config.threshold_tau,
             "weight_volume": config.weight_volume,

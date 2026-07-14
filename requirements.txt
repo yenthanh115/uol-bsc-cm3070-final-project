@@ -8,4 +8,5 @@ textblob>=0.17
 vaderSentiment>=3.3
 xgboost>=1.7
 joblib>=1.2
+tqdm>=4.60
 pytest>=7.0

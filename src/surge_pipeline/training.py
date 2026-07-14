@@ -25,6 +25,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.features import FEATURE_COLUMNS
@@ -335,7 +336,7 @@ def _train_single_model(
     best_fold_scores: List[float] = []
     all_cv_results: List[CVResult] = []
 
-    for params in param_grid:
+    for params in tqdm(param_grid, desc=f"  {model_name}", unit="cfg", leave=True):
         fold_aucs: List[float] = []
 
         for train_idx, val_idx in splits:

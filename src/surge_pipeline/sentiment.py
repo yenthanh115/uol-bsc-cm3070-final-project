@@ -20,6 +20,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
 
@@ -169,7 +170,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
 
     # Only compute polarity for included records
     included_indices = np.where(included_mask)[0]
-    for i in included_indices:
+    for i in tqdm(included_indices, desc="Sentiment", unit="rec", leave=True):
         title = titles.iloc[i].strip()
         selftext = selftexts.iloc[i].strip()
 
