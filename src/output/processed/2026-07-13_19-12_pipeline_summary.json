@@ -1,0 +1,65 @@
+{
+  "normalisation_params": {
+    "mu_volume": 0.1473429951690821,
+    "sigma_volume": 0.440991628779766,
+    "mu_sentiment": 0.0,
+    "sigma_sentiment": 0.0,
+    "train_size": 207,
+    "test_size": 46,
+    "split_timestamp": 1615240237.6
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 4,
+      "no_surge_count": 249,
+      "total": 253,
+      "surge_rate": 1.5810276679841897,
+      "imbalance_ratio": 62.25
+    },
+    "train": {
+      "surge_count": 3,
+      "no_surge_count": 204,
+      "total": 207,
+      "surge_rate": 1.4492753623188406,
+      "imbalance_ratio": 68.0
+    },
+    "test": {
+      "surge_count": 1,
+      "no_surge_count": 45,
+      "total": 46,
+      "surge_rate": 2.1739130434782608,
+      "imbalance_ratio": 45.0
+    }
+  },
+  "stage_counts": {
+    "after_load": 805,
+    "after_windowing": 805,
+    "excluded_count": 552,
+    "after_sentiment": 805,
+    "after_labelling": 805
+  },
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.5,
+    "weight_sentiment": 0.5,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 1,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 68.57142857142857,
+  "dataset_fingerprint": {
+    "sha256": "synthetic",
+    "num_rows": 500,
+    "columns": [
+      "created_utc",
+      "id",
+      "num_comments",
+      "score",
+      "selftext",
+      "subreddit",
+      "tickers",
+      "title"
+    ]
+  }
+}

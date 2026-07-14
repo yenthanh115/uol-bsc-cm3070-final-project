@@ -4,7 +4,7 @@
   "overall_pass": true,
   "success_tier_achieved": "target",
   "recommended_config": {
-    "threshold_tau": 1.0,
+    "threshold_tau": 1.5,
     "weight_w2": 0.5
   },
   "phase1_vs_phase2": null,
