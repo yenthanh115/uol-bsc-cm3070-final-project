@@ -45,7 +45,8 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   │   └── eda_pipeline.py             # Exploratory data analysis with figures
 │   ├── tests/                          # Unit tests
 │   ├── run_labeling.py                 # CLI: run the labelling pipeline
-│   └── run_training.py                 # CLI: train model and evaluate
+│   ├── run_training.py                 # CLI: train model and evaluate
+│   └── run_cross_validation.py         # CLI: cross-dataset generalisation test
 │
 ├── reports/                            # Academic reports (literature review, design, etc.)
 ├── admin/                              # Project admin (decision log, journal)
@@ -281,6 +282,37 @@ Use the `--notes` flag on either runner to tag experiments:
 python run_labeling.py --config config.json --notes "testing tau=2.0 with textblob"
 python run_training.py --notes "phase2 with higher sentiment weight"
 ```
+
+### Cross-Dataset Validation
+
+Test whether trained models generalise to a different subreddit:
+
+```bash
+# Evaluate WSB-trained models on r/pennystocks test set
+python run_cross_validation.py \
+    --model-dir ../output/models \
+    --eval-data ../output/processed/labelled_dataset.csv \
+    --partition test \
+    --notes "Cross-val: WSB models on pennystocks"
+
+# Evaluate on all non-excluded records (train + test)
+python run_cross_validation.py \
+    --model-dir ../output/models \
+    --eval-data ../output/processed/labelled_dataset.csv \
+    --notes "Cross-val: WSB models on pennystocks full"
+```
+
+Key parameters:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--model-dir` | `../output/models` | Directory containing saved `.joblib` model files |
+| `--eval-data` | *(required)* | Path to the labelled dataset CSV to evaluate on |
+| `--partition` | *(all non-excluded)* | Partition to evaluate: `train`, `test`, or omit for all |
+| `--output-dir` | `../output/evaluation` | Directory for cross-validation results JSON |
+| `--notes` | *(empty)* | Free-text annotation for the experiment log |
+
+The script loads pre-trained models (with their scalers), computes features on the target dataset, and reports AUC, precision, recall, and F1 for each model. Results are saved as a timestamped JSON file in the evaluation output directory.
 
 ## License
 
