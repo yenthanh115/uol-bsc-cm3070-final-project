@@ -1,8 +1,8 @@
 {
-  "best_model": "random_forest",
-  "best_auc_roc": 0.710832801531589,
+  "best_model": "xgboost",
+  "best_auc_roc": 0.8883848521548947,
   "overall_pass": true,
-  "success_tier_achieved": "target",
+  "success_tier_achieved": "stretch",
   "recommended_config": {
     "threshold_tau": 1.5,
     "weight_w2": 0.5
@@ -10,44 +10,44 @@
   "phase1_vs_phase2": null,
   "models": {
     "logistic_regression": {
-      "auc_roc": 0.6173198964759271,
-      "precision": 0.05425055928411633,
-      "recall": 0.6736111111111112,
-      "f1": 0.10041407867494824,
-      "tier": "minimum"
+      "auc_roc": 0.7065467226853158,
+      "precision": 0.013219342245064367,
+      "recall": 0.8008982035928144,
+      "f1": 0.0260093828240842,
+      "tier": "target"
     },
     "random_forest": {
-      "auc_roc": 0.710832801531589,
-      "precision": 0.09222222222222222,
-      "recall": 0.5763888888888888,
-      "f1": 0.15900383141762453,
-      "tier": "target"
+      "auc_roc": 0.8758195425133909,
+      "precision": 0.04014570843135767,
+      "recall": 0.7919161676646707,
+      "f1": 0.07641747923438064,
+      "tier": "stretch"
     },
     "xgboost": {
-      "auc_roc": 0.7095265634971284,
-      "precision": 0.3333333333333333,
-      "recall": 0.020833333333333332,
-      "f1": 0.0392156862745098,
-      "tier": "target"
+      "auc_roc": 0.8883848521548947,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tier": "stretch"
     }
   },
   "mcnemar_tests": [
     {
       "model_a": "logistic_regression",
       "model_b": "random_forest",
-      "p_value": 1.4973062446568168e-133,
+      "p_value": 0.0,
       "is_significant": true
     },
     {
       "model_a": "logistic_regression",
       "model_b": "xgboost",
-      "p_value": 5.51932270957e-311,
+      "p_value": 0.0,
       "is_significant": true
     },
     {
       "model_a": "random_forest",
       "model_b": "xgboost",
-      "p_value": 4.3530982712914465e-132,
+      "p_value": 0.0,
       "is_significant": true
     }
   ]
