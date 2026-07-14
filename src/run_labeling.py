@@ -16,6 +16,7 @@ from pathlib import Path
 # Ensure the src directory is on the path so surge_pipeline is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
 from surge_pipeline.config import PipelineConfig  # noqa: E402
 from surge_pipeline.experiment_log import append_experiment  # noqa: E402
 from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs  # noqa: E402
@@ -88,6 +89,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="",
         help="Free-text annotation for the experiment log.",
     )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Log file path. Use 'auto' for timestamped filename in output/logs/.",
+    )
 
     return parser.parse_args(argv)
 
@@ -128,147 +135,154 @@ def main(argv: list[str] | None = None) -> None:
 
     config = build_config(args)
 
-    print("=" * 60)
-    print("SURGE-LABELLING PIPELINE")
-    print("=" * 60)
-    print(f"  Random seed:       {config.random_seed}")
-    print(f"  Sentiment model:   {config.sentiment_model}")
-    print(f"  Threshold τ:       {config.threshold_tau}")
-    print(f"  Sweep thresholds:  {config.thresholds}")
-    print(f"  Output directory:  {config.output_dir}")
-    print(f"  Input file:        {config.file_path or '(synthetic data)'}")
-    print("=" * 60)
+    # Resolve log file path and wrap execution in tee context
+    log_path = resolve_log_path(args.log_file, pipeline="labelling")
 
-    if args.sweep_only:
-        # Threshold sweep mode only
-        print("\n[MODE] Threshold sweep only\n")
-        sweep_df = run_threshold_sweep(config)
+    with tee_output(log_path) as active_log:
+        if active_log:
+            print(f"  [Logging to: {active_log}]\n")
 
-        # Print table to console (R8-AC3)
-        print("\nThreshold Sensitivity Table:")
-        print("-" * 70)
-        print(f"{'τ':<10} {'Surge':<12} {'No-Surge':<14} {'Rate(%)':<12} {'Imbalance':<16} {'Viable':<8}")
-        print("-" * 70)
-        for _, row in sweep_df.iterrows():
-            viable_flag = "✓" if row["viable"] else "✗"
-            print(
-                f"{row['threshold']:<10.2f} {int(row['surge_count']):<12d} "
-                f"{int(row['no_surge_count']):<14d} {row['surge_rate']:<12.2f} "
-                f"{row['imbalance_ratio']:<16.2f} {viable_flag:<8}"
+        print("=" * 60)
+        print("SURGE-LABELLING PIPELINE")
+        print("=" * 60)
+        print(f"  Random seed:       {config.random_seed}")
+        print(f"  Sentiment model:   {config.sentiment_model}")
+        print(f"  Threshold τ:       {config.threshold_tau}")
+        print(f"  Sweep thresholds:  {config.thresholds}")
+        print(f"  Output directory:  {config.output_dir}")
+        print(f"  Input file:        {config.file_path or '(synthetic data)'}")
+        print("=" * 60)
+
+        if args.sweep_only:
+            # Threshold sweep mode only
+            print("\n[MODE] Threshold sweep only\n")
+            sweep_df = run_threshold_sweep(config)
+
+            # Print table to console (R8-AC3)
+            print("\nThreshold Sensitivity Table:")
+            print("-" * 70)
+            print(f"{'τ':<10} {'Surge':<12} {'No-Surge':<14} {'Rate(%)':<12} {'Imbalance':<16} {'Viable':<8}")
+            print("-" * 70)
+            for _, row in sweep_df.iterrows():
+                viable_flag = "✓" if row["viable"] else "✗"
+                print(
+                    f"{row['threshold']:<10.2f} {int(row['surge_count']):<12d} "
+                    f"{int(row['no_surge_count']):<14d} {row['surge_rate']:<12.2f} "
+                    f"{row['imbalance_ratio']:<16.2f} {viable_flag:<8}"
+                )
+            print("-" * 70)
+
+            # Save sweep table
+            from datetime import datetime
+            output_dir = Path(config.output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
+            sweep_df.to_csv(sweep_path, index=False)
+            print(f"\nSweep table saved to: {sweep_path}")
+
+            # Log experiment
+            viable_count = int(sweep_df["viable"].sum())
+            append_experiment(
+                run_id=prefix,
+                pipeline="sweep",
+                config={
+                    "thresholds": config.thresholds,
+                    "sentiment_model": config.sentiment_model,
+                    "weight_volume": config.weight_volume,
+                    "weight_sentiment": config.weight_sentiment,
+                    "random_seed": config.random_seed,
+                },
+                outputs=[str(sweep_path)],
+                summary={
+                    "n_thresholds": len(config.thresholds),
+                    "viable_thresholds": viable_count,
+                },
+                notes=args.notes,
             )
-        print("-" * 70)
 
-        # Save sweep table
-        from datetime import datetime
-        output_dir = Path(config.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
-        sweep_df.to_csv(sweep_path, index=False)
-        print(f"\nSweep table saved to: {sweep_path}")
+        else:
+            # Full pipeline mode
+            print("\n[MODE] Full pipeline execution\n")
 
-        # Log experiment
-        viable_count = int(sweep_df["viable"].sum())
-        append_experiment(
-            run_id=prefix,
-            pipeline="sweep",
-            config={
-                "thresholds": config.thresholds,
-                "sentiment_model": config.sentiment_model,
-                "weight_volume": config.weight_volume,
-                "weight_sentiment": config.weight_sentiment,
-                "random_seed": config.random_seed,
-            },
-            outputs=[str(sweep_path)],
-            summary={
-                "n_thresholds": len(config.thresholds),
-                "viable_thresholds": viable_count,
-            },
-            notes=args.notes,
-        )
+            # Run full pipeline
+            results = run_pipeline(config)
 
-    else:
-        # Full pipeline mode
-        print("\n[MODE] Full pipeline execution\n")
+            # Save all outputs
+            output_paths = save_outputs(results, config)
 
-        # Run full pipeline
-        results = run_pipeline(config)
+            # Print summary to console
+            print("\n" + "=" * 60)
+            print("PIPELINE RESULTS SUMMARY")
+            print("=" * 60)
 
-        # Save all outputs
-        output_paths = save_outputs(results, config)
+            stage_counts = results["stage_counts"]
+            print(f"  Records loaded:      {stage_counts.get('after_load', 'N/A')}")
+            print(f"  After windowing:     {stage_counts.get('after_windowing', 'N/A')}")
+            print(f"  After sentiment:     {stage_counts.get('after_sentiment', 'N/A')}")
+            print(f"  After labelling:     {stage_counts.get('after_labelling', 'N/A')}")
 
-        # Print summary to console
-        print("\n" + "=" * 60)
-        print("PIPELINE RESULTS SUMMARY")
-        print("=" * 60)
+            if "excluded_count" in stage_counts:
+                total = stage_counts["after_windowing"]
+                excluded = stage_counts["excluded_count"]
+                rate = excluded / total * 100 if total > 0 else 0
+                print(f"  Excluded:            {excluded} ({rate:.1f}%)")
 
-        stage_counts = results["stage_counts"]
-        print(f"  Records loaded:      {stage_counts.get('after_load', 'N/A')}")
-        print(f"  After windowing:     {stage_counts.get('after_windowing', 'N/A')}")
-        print(f"  After sentiment:     {stage_counts.get('after_sentiment', 'N/A')}")
-        print(f"  After labelling:     {stage_counts.get('after_labelling', 'N/A')}")
+            # Class distribution
+            class_dist = results.get("class_distributions", {}).get("all", {})
+            if class_dist:
+                print(f"\n  Class distribution (all included):")
+                print(f"    Surge:        {class_dist.get('surge_count', 0)}")
+                print(f"    No-Surge:     {class_dist.get('no_surge_count', 0)}")
+                print(f"    Surge rate:   {class_dist.get('surge_rate', 0.0):.2f}%")
+                print(f"    Imbalance:    {class_dist.get('imbalance_ratio', 0.0):.2f}:1")
 
-        if "excluded_count" in stage_counts:
-            total = stage_counts["after_windowing"]
-            excluded = stage_counts["excluded_count"]
-            rate = excluded / total * 100 if total > 0 else 0
-            print(f"  Excluded:            {excluded} ({rate:.1f}%)")
+            # Stage durations
+            stage_durations = results.get("stage_durations", {})
+            total_duration = results.get("total_duration_seconds")
+            if stage_durations:
+                print(f"\n  Stage Durations:")
+                for stage_name, duration in stage_durations.items():
+                    label = stage_name.replace("_", " ").capitalize()
+                    print(f"    {label:20s}: {duration:>7.2f}s")
+                print(f"    {'─' * 30}")
+                print(f"    {'Total':20s}: {total_duration:>7.2f}s")
 
-        # Class distribution
-        class_dist = results.get("class_distributions", {}).get("all", {})
-        if class_dist:
-            print(f"\n  Class distribution (all included):")
-            print(f"    Surge:        {class_dist.get('surge_count', 0)}")
-            print(f"    No-Surge:     {class_dist.get('no_surge_count', 0)}")
-            print(f"    Surge rate:   {class_dist.get('surge_rate', 0.0):.2f}%")
-            print(f"    Imbalance:    {class_dist.get('imbalance_ratio', 0.0):.2f}:1")
+            # Output paths
+            print(f"\n  Output files:")
+            for key, path in output_paths.items():
+                print(f"    {key}: {path}")
 
-        # Stage durations
-        stage_durations = results.get("stage_durations", {})
-        total_duration = results.get("total_duration_seconds")
-        if stage_durations:
-            print(f"\n  Stage Durations:")
-            for stage_name, duration in stage_durations.items():
-                label = stage_name.replace("_", " ").capitalize()
-                print(f"    {label:20s}: {duration:>7.2f}s")
-            print(f"    {'─' * 30}")
-            print(f"    {'Total':20s}: {total_duration:>7.2f}s")
+            # Log experiment
+            from datetime import datetime
+            prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            append_experiment(
+                run_id=prefix,
+                pipeline="labelling",
+                config={
+                    "threshold_tau": config.threshold_tau,
+                    "weight_volume": config.weight_volume,
+                    "weight_sentiment": config.weight_sentiment,
+                    "sentiment_model": config.sentiment_model,
+                    "min_window_count": config.min_window_count,
+                    "surge_method": config.surge_method,
+                    "temporal_split_ratio": config.temporal_split_ratio,
+                    "random_seed": config.random_seed,
+                },
+                outputs=list(output_paths.values()),
+                summary={
+                    "train_size": results.get("class_distributions", {}).get("train", {}).get("total", 0),
+                    "test_size": results.get("class_distributions", {}).get("test", {}).get("total", 0),
+                    "surge_rate": results.get("class_distributions", {}).get("all", {}).get("surge_rate", 0.0),
+                    "exclusion_rate": results.get("exclusion_rate", 0.0),
+                    "total_duration_seconds": total_duration,
+                },
+                notes=args.notes,
+            )
 
-        # Output paths
-        print(f"\n  Output files:")
-        for key, path in output_paths.items():
-            print(f"    {key}: {path}")
-
-        # Log experiment
-        from datetime import datetime
-        prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        append_experiment(
-            run_id=prefix,
-            pipeline="labelling",
-            config={
-                "threshold_tau": config.threshold_tau,
-                "weight_volume": config.weight_volume,
-                "weight_sentiment": config.weight_sentiment,
-                "sentiment_model": config.sentiment_model,
-                "min_window_count": config.min_window_count,
-                "surge_method": config.surge_method,
-                "temporal_split_ratio": config.temporal_split_ratio,
-                "random_seed": config.random_seed,
-            },
-            outputs=list(output_paths.values()),
-            summary={
-                "train_size": results.get("class_distributions", {}).get("train", {}).get("total", 0),
-                "test_size": results.get("class_distributions", {}).get("test", {}).get("total", 0),
-                "surge_rate": results.get("class_distributions", {}).get("all", {}).get("surge_rate", 0.0),
-                "exclusion_rate": results.get("exclusion_rate", 0.0),
-                "total_duration_seconds": total_duration,
-            },
-            notes=args.notes,
-        )
-
-        print("\n" + "=" * 60)
-        print("DONE")
-        print("=" * 60)
+            print("\n" + "=" * 60)
+            print("DONE")
+            print("=" * 60)
 
 
 if __name__ == "__main__":

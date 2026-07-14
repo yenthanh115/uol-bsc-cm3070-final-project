@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
 from surge_pipeline.config import PipelineConfig  # noqa: E402
 from surge_pipeline.experiment_log import append_experiment  # noqa: E402
 from surge_pipeline.features import compute_features, FEATURE_COLUMNS  # noqa: E402
@@ -144,6 +145,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         default="",
         help="Free-text annotation for the experiment log.",
+    )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Log file path. Use 'auto' for timestamped filename in output/logs/.",
     )
     return parser.parse_args(argv)
 

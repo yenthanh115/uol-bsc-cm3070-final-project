@@ -24,11 +24,13 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   ├── figures/                        # ALL generated figures
 │   │   ├── eda/                        # EDA figures (01–09)
 │   │   └── evaluation/                 # Model evaluation figures (10+)
+│   ├── logs/                           # CLI run logs (via --log-file)
 │   └── experiment_log.jsonl            # Consolidated log of all runs
 │
 ├── src/
 │   ├── surge_pipeline/                 # Core pipeline modules
 │   │   ├── config.py                   # PipelineConfig dataclass (JSON-serialisable)
+│   │   ├── cli_logging.py             # Tee-style CLI output logging to file
 │   │   ├── loader.py                   # Data loading and ticker extraction
 │   │   ├── windowing.py                # Temporal windowed count computation
 │   │   ├── sentiment.py                # TextBlob sentiment scoring
@@ -120,6 +122,12 @@ python run_labeling.py --file-path ../input/raw/r_pennystocks_submissions_reddit
 
 # Enable verbose logging
 python run_labeling.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --verbose
+
+# Capture full CLI output to a log file (auto-timestamped)
+python run_labeling.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --verbose --log-file auto
+
+# Capture to a specific log file
+python run_labeling.py --file-path ../input/raw/r_pennystocks_submissions_reddit.csv --log-file my_run.log
 ```
 
 Key parameters:
@@ -133,6 +141,7 @@ Key parameters:
 | `--random-seed` | `42` | Seed for reproducibility |
 | `--sweep-only` | `false` | Only run threshold sweep |
 | `--notes` | *(empty)* | Free-text annotation for the experiment log |
+| `--log-file` | *(disabled)* | Log file path; use `auto` for timestamped file in `output/logs/` |
 
 ### Train and Evaluate the Model
 
@@ -143,6 +152,9 @@ python run_training.py --data-path ../output/processed/labelled_dataset.csv --ou
 
 # Skip figure generation
 python run_training.py --data-path ../output/processed/labelled_dataset.csv --no-figures
+
+# With log file capture
+python run_training.py --data-path ../output/processed/labelled_dataset.csv --log-file auto
 ```
 
 ### Run Exploratory Data Analysis
@@ -154,9 +166,25 @@ python -m eda.eda_pipeline
 ### Run Tests
 
 ```bash
-cd src
+# Run all tests
 python -m pytest tests/
+
+# Quick run: stop on first failure, minimal output, short tracebacks
+python -m pytest tests/ -x -q --tb=short
+
+# Save test results to a file (merges stderr into stdout)
+python -m pytest tests/ -x -q --tb=short 2>&1 > test_results.txt
 ```
+
+Useful pytest flags:
+
+| Flag | Description |
+|------|-------------|
+| `-x` | Stop immediately on first failure |
+| `-q` | Quiet mode (less verbose output) |
+| `--tb=short` | Shortened traceback on errors |
+| `-v` | Verbose mode (show each test name) |
+| `-k "keyword"` | Run only tests matching keyword |
 
 ## Configuration
 
@@ -194,6 +222,19 @@ Generated figures are saved under `output/figures/`:
 
 - `output/figures/eda/` — EDA visualisations (posting frequency, ticker distributions, etc.)
 - `output/figures/evaluation/` — Model evaluation plots (confusion matrix, ROC curve, threshold sensitivity)
+
+## CLI Log Files
+
+When `--log-file auto` is used, a timestamped log capturing the full CLI output (stdout + stderr + Python logging) is saved to `output/logs/`. This provides a traceable record of each run without needing to scroll back through terminal history.
+
+| `--log-file` value | Behaviour |
+|--------------------|-----------|
+| *(omitted)* | No log file (console only) |
+| `auto` | Auto-named: `output/logs/YYYY-MM-DD_HH-MM-SS_<pipeline>.log` |
+| `myrun.log` | Named file placed in `output/logs/` |
+| `../path/to/file.log` | Explicit path (parent dirs created automatically) |
+
+Each log file includes a header with the exact command, timestamp, and Python version for reproducibility.
 
 ## Experiment Log
 
