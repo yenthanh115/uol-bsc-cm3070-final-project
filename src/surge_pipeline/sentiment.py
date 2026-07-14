@@ -227,15 +227,16 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
                 times, times + _WINDOW_SECONDS, side="right"
             )
 
-            for j, orig_pos in enumerate(pos):
-                fl = forward_left[j]
-                fr = forward_right[j]
+            # Vectorized mean via prefix sums — O(n) instead of per-record slicing
+            cumsum_padded = np.concatenate([[0.0], np.cumsum(group_polarities)])
+            window_sums = cumsum_padded[forward_right] - cumsum_padded[forward_left]
+            window_counts = forward_right - forward_left
 
-                if fl < fr:
-                    mean_future[orig_pos] = group_polarities[fl:fr].mean()
-                else:
-                    # No forward records: default to current sentiment
-                    mean_future[orig_pos] = polarities[orig_pos]
+            has_forward = window_counts > 0
+            mean_future[pos[has_forward]] = (
+                window_sums[has_forward] / window_counts[has_forward]
+            )
+            mean_future[pos[~has_forward]] = polarities[pos[~has_forward]]
 
     # ------------------------------------------------------------------
     # Step 3: Sentiment change (AC3)
