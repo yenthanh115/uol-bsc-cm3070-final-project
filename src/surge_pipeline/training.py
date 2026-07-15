@@ -68,17 +68,31 @@ def _get_rf_param_grid() -> List[Dict[str, Any]]:
     ]
 
 
-def _get_xgb_param_grid(random_seed: int = 42) -> List[Dict[str, Any]]:
-    """XGBoost grid: ≤50 configurations.
+def _get_xgb_param_grid(
+    random_seed: int = 42, imbalance_ratio: float = 1.0
+) -> List[Dict[str, Any]]:
+    """XGBoost grid with scale_pos_weight for class imbalance handling (P6).
 
-    n_estimators(3) x max_depth(3) x learning_rate(3) x subsample(2) = 54 → capped at 50.
+    n_estimators(3) x max_depth(3) x learning_rate(3) x scale_pos_weight(3) = 81 → capped at 75.
+
+    The scale_pos_weight values are:
+      - 1.0: no reweighting (baseline)
+      - imbalance_ratio / 2: moderate reweighting
+      - imbalance_ratio: full reweighting (equivalent to sklearn's 'balanced')
+
+    Subsample fixed at 1.0 to make room for the weight dimension while
+    keeping the grid manageable.
     """
+    # Deduplicate weight values in case imbalance_ratio ≈ 1.0
+    weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
+
     grid = [
         {
             "n_estimators": n,
             "max_depth": d,
             "learning_rate": lr,
-            "subsample": s,
+            "subsample": 1.0,
+            "scale_pos_weight": w,
             "random_state": random_seed,
             "eval_metric": "logloss",
             "use_label_encoder": False,
@@ -86,9 +100,9 @@ def _get_xgb_param_grid(random_seed: int = 42) -> List[Dict[str, Any]]:
         for n in [50, 100, 200]
         for d in [3, 5, 7]
         for lr in [0.01, 0.1, 0.3]
-        for s in [0.8, 1.0]
+        for w in weight_values
     ]
-    return grid[:50]
+    return grid[:75]
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +293,10 @@ def _make_rf(params: Dict[str, Any], random_seed: int) -> RandomForestClassifier
 
 
 def _make_xgb(params: Dict[str, Any], random_seed: int):
-    """Create an XGBClassifier instance from params."""
+    """Create an XGBClassifier instance from params.
+
+    Passes scale_pos_weight for class imbalance handling (P6).
+    """
     from xgboost import XGBClassifier
 
     return XGBClassifier(
@@ -287,6 +304,7 @@ def _make_xgb(params: Dict[str, Any], random_seed: int):
         max_depth=params["max_depth"],
         learning_rate=params["learning_rate"],
         subsample=params["subsample"],
+        scale_pos_weight=params.get("scale_pos_weight", 1.0),
         random_state=random_seed,
         eval_metric=params.get("eval_metric", "logloss"),
         use_label_encoder=False,
@@ -463,10 +481,16 @@ def train_models(
     X_train_full = train_df[FEATURE_COLUMNS].values.astype(np.float64)
     y_train_full = train_df["surge_label"].values.astype(np.int64)
 
+    # Compute class imbalance ratio for scale_pos_weight (P6)
+    n_positive = int(np.sum(y_train_full == 1))
+    n_negative = int(np.sum(y_train_full == 0))
+    imbalance_ratio = float(n_negative) / max(n_positive, 1)
+
     logger.info(
-        "Training data: %d samples, %d features | surge=%.1f%%",
+        "Training data: %d samples, %d features | surge=%.1f%% | "
+        "imbalance_ratio=%.1f:1",
         X_train_full.shape[0], X_train_full.shape[1],
-        y_train_full.mean() * 100,
+        y_train_full.mean() * 100, imbalance_ratio,
     )
 
     # Create temporal CV folds and splits
@@ -491,10 +515,10 @@ def train_models(
         X_train_full, y_train_full, splits, random_seed, _make_rf,
     )
 
-    # --- XGBoost ---
+    # --- XGBoost (with scale_pos_weight grid for class imbalance — P6) ---
     logger.info("Training XGBoost...")
     models["xgboost"] = _train_single_model(
-        "xgboost", _get_xgb_param_grid(random_seed),
+        "xgboost", _get_xgb_param_grid(random_seed, imbalance_ratio=imbalance_ratio),
         X_train_full, y_train_full, splits, random_seed, _make_xgb,
     )
 
