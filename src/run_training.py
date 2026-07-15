@@ -54,10 +54,13 @@ from surge_pipeline.evaluation import (  # noqa: E402
     ModelMetrics,
     ThresholdResult,
     compute_bootstrap_ci,
+    compute_builtin_importance,
+    compute_feature_importance,
     evaluate_baselines,
     find_optimal_threshold,
     generate_evaluation_figures,
     mcnemar_pairwise_test,
+    plot_feature_importance,
     plot_roc_curve_combined,
     produce_final_summary,
     save_evaluation_results,
@@ -178,6 +181,17 @@ def main(argv: list[str] | None = None) -> None:
     )
     logger = logging.getLogger(__name__)
 
+    # Resolve log file path and run the pipeline under tee_output
+    log_path = resolve_log_path(args.log_file, pipeline="training")
+    if log_path:
+        logger.info("Logging output to: %s", log_path)
+
+    with tee_output(log_path):
+        _run_pipeline(args, logger)
+
+
+def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
+    """Core pipeline logic, extracted so tee_output can wrap it."""
     print("=" * 60)
     print("MULTI-MODEL TRAINING & ADVANCED EVALUATION")
     print("=" * 60)
@@ -342,6 +356,9 @@ def main(argv: list[str] | None = None) -> None:
             print(f"    {m.metric_name:12s}: {m.point_estimate:.4f} "
                   f"[{m.ci_lower:.4f}, {m.ci_upper:.4f}]")
 
+    # Timestamp prefix for all output files (YYYY-MM-DD_HH-MM)
+    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
     # ------------------------------------------------------------------
     # 7b. Classification threshold tuning (P1)
     # ------------------------------------------------------------------
@@ -395,6 +412,74 @@ def main(argv: list[str] | None = None) -> None:
             )
 
     # ------------------------------------------------------------------
+    # 7c. Feature importance (P3)
+    # ------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("FEATURE IMPORTANCE (permutation, n_repeats=10, scoring=roc_auc)")
+    print("=" * 60)
+
+    importance_results: list = []
+
+    for name, tm in training_result.models.items():
+        fi = compute_feature_importance(
+            model=tm.model,
+            scaler=tm.scaler,
+            X_test=X_test,
+            y_test=y_test,
+            model_name=name,
+            feature_names=FEATURE_COLUMNS,
+            n_repeats=10,
+            random_seed=args.seed,
+        )
+        importance_results.append(fi)
+
+        ranked = fi.ranked()
+        print(f"\n  {name}:")
+        for rank, (feat, imp, std) in enumerate(ranked, 1):
+            print(f"    {rank:2d}. {feat:<30s} {imp:+.4f} ± {std:.4f}")
+
+    # Also get built-in importances for tree models
+    builtin_results: dict = {}
+    for name, tm in training_result.models.items():
+        bi = compute_builtin_importance(tm.model, name, FEATURE_COLUMNS)
+        if bi is not None:
+            builtin_results[name] = bi
+
+    if builtin_results:
+        print("\n  Built-in (gain-based) importances:")
+        for name, bi in builtin_results.items():
+            ranked = bi.ranked()
+            print(f"    {name}: top-3 = "
+                  f"{ranked[0][0]} ({ranked[0][1]:.3f}), "
+                  f"{ranked[1][0]} ({ranked[1][1]:.3f}), "
+                  f"{ranked[2][0]} ({ranked[2][1]:.3f})")
+
+    # Save feature importance JSON
+    fi_output = {
+        "experiment": "feature_importance",
+        "method": "permutation",
+        "scoring": "roc_auc",
+        "n_repeats": 10,
+        "timestamp": datetime.now().isoformat(),
+        "models": {fi.model_name: fi.to_dict() for fi in importance_results},
+    }
+    if builtin_results:
+        fi_output["builtin_importances"] = {
+            name: bi.to_dict() for name, bi in builtin_results.items()
+        }
+
+    fi_path = Path(args.output_dir) / f"{prefix}_feature_importance.json"
+    fi_path.parent.mkdir(parents=True, exist_ok=True)
+    fi_path.write_text(json.dumps(fi_output, indent=2), encoding="utf-8")
+    print(f"\n  Feature importance: {fi_path}")
+
+    # Generate figure
+    if not args.no_figures and importance_results:
+        figures_dir = Path(args.output_dir).parent / "figures" / "evaluation"
+        fi_fig_path = plot_feature_importance(importance_results, figures_dir=figures_dir)
+        print(f"  Figure: {fi_fig_path}")
+
+    # ------------------------------------------------------------------
     # 8. Success tier validation (Phase 2.4)
     # ------------------------------------------------------------------
     print("\n" + "=" * 60)
@@ -419,9 +504,6 @@ def main(argv: list[str] | None = None) -> None:
     print("\n" + "=" * 60)
     print("FINAL SUMMARY")
     print("=" * 60)
-
-    # Timestamp prefix for experiment comparison (YYYY-MM-DD_HH-MM)
-    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     summary = produce_final_summary(
         model_metrics=model_metrics,

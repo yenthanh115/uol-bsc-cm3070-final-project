@@ -1183,6 +1183,212 @@ def plot_classification_threshold_sensitivity(
     )
 
 
+# ---------------------------------------------------------------------------
+# Feature importance (P3)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FeatureImportanceResult:
+    """Result from feature importance computation for a single model."""
+
+    model_name: str
+    method: str  # "permutation" or "builtin_gain"
+    feature_names: List[str]
+    importances: List[float]
+    importances_std: List[float]
+    scoring: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialisation."""
+        return asdict(self)
+
+    def ranked(self) -> List[Tuple[str, float, float]]:
+        """Return features sorted by importance (descending).
+
+        Returns
+        -------
+        List[Tuple[str, float, float]]
+            List of (feature_name, importance, std) sorted descending.
+        """
+        indices = np.argsort(self.importances)[::-1]
+        return [
+            (self.feature_names[i], self.importances[i], self.importances_std[i])
+            for i in indices
+        ]
+
+
+def compute_feature_importance(
+    model,
+    scaler: "StandardScaler",
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    model_name: str,
+    feature_names: List[str],
+    n_repeats: int = 10,
+    random_seed: int = 42,
+) -> FeatureImportanceResult:
+    """Compute permutation importance on the test set.
+
+    Measures the decrease in AUC-ROC when each feature is randomly
+    shuffled, repeated n_repeats times for stability.
+
+    Parameters
+    ----------
+    model : estimator
+        Trained sklearn-compatible model with predict_proba.
+    scaler : StandardScaler
+        Scaler fitted on training data (applied to X_test before scoring).
+    X_test : np.ndarray
+        Raw (unscaled) test feature matrix.
+    y_test : np.ndarray
+        True binary labels for the test set.
+    model_name : str
+        Model identifier for the result.
+    feature_names : List[str]
+        Names of the features (matching columns of X_test).
+    n_repeats : int
+        Number of shuffles per feature (default 10).
+    random_seed : int
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    FeatureImportanceResult
+        Permutation importance values per feature.
+    """
+    from sklearn.inspection import permutation_importance
+
+    # Scale test data using the already-fitted scaler.
+    # permutation_importance shuffles columns of X then scores —
+    # we pass scaled data so shuffling happens in scaled space.
+    # This is standard practice: the model expects scaled input.
+    X_test_scaled = scaler.transform(X_test)
+
+    result = permutation_importance(
+        model,
+        X_test_scaled,
+        y_test,
+        scoring="roc_auc",
+        n_repeats=n_repeats,
+        random_state=random_seed,
+        n_jobs=-1,
+    )
+
+    return FeatureImportanceResult(
+        model_name=model_name,
+        method="permutation",
+        feature_names=list(feature_names),
+        importances=[float(x) for x in result.importances_mean],
+        importances_std=[float(x) for x in result.importances_std],
+        scoring="roc_auc",
+    )
+
+
+def compute_builtin_importance(
+    model,
+    model_name: str,
+    feature_names: List[str],
+) -> Optional[FeatureImportanceResult]:
+    """Extract built-in feature importances (gain-based) if available.
+
+    Works for tree-based models (RF, XGBoost) that expose
+    `feature_importances_`. Returns None for models without this attribute.
+
+    Parameters
+    ----------
+    model : estimator
+        Trained model.
+    model_name : str
+        Model identifier.
+    feature_names : List[str]
+        Feature names matching the model's input.
+
+    Returns
+    -------
+    Optional[FeatureImportanceResult]
+        Built-in importances, or None if not available.
+    """
+    if not hasattr(model, "feature_importances_"):
+        return None
+
+    importances = model.feature_importances_
+    return FeatureImportanceResult(
+        model_name=model_name,
+        method="builtin_gain",
+        feature_names=list(feature_names),
+        importances=[float(x) for x in importances],
+        importances_std=[0.0] * len(importances),  # no std for built-in
+        scoring="gain",
+    )
+
+
+def plot_feature_importance(
+    results: List[FeatureImportanceResult],
+    figures_dir: Path | None = None,
+) -> Path:
+    """Generate a grouped horizontal bar chart comparing feature importance.
+
+    Shows permutation importance (mean decrease in AUC) for all models
+    side-by-side, features sorted by the best model's importance.
+
+    Parameters
+    ----------
+    results : List[FeatureImportanceResult]
+        Permutation importance results for each model.
+    figures_dir : Path, optional
+        Override output directory.
+
+    Returns
+    -------
+    Path
+        Path to the saved figure.
+    """
+    _setup_plot_style()
+
+    if not results:
+        raise ValueError("No results to plot.")
+
+    # Sort features by the first model's importance (descending)
+    primary = results[0]
+    sort_idx = np.argsort(primary.importances)  # ascending for barh
+    feature_names = [primary.feature_names[i] for i in sort_idx]
+
+    n_features = len(feature_names)
+    n_models = len(results)
+    bar_height = 0.8 / n_models
+    colors = ["#2196F3", "#4CAF50", "#FF9800"]  # blue, green, orange
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    for j, res in enumerate(results):
+        importances_sorted = [res.importances[i] for i in sort_idx]
+        stds_sorted = [res.importances_std[i] for i in sort_idx]
+        y_positions = np.arange(n_features) + j * bar_height
+
+        ax.barh(
+            y_positions,
+            importances_sorted,
+            height=bar_height,
+            xerr=stds_sorted,
+            label=res.model_name.replace("_", " ").title(),
+            color=colors[j % len(colors)],
+            alpha=0.85,
+            capsize=2,
+        )
+
+    ax.set_yticks(np.arange(n_features) + bar_height * (n_models - 1) / 2)
+    ax.set_yticklabels(feature_names, fontsize=9)
+    ax.set_xlabel("Mean Decrease in AUC-ROC (Permutation Importance)")
+    ax.set_title("Feature Importance Comparison (Permutation, test set)")
+    ax.legend(loc="lower right")
+    ax.axvline(x=0, color="gray", linewidth=0.5, linestyle="-")
+
+    plt.tight_layout()
+
+    return _save_figure(fig, "13_feature_importance_comparison", figures_dir)
+
+
 def generate_evaluation_figures(
     y_true: np.ndarray,
     y_pred: np.ndarray,
