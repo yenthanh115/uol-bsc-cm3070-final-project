@@ -1,0 +1,74 @@
+{
+  "experiment": "cross_dataset_validation",
+  "model_source": "D:\\git\\uol-bsc-cm3070-final-project\\output\\models",
+  "eval_dataset": "D:\\git\\uol-bsc-cm3070-final-project\\output\\processed\\labelled_dataset.csv",
+  "partition": "test",
+  "timestamp": "2026-07-15T08:40:40.262536",
+  "results": [
+    {
+      "model_name": "logistic_regression",
+      "roc_auc": 0.6518572975550634,
+      "precision": 0.012965050732807215,
+      "recall": 0.7419354838709677,
+      "f1": 0.02548476454293629,
+      "accuracy": 0.46339231238560097,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          1496,
+          1751
+        ],
+        [
+          8,
+          23
+        ]
+      ]
+    },
+    {
+      "model_name": "random_forest",
+      "roc_auc": 0.6560944594017306,
+      "precision": 0.016115351993214587,
+      "recall": 0.6129032258064516,
+      "f1": 0.03140495867768595,
+      "accuracy": 0.6424649176327029,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          2087,
+          1160
+        ],
+        [
+          12,
+          19
+        ]
+      ]
+    },
+    {
+      "model_name": "xgboost",
+      "roc_auc": 0.6938066900463952,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.9905430140329469,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          3247,
+          0
+        ],
+        [
+          31,
+          0
+        ]
+      ]
+    }
+  ],
+  "summary": {
+    "best_model": "xgboost",
+    "best_auc": 0.6938066900463952,
+    "num_models": 3
+  }
+}
