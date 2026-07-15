@@ -1,9 +1,0 @@
-{
-  "prefix": "2026-07-13_19-34",
-  "outputs": {
-    "labelled_dataset": "output\\processed\\2026-07-13_19-34_labelled_dataset.csv",
-    "pipeline_summary": "output\\processed\\2026-07-13_19-34_pipeline_summary.json",
-    "threshold_sensitivity": "output\\processed\\2026-07-13_19-34_threshold_sensitivity.csv",
-    "pipeline_config": "output\\processed\\2026-07-13_19-34_pipeline_config.json"
-  }
-}

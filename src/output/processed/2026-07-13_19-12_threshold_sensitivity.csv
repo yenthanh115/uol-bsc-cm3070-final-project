@@ -1,6 +1,0 @@
-threshold,surge_count,no_surge_count,surge_rate,imbalance_ratio,viable
-0.5,40,213,15.810276679841898,5.325,False
-1.0,4,249,1.5810276679841897,62.25,False
-1.5,4,249,1.5810276679841897,62.25,False
-2.0,4,249,1.5810276679841897,62.25,False
-2.5,0,253,0.0,inf,False
