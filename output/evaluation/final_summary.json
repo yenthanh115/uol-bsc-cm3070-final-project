@@ -1,8 +1,8 @@
 {
-  "best_model": "random_forest",
-  "best_auc_roc": 0.7435846488570095,
+  "best_model": "xgboost",
+  "best_auc_roc": 0.8883848521548947,
   "overall_pass": true,
-  "success_tier_achieved": "target",
+  "success_tier_achieved": "stretch",
   "recommended_config": {
     "threshold_tau": 1.5,
     "weight_w2": 0.5
@@ -10,25 +10,25 @@
   "phase1_vs_phase2": null,
   "models": {
     "logistic_regression": {
-      "auc_roc": 0.6801017316232354,
-      "precision": 0.01277139208173691,
-      "recall": 0.6451612903225806,
-      "f1": 0.025046963055729492,
-      "tier": "minimum"
-    },
-    "random_forest": {
-      "auc_roc": 0.7435846488570095,
-      "precision": 0.125,
-      "recall": 0.12903225806451613,
-      "f1": 0.12698412698412698,
+      "auc_roc": 0.7065467226853158,
+      "precision": 0.013219342245064367,
+      "recall": 0.8008982035928144,
+      "f1": 0.0260093828240842,
       "tier": "target"
     },
+    "random_forest": {
+      "auc_roc": 0.8758195425133909,
+      "precision": 0.04014570843135767,
+      "recall": 0.7919161676646707,
+      "f1": 0.07641747923438064,
+      "tier": "stretch"
+    },
     "xgboost": {
-      "auc_roc": 0.7367793596073795,
+      "auc_roc": 0.8883848521548947,
       "precision": 0.0,
       "recall": 0.0,
       "f1": 0.0,
-      "tier": "target"
+      "tier": "stretch"
     }
   },
   "mcnemar_tests": [
@@ -47,7 +47,7 @@
     {
       "model_a": "random_forest",
       "model_b": "xgboost",
-      "p_value": 4.7854839743773405e-05,
+      "p_value": 0.0,
       "is_significant": true
     }
   ]
