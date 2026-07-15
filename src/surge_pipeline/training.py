@@ -119,6 +119,9 @@ class TrainedModel:
     training_duration_seconds: float
     n_configs_evaluated: int
     feature_columns: List[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
+    # Validation predictions from the last CV fold (for threshold tuning)
+    val_y_true: np.ndarray | None = field(default=None, repr=False)
+    val_y_prob: np.ndarray | None = field(default=None, repr=False)
 
 
 @dataclass
@@ -380,6 +383,14 @@ def _train_single_model(
     final_model = make_model_fn(best_params, random_seed)
     final_model.fit(X_train_scaled, y_train_full)
 
+    # Generate validation predictions on the last CV fold for threshold tuning.
+    # Use the final model's scaler (fitted on full training data) for consistency
+    # with how test-set predictions will be generated.
+    last_train_idx, last_val_idx = splits[-1]
+    X_val_last = final_scaler.transform(X_train_full[last_val_idx])
+    val_y_true = y_train_full[last_val_idx]
+    val_y_prob = final_model.predict_proba(X_val_last)[:, 1]
+
     duration = time.time() - start_time
 
     logger.info(
@@ -405,6 +416,8 @@ def _train_single_model(
         cv_results=[best_cv_result],
         training_duration_seconds=duration,
         n_configs_evaluated=len(param_grid),
+        val_y_true=val_y_true,
+        val_y_prob=val_y_prob,
     )
 
 
@@ -485,12 +498,31 @@ def train_models(
         X_train_full, y_train_full, splits, random_seed, _make_xgb,
     )
 
-    # Serialise models to disk
+    # Serialise models to disk (including optimal threshold from validation fold)
+    from surge_pipeline.evaluation import find_optimal_threshold
+
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, tm in models.items():
+        # Select optimal threshold on last CV validation fold
+        optimal_threshold = 0.5  # default fallback
+        if tm.val_y_true is not None and tm.val_y_prob is not None:
+            threshold_result = find_optimal_threshold(
+                tm.val_y_true, tm.val_y_prob, model_name=name
+            )
+            optimal_threshold = threshold_result.optimal_threshold
+            logger.info(
+                "%s — optimal threshold: %.2f (F1=%.3f on validation fold)",
+                name, optimal_threshold, threshold_result.f1_at_threshold,
+            )
+
         model_path = out_dir / f"{name}_{phase}_{random_seed}.joblib"
         joblib.dump(
-            {"model": tm.model, "scaler": tm.scaler, "params": tm.best_params},
+            {
+                "model": tm.model,
+                "scaler": tm.scaler,
+                "params": tm.best_params,
+                "optimal_threshold": optimal_threshold,
+            },
             model_path,
         )
         logger.info("Saved model: %s", model_path)
@@ -640,3 +672,25 @@ def predict(
     y_prob = result.model.predict_proba(X_scaled)[:, 1]
 
     return y_true, y_pred, y_prob
+
+
+def predict_with_threshold(
+    y_prob: np.ndarray,
+    threshold: float = 0.5,
+) -> np.ndarray:
+    """Apply a custom classification threshold to predicted probabilities.
+
+    Parameters
+    ----------
+    y_prob : np.ndarray
+        Predicted probabilities for the positive class.
+    threshold : float
+        Classification threshold (default 0.5). A sample is predicted
+        positive if y_prob >= threshold.
+
+    Returns
+    -------
+    np.ndarray
+        Binary predictions (0 or 1).
+    """
+    return (y_prob >= threshold).astype(np.int64)

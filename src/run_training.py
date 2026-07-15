@@ -22,6 +22,7 @@ import json
 import logging
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -30,6 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from sklearn.metrics import (  # noqa: E402
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
 from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
 from surge_pipeline.config import PipelineConfig  # noqa: E402
@@ -38,12 +47,15 @@ from surge_pipeline.features import compute_features, FEATURE_COLUMNS  # noqa: E
 from surge_pipeline.training import (  # noqa: E402
     train_models,
     get_training_summary,
+    predict_with_threshold,
     TrainingPipelineResult,
 )
 from surge_pipeline.evaluation import (  # noqa: E402
     ModelMetrics,
+    ThresholdResult,
     compute_bootstrap_ci,
     evaluate_baselines,
+    find_optimal_threshold,
     generate_evaluation_figures,
     mcnemar_pairwise_test,
     plot_roc_curve_combined,
@@ -240,11 +252,6 @@ def main(argv: list[str] | None = None) -> None:
         probabilities[name] = y_prob
 
         # Compute metrics
-        from sklearn.metrics import (
-            accuracy_score, precision_score, recall_score,
-            f1_score, roc_auc_score, confusion_matrix,
-        )
-
         acc = float(accuracy_score(y_test, y_pred))
         prec = float(precision_score(y_test, y_pred, zero_division=0.0))
         rec = float(recall_score(y_test, y_pred, zero_division=0.0))
@@ -336,6 +343,58 @@ def main(argv: list[str] | None = None) -> None:
                   f"[{m.ci_lower:.4f}, {m.ci_upper:.4f}]")
 
     # ------------------------------------------------------------------
+    # 7b. Classification threshold tuning (P1)
+    # ------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("CLASSIFICATION THRESHOLD TUNING (selected on validation fold)")
+    print("=" * 60)
+
+    threshold_results: dict[str, ThresholdResult] = {}
+    tuned_metrics: dict[str, ModelMetrics] = {}
+
+    for name, tm in training_result.models.items():
+        if tm.val_y_true is not None and tm.val_y_prob is not None:
+            # Select optimal threshold on the last CV validation fold
+            tr = find_optimal_threshold(
+                tm.val_y_true, tm.val_y_prob, model_name=name
+            )
+            threshold_results[name] = tr
+
+            # Apply tuned threshold to test set
+            y_pred_tuned = predict_with_threshold(probabilities[name], tr.optimal_threshold)
+
+            prec_tuned = float(precision_score(y_test, y_pred_tuned, zero_division=0.0))
+            rec_tuned = float(recall_score(y_test, y_pred_tuned, zero_division=0.0))
+            f1_tuned = float(f1_score(y_test, y_pred_tuned, zero_division=0.0))
+            cm_tuned = confusion_matrix(y_test, y_pred_tuned, labels=[0, 1]).tolist()
+
+            tuned_metrics[name] = ModelMetrics(
+                model_name=name,
+                accuracy=float(accuracy_score(y_test, y_pred_tuned)),
+                precision=prec_tuned,
+                recall=rec_tuned,
+                f1=f1_tuned,
+                auc_roc=model_metrics[name].auc_roc,  # AUC doesn't change
+                confusion_matrix=cm_tuned,
+                n_test_samples=len(y_test),
+            )
+
+            f1_gain = f1_tuned - model_metrics[name].f1
+            print(f"\n  {name}:")
+            print(f"    Default (0.50): P={model_metrics[name].precision:.3f}  "
+                  f"R={model_metrics[name].recall:.3f}  "
+                  f"F1={model_metrics[name].f1:.3f}")
+            print(f"    Tuned   ({tr.optimal_threshold:.2f}): P={prec_tuned:.3f}  "
+                  f"R={rec_tuned:.3f}  "
+                  f"F1={f1_tuned:.3f}  ← {f1_gain:+.3f} F1")
+            print(f"    (Threshold selected on validation fold: "
+                  f"val_F1={tr.f1_at_threshold:.3f})")
+        else:
+            logger.warning(
+                "%s: No validation predictions available for threshold tuning.", name
+            )
+
+    # ------------------------------------------------------------------
     # 8. Success tier validation (Phase 2.4)
     # ------------------------------------------------------------------
     print("\n" + "=" * 60)
@@ -425,6 +484,42 @@ def main(argv: list[str] | None = None) -> None:
     out_path = save_evaluation_results(eval_metrics_list, output_dir=args.output_dir, timestamp_prefix=prefix)
     print(f"\n  Evaluation metrics: {out_path}")
     print(f"  Final summary    : {Path(args.output_dir) / f'{prefix}_final_summary.json'}")
+
+    # Save threshold tuning results as separate JSON
+    if threshold_results:
+        threshold_output = {
+            "experiment": "threshold_tuning",
+            "strategy": "max_f1",
+            "selection_method": "last_cv_validation_fold",
+            "timestamp": datetime.now().isoformat(),
+            "models": {},
+        }
+        for name, tr in threshold_results.items():
+            threshold_output["models"][name] = {
+                "optimal_threshold": tr.optimal_threshold,
+                "validation_fold_metrics": {
+                    "precision": tr.precision_at_threshold,
+                    "recall": tr.recall_at_threshold,
+                    "f1": tr.f1_at_threshold,
+                },
+                "test_set_metrics_at_tuned_threshold": (
+                    asdict(tuned_metrics[name]) if name in tuned_metrics else None
+                ),
+                "test_set_metrics_at_default_0_5": (
+                    asdict(model_metrics[name]) if name in model_metrics else None
+                ),
+            }
+            # Also add to model_metrics dict representation
+            threshold_output["models"][name]["f1_improvement"] = (
+                tuned_metrics[name].f1 - model_metrics[name].f1
+                if name in tuned_metrics else 0.0
+            )
+
+        threshold_path = Path(args.output_dir) / f"{prefix}_threshold_tuning.json"
+        threshold_path.write_text(
+            json.dumps(threshold_output, indent=2, default=str), encoding="utf-8"
+        )
+        print(f"  Threshold tuning : {threshold_path}")
 
     # ------------------------------------------------------------------
     # 12. Latest outputs manifest (for downstream tool discovery)

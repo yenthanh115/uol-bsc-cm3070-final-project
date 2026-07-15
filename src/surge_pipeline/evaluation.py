@@ -137,6 +137,25 @@ class SuccessTierResult:
 
 
 @dataclass
+class ThresholdResult:
+    """Result from optimal classification threshold selection."""
+
+    model_name: str
+    optimal_threshold: float
+    strategy: str  # "max_f1" or "precision_floor"
+    precision_at_threshold: float
+    recall_at_threshold: float
+    f1_at_threshold: float
+    precision_at_default: float
+    recall_at_default: float
+    f1_at_default: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialisation."""
+        return asdict(self)
+
+
+@dataclass
 class FinalSummary:
     """Final evaluation summary encompassing all analysis results."""
 
@@ -150,6 +169,99 @@ class FinalSummary:
     tier_results: Dict[str, Any]
     recommended_config: Dict[str, Any]
     phase1_vs_phase2: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# Classification threshold tuning (P1)
+# ---------------------------------------------------------------------------
+
+
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    model_name: str = "Model",
+    strategy: str = "max_f1",
+    precision_floor: float = 0.10,
+) -> ThresholdResult:
+    """Find the optimal classification probability threshold.
+
+    Sweeps thresholds from 0.01 to 0.99 and selects the best operating
+    point based on the chosen strategy. This should be called on a
+    **validation set** (not the test set) to avoid optimistic bias.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True binary labels.
+    y_prob : np.ndarray
+        Predicted probabilities for the positive class.
+    model_name : str
+        Model identifier for the result.
+    strategy : str
+        Threshold selection strategy:
+        - "max_f1": Maximise F1-score (default).
+        - "precision_floor": Find the lowest threshold where
+          precision >= `precision_floor`, then maximise F1 among
+          those candidates.
+    precision_floor : float
+        Minimum acceptable precision (only used with "precision_floor"
+        strategy). Default is 0.10 (10%).
+
+    Returns
+    -------
+    ThresholdResult
+        Contains the optimal threshold and metrics at both the optimal
+        and default (0.5) thresholds for comparison.
+    """
+    thresholds = np.arange(0.01, 1.00, 0.01)
+    precisions = np.empty(len(thresholds))
+    recalls = np.empty(len(thresholds))
+    f1_scores = np.empty(len(thresholds))
+
+    for i, t in enumerate(thresholds):
+        y_pred_t = (y_prob >= t).astype(int)
+        precisions[i] = precision_score(y_true, y_pred_t, zero_division=0.0)
+        recalls[i] = recall_score(y_true, y_pred_t, zero_division=0.0)
+        f1_scores[i] = f1_score(y_true, y_pred_t, zero_division=0.0)
+
+    if strategy == "precision_floor":
+        # Find candidates where precision >= floor
+        valid_mask = precisions >= precision_floor
+        if valid_mask.any():
+            # Among valid candidates, maximise F1
+            valid_f1 = np.where(valid_mask, f1_scores, -1.0)
+            best_idx = int(np.argmax(valid_f1))
+        else:
+            # No threshold achieves the precision floor; fall back to max F1
+            logger.warning(
+                "%s: No threshold achieves precision >= %.2f. "
+                "Falling back to max F1 strategy.",
+                model_name, precision_floor,
+            )
+            best_idx = int(np.argmax(f1_scores))
+    else:
+        # Default: max F1
+        best_idx = int(np.argmax(f1_scores))
+
+    optimal_threshold = float(thresholds[best_idx])
+
+    # Metrics at default threshold (0.5)
+    y_pred_default = (y_prob >= 0.5).astype(int)
+    prec_default = float(precision_score(y_true, y_pred_default, zero_division=0.0))
+    rec_default = float(recall_score(y_true, y_pred_default, zero_division=0.0))
+    f1_default = float(f1_score(y_true, y_pred_default, zero_division=0.0))
+
+    return ThresholdResult(
+        model_name=model_name,
+        optimal_threshold=optimal_threshold,
+        strategy=strategy,
+        precision_at_threshold=float(precisions[best_idx]),
+        recall_at_threshold=float(recalls[best_idx]),
+        f1_at_threshold=float(f1_scores[best_idx]),
+        precision_at_default=prec_default,
+        recall_at_default=rec_default,
+        f1_at_default=f1_default,
+    )
 
 
 # ---------------------------------------------------------------------------
