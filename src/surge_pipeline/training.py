@@ -271,11 +271,10 @@ def _make_lr(params: Dict[str, Any], random_seed: int) -> LogisticRegression:
     """Create a LogisticRegression instance from params."""
     return LogisticRegression(
         C=params["C"],
-        penalty="elasticnet",
         l1_ratio=params["l1_ratio"],
         solver=params["solver"],
         random_state=random_seed,
-        max_iter=2000,
+        max_iter=5000,
         class_weight="balanced",
     )
 
