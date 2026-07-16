@@ -1,0 +1,54 @@
+{
+  "best_model": "xgboost",
+  "best_auc_roc": 0.891658975653557,
+  "overall_pass": true,
+  "success_tier_achieved": "stretch",
+  "recommended_config": {
+    "threshold_tau": 1.0,
+    "weight_w2": 0.5
+  },
+  "phase1_vs_phase2": null,
+  "models": {
+    "logistic_regression": {
+      "auc_roc": 0.7065467226853158,
+      "precision": 0.013219342245064367,
+      "recall": 0.8008982035928144,
+      "f1": 0.0260093828240842,
+      "tier": "target"
+    },
+    "random_forest": {
+      "auc_roc": 0.8758195425133909,
+      "precision": 0.04014570843135767,
+      "recall": 0.7919161676646707,
+      "f1": 0.07641747923438064,
+      "tier": "stretch"
+    },
+    "xgboost": {
+      "auc_roc": 0.891658975653557,
+      "precision": 0.042591294868800124,
+      "recall": 0.8188622754491018,
+      "f1": 0.08097106061727481,
+      "tier": "stretch"
+    }
+  },
+  "mcnemar_tests": [
+    {
+      "model_a": "logistic_regression",
+      "model_b": "random_forest",
+      "p_value": 0.0,
+      "is_significant": true
+    },
+    {
+      "model_a": "logistic_regression",
+      "model_b": "xgboost",
+      "p_value": 0.0,
+      "is_significant": true
+    },
+    {
+      "model_a": "random_forest",
+      "model_b": "xgboost",
+      "p_value": 2.6922267892525787e-08,
+      "is_significant": true
+    }
+  ]
+}
