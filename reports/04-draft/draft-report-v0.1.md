@@ -1,9 +1,24 @@
-# Predicting Posting-Volume Surges on r/pennystocks Using Machine Learning
+# Predicting Posting-Volume Surges on Reddit Financial Communities Using Machine Learning
 
 ## Abstract
 
-<!-- Written last, after all sections are complete -->
+Rapid surges in social media posting about specific stocks can signal coordinated retail trading activity, yet detecting these surges in advance remains an open challenge due to temporal data leakage risks and the sparsity of ticker-level discussion. This project investigates whether posting-volume surges on Reddit financial communities can be predicted using only backward-looking features available at observation time. A composite surge metric combines z-score normalised posting-volume growth with sentiment change magnitude, producing binary labels from raw submission data. The pipeline is evaluated on two subreddits at opposite ends of the data density spectrum: r/pennystocks (80,212 records) and r/wallstreetbets (1,293,981 records).
 
+Three classifiers are compared: Logistic Regression, Random Forest, and XGBoost, trained with expanding-window temporal cross-validation (k=4 folds) and evaluated on a held-out future partition (80/20 temporal split). Eleven features are engineered from timestamps and text content; no post-creation engagement metrics are used, eliminating look-ahead bias.
+
+On r/wallstreetbets, XGBoost achieves AUC-ROC of 0.889 (stretch tier), while Random Forest reaches 0.754 on r/pennystocks (target tier). Validation-fold threshold tuning proves essential for practical utility, lifting XGBoost from zero positive predictions to F1=0.178. Cross-dataset transfer (WSB-trained models evaluated on r/pennystocks) yields AUC=0.694, demonstrating partial generalisation while confirming that thresholds require community-specific recalibration.
+
+These results demonstrate that posting-volume surges are predictable from observation-time features alone, with data density being the primary determinant of model performance. The methodology provides a reproducible, leakage-free framework applicable to any timestamped discussion forum, offering a foundation for real-time surge detection systems relevant to market surveillance and retail investor research.
+
+<!-- 
+SIDE NOTE (DELETE LATER)
+- why use combined/composite metric
+- why use 2 datasets, why pick pennystocks and wsb
+- why pick 3 model: LR, RF, XGB
+- why use validation-fold
+- why not k=5 or k=10 but k=4?
+- what are stretch tier vs target tier
+-->
 ---
 
 ## 1. Introduction
