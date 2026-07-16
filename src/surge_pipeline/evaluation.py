@@ -1531,18 +1531,6 @@ class SuccessTierResult:
     tier_achieved: str  # "below_minimum", "minimum", "target", "stretch"
 
 
-@dataclass
-class FinalSummary:
-    """Final summary report for the project."""
-
-    best_model: str
-    best_auc_roc: float
-    overall_pass: bool
-    success_tier_achieved: str
-    recommended_config: Dict[str, Any]
-    phase1_vs_phase2: Optional[Dict[str, Any]]
-
-
 # ---------------------------------------------------------------------------
 # McNemar's pairwise test with Bonferroni correction (R19)
 # ---------------------------------------------------------------------------
