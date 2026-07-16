@@ -512,6 +512,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
         tier_results=tier_results,
         config=config,
         output_dir=args.output_dir,
+        timestamp_prefix=prefix,
     )
 
     print(f"  Best model       : {summary.best_model}")
