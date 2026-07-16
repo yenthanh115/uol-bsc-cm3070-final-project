@@ -46,7 +46,8 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   ├── tests/                          # Unit tests
 │   ├── run_labeling.py                 # CLI: run the labelling pipeline
 │   ├── run_training.py                 # CLI: train model and evaluate
-│   └── run_cross_validation.py         # CLI: cross-dataset generalisation test
+│   ├── run_cross_validation.py         # CLI: cross-dataset generalisation test
+│   └── generate_figures.py             # CLI: standalone figure generation from saved models
 │
 ├── reports/                            # Academic reports (literature review, design, etc.)
 ├── admin/                              # Project admin (decision log, journal)
@@ -282,6 +283,38 @@ Use the `--notes` flag on either runner to tag experiments:
 python run_labeling.py --config config.json --notes "testing tau=2.0 with textblob"
 python run_training.py --notes "phase2 with higher sentiment weight"
 ```
+
+### Generate Evaluation Figures (Standalone)
+
+Generate confusion matrices, ROC curves, and threshold sensitivity plots from saved models without retraining:
+
+```bash
+# Phase 2 figures (default — resolves data from latest_outputs.json)
+python generate_figures.py
+
+# Phase 1 figures with prefix to avoid overwriting
+python generate_figures.py --phase phase1 --data-path output/processed/2026-07-16_15-45_labelled_dataset.csv --prefix "phase1_"
+
+# Custom paths
+python generate_figures.py --data-path ../output/processed/labelled_dataset.csv --models-dir ../output/models --figures-dir ../output/figures/evaluation
+```
+
+Key parameters:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--data-path` | *(from latest_outputs.json)* | Path to the labelled dataset CSV |
+| `--models-dir` | `../output/models` | Directory containing saved `.joblib` model files |
+| `--figures-dir` | `../output/figures/evaluation` | Output directory for figures |
+| `--phase` | `phase2` | Which phase models to load (`phase1` or `phase2`) |
+| `--seed` | `42` | Random seed used in model filename |
+| `--prefix` | *(empty)* | Prefix for output filenames (e.g., `phase1_` to keep both sets) |
+
+Generated figures:
+- `10_confusion_matrix_<model>.png` — per-model confusion matrix
+- `11_roc_curve_<model>.png` — per-model ROC curve
+- `11_roc_curves_combined.png` — all models overlaid
+- `12_classification_threshold_sensitivity_<model>.png` — F1/precision/recall vs threshold
 
 ### Cross-Dataset Validation
 
