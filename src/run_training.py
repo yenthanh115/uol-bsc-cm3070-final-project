@@ -71,7 +71,8 @@ from surge_pipeline.evaluation import (  # noqa: E402
 
 def _resolve_default_data_path() -> str:
     """Resolve the latest labelled dataset path from latest_outputs.json."""
-    latest_file = Path(__file__).resolve().parent.parent / "output" / "processed" / "latest_outputs.json"
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    latest_file = _PROJECT_ROOT / "output" / "processed" / "latest_outputs.json"
     if latest_file.exists():
         try:
             data = json.loads(latest_file.read_text(encoding="utf-8"))
@@ -110,13 +111,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="../output/evaluation",
+        default=str(Path(__file__).resolve().parent.parent / "output" / "evaluation"),
         help="Output directory for evaluation results.",
     )
     parser.add_argument(
         "--models-dir",
         type=str,
-        default="../output/models",
+        default=str(Path(__file__).resolve().parent.parent / "output" / "models"),
         help="Output directory for serialised models.",
     )
     parser.add_argument(

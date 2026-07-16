@@ -17,9 +17,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
-from surge_pipeline.config import PipelineConfig  # noqa: E402
+from surge_pipeline.config import PipelineConfig, PROJECT_ROOT  # noqa: E402
 from surge_pipeline.experiment_log import append_experiment  # noqa: E402
 from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs  # noqa: E402
+
+# Default paths resolved from project root (works regardless of CWD)
+_DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "output" / "processed")
+_DEFAULT_INPUT_DIR = str(PROJECT_ROOT / "input" / "raw")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -38,7 +42,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     # --- Individual parameters ---
     parser.add_argument("--file-path", type=str, default="", help="Input data file path.")
-    parser.add_argument("--output-dir", type=str, default="output/processed", help="Output directory.")
+    parser.add_argument("--output-dir", type=str, default=_DEFAULT_OUTPUT_DIR, help="Output directory.")
     parser.add_argument(
         "--temporal-split-ratio", type=float, default=0.8, help="Train/test temporal split ratio."
     )

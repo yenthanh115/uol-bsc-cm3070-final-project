@@ -7,6 +7,9 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
+# Project root is two levels up from this file (src/surge_pipeline/config.py -> project root)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 @dataclass
 class PipelineConfig:
@@ -18,7 +21,7 @@ class PipelineConfig:
 
     # --- Input / Output ---
     file_path: str = ""
-    output_dir: str = "output/processed"
+    output_dir: str = str(PROJECT_ROOT / "output" / "processed")
 
     # --- Temporal split ---
     temporal_split_ratio: float = 0.8

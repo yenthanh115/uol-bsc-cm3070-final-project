@@ -54,7 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--model-dir",
         type=str,
-        default="../output/models",
+        default=str(Path(__file__).resolve().parent.parent / "output" / "models"),
         help="Directory containing saved .joblib model files.",
     )
     parser.add_argument(
@@ -72,7 +72,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="../output/evaluation",
+        default=str(Path(__file__).resolve().parent.parent / "output" / "evaluation"),
         help="Output directory for cross-validation results.",
     )
     parser.add_argument(
