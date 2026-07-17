@@ -4,11 +4,14 @@ Generates evaluation figures (confusion matrices, ROC curves, threshold
 sensitivity) without re-running the full training pipeline.
 
 Usage:
-    # Generate Phase 2 figures (default)
+    # Generate Phase 2 figures from latest models (default)
     python generate_figures.py
 
     # Generate Phase 1 figures
     python generate_figures.py --phase phase1
+
+    # Load a specific model version by timestamp
+    python generate_figures.py --timestamp 2026-07-16_18-52
 
     # Custom data path and output directory
     python generate_figures.py --data-path output/processed/my_dataset.csv \
@@ -77,6 +80,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Random seed used in model filename.",
     )
     parser.add_argument(
+        "--timestamp",
+        type=str,
+        default=None,
+        help="Specific model timestamp to load (e.g., '2026-07-16_18-52'). "
+             "If not specified, reads from latest_models.json.",
+    )
+    parser.add_argument(
         "--prefix",
         type=str,
         default="",
@@ -125,6 +135,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  Figures dir: {args.figures_dir}")
     print(f"  Phase      : {args.phase}")
     print(f"  Seed       : {args.seed}")
+    print(f"  Timestamp  : {args.timestamp or '(latest)'}")
     print(f"  Prefix     : {args.prefix or '(none)'}")
 
     # Load dataset and prepare test set
@@ -145,16 +156,39 @@ def main(argv: list[str] | None = None) -> None:
     figures_dir = Path(args.figures_dir)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
+    # Resolve model filenames — from manifest, --timestamp, or legacy fallback
+    import json as _json
+
+    model_timestamp = args.timestamp
+    manifest_path = models_dir / "latest_models.json"
+
+    if model_timestamp is None and manifest_path.exists():
+        manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+        model_timestamp = manifest.get("timestamp")
+        print(f"\n  Resolved timestamp from manifest: {model_timestamp}")
+
     roc_data = []
     generated_paths = []
 
     for name in MODEL_NAMES:
-        model_filename = f"{name}_{args.phase}_{args.seed}.joblib"
+        # Try timestamped filename first, fall back to legacy (no timestamp)
+        if model_timestamp:
+            model_filename = f"{name}_{args.phase}_{args.seed}_{model_timestamp}.joblib"
+        else:
+            model_filename = f"{name}_{args.phase}_{args.seed}.joblib"
+
         model_path = models_dir / model_filename
 
         if not model_path.exists():
-            print(f"\n  WARNING: Model not found: {model_path} — skipping.")
-            continue
+            # Try legacy filename as fallback when timestamp was specified but file doesn't exist
+            legacy_filename = f"{name}_{args.phase}_{args.seed}.joblib"
+            legacy_path = models_dir / legacy_filename
+            if legacy_path.exists():
+                print(f"\n  NOTE: Timestamped model not found, using legacy: {legacy_filename}")
+                model_path = legacy_path
+            else:
+                print(f"\n  WARNING: Model not found: {model_path} — skipping.")
+                continue
 
         print(f"\n  Loading {name}...")
         model_dict = joblib.load(model_path)

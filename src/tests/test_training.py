@@ -314,8 +314,9 @@ class TestModelTraining:
         result = train_models(small_training_df, config, output_dir=str(tmp_path))
 
         for name in result.models:
-            model_file = tmp_path / f"{name}_phase2_42.joblib"
-            assert model_file.exists(), f"Model file {model_file} not found"
+            # Timestamped filenames: {name}_phase2_42_{timestamp}.joblib
+            matches = list(tmp_path.glob(f"{name}_phase2_42_*.joblib"))
+            assert len(matches) == 1, f"Model file for {name} not found"
 
 
 # ============================================================================
@@ -364,7 +365,7 @@ class TestPhaseSupport:
 
         train_models(small_training_df, config, output_dir=str(tmp_path))
 
-        # Check phase1 in filename
+        # Check phase1 in filename (timestamped: *_phase1_*_*.joblib)
         files = list(tmp_path.glob("*_phase1_*.joblib"))
         assert len(files) == 3
 

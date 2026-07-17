@@ -224,6 +224,11 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     # ------------------------------------------------------------------
     # 3. Multi-model training (LR, RF, XGBoost)
     # ------------------------------------------------------------------
+
+    # Timestamp prefix for all output files (YYYY-MM-DD_HH-MM)
+    # Generated early so models and evaluation artifacts share the same prefix.
+    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
     config = PipelineConfig(
         random_seed=args.seed,
         weight_sentiment=args.weight_sentiment,
@@ -231,7 +236,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     )
 
     training_result: TrainingPipelineResult = train_models(
-        df, config, output_dir=args.models_dir
+        df, config, output_dir=args.models_dir, timestamp=prefix
     )
     training_summary = get_training_summary(training_result)
 
@@ -356,9 +361,6 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
         for m in ci.metric_cis:
             print(f"    {m.metric_name:12s}: {m.point_estimate:.4f} "
                   f"[{m.ci_lower:.4f}, {m.ci_upper:.4f}]")
-
-    # Timestamp prefix for all output files (YYYY-MM-DD_HH-MM)
-    prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     # ------------------------------------------------------------------
     # 7b. Classification threshold tuning (P1)
