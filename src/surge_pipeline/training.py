@@ -73,7 +73,8 @@ def _get_xgb_param_grid(
 ) -> List[Dict[str, Any]]:
     """XGBoost grid with scale_pos_weight for class imbalance handling (P6).
 
-    n_estimators(3) x max_depth(3) x learning_rate(3) x scale_pos_weight(3) = 81 → capped at 75.
+    n_estimators(3) x max_depth(3) x learning_rate(3) x scale_pos_weight(2-3)
+    = 54-81 → capped at 50 to respect R13-AC6 grid size limit.
 
     The scale_pos_weight values are:
       - 1.0: no reweighting (baseline)
@@ -102,7 +103,7 @@ def _get_xgb_param_grid(
         for lr in [0.01, 0.1, 0.3]
         for w in weight_values
     ]
-    return grid[:75]
+    return grid[:50]
 
 
 # ---------------------------------------------------------------------------
@@ -447,6 +448,7 @@ def train_models(
     df: pd.DataFrame,
     config: PipelineConfig,
     output_dir: str | None = None,
+    timestamp: str | None = None,
 ) -> TrainingPipelineResult:
     """Train all models (LR, RF, XGBoost) with temporal cross-validation.
 
@@ -459,15 +461,23 @@ def train_models(
         Pipeline configuration (random_seed, weight_sentiment used).
     output_dir : str, optional
         Directory to serialise trained models. Defaults to config.output_dir.
+    timestamp : str, optional
+        Timestamp prefix for versioned model filenames (e.g. "2026-07-16_18-52").
+        If not provided, generates one from the current time.
 
     Returns
     -------
     TrainingPipelineResult
         Contains all trained models, phase info, and metadata.
     """
+    from datetime import datetime as _dt
+
     random_seed = config.random_seed
     phase = "phase1" if config.weight_sentiment == 0.0 else "phase2"
     out_dir = Path(output_dir) if output_dir else Path(config.output_dir)
+
+    if timestamp is None:
+        timestamp = _dt.now().strftime("%Y-%m-%d_%H-%M")
 
     logger.info("=" * 60)
     logger.info("MULTI-MODEL TRAINING (phase=%s, seed=%d)", phase, random_seed)
@@ -538,17 +548,39 @@ def train_models(
                 name, optimal_threshold, threshold_result.f1_at_threshold,
             )
 
-        model_path = out_dir / f"{name}_{phase}_{random_seed}.joblib"
+        model_filename = f"{name}_{phase}_{random_seed}_{timestamp}.joblib"
+        model_path = out_dir / model_filename
         joblib.dump(
             {
                 "model": tm.model,
                 "scaler": tm.scaler,
                 "params": tm.best_params,
                 "optimal_threshold": optimal_threshold,
+                "timestamp": timestamp,
+                "phase": phase,
+                "random_seed": random_seed,
             },
             model_path,
         )
         logger.info("Saved model: %s", model_path)
+
+    # Write latest_models.json manifest for downstream tooling
+    import json as _json
+
+    manifest = {
+        "timestamp": timestamp,
+        "phase": phase,
+        "random_seed": random_seed,
+        "models": {
+            name: f"{name}_{phase}_{random_seed}_{timestamp}.joblib"
+            for name in models
+        },
+    }
+    manifest_path = out_dir / "latest_models.json"
+    manifest_path.write_text(
+        _json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    logger.info("Updated manifest: %s", manifest_path)
 
     result = TrainingPipelineResult(
         models=models,
