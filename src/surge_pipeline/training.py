@@ -38,8 +38,6 @@ from surge_pipeline.training_models import (
 
 logger = logging.getLogger(__name__)
 
-# N_FOLDS is defined in training_models and re-imported above.
-
 # ---------------------------------------------------------------------------
 # Hyperparameter grids
 # ---------------------------------------------------------------------------
