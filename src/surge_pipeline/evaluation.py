@@ -10,14 +10,14 @@ validation, and final summary generation.
 
 Requirements: R15 (Evaluation Metrics), R16 (Evaluation Visualisations),
               R19 (Statistical Significance), R21 (Success Tiers)
-Design Decision: D12 — Evaluation output structure.
+Design Decision: D12 - Evaluation output structure.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -40,135 +40,24 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 
+from surge_pipeline.evaluation_models import (
+    BaselineComparison,
+    BootstrapCI,
+    EvaluationMetrics,
+    FeatureImportanceResult,
+    FinalSummary,
+    McNemarResult,
+    MetricCI,
+    ModelMetrics,
+    SuccessTierResult,
+    ThresholdResult,
+    SUCCESS_TIER_MINIMUM,
+    SUCCESS_TIER_TARGET,
+    SUCCESS_TIER_STRETCH,
+)
 from surge_pipeline.training import TrainingResult, predict
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Success tier constants (R21)
-# ---------------------------------------------------------------------------
-
-SUCCESS_TIER_MINIMUM: float = 0.60
-"""Minimum acceptable AUC-ROC threshold."""
-
-SUCCESS_TIER_TARGET: float = 0.70
-"""Target AUC-ROC threshold."""
-
-SUCCESS_TIER_STRETCH: float = 0.80
-"""Stretch goal AUC-ROC threshold."""
-
-
-# ---------------------------------------------------------------------------
-# Advanced evaluation dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ModelMetrics:
-    """Comprehensive metrics for a single trained model on the test set."""
-
-    model_name: str
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    auc_roc: float
-    confusion_matrix: List[List[int]]
-    n_test_samples: int
-
-
-@dataclass
-class McNemarResult:
-    """Result from a McNemar's pairwise comparison between two models."""
-
-    model_a: str
-    model_b: str
-    test_statistic: float
-    p_value: float
-    adjusted_alpha: float
-    is_significant: bool
-
-
-@dataclass
-class BaselineComparison:
-    """Comparison of a model against random and single-feature baselines."""
-
-    model_name: str
-    model_auc: float
-    random_baseline_auc: float
-    beats_random: bool
-    single_feature_aucs: Dict[str, float]
-    best_single_feature: str
-    best_single_feature_auc: float
-    improvement_over_best_single_feature: float
-
-
-@dataclass
-class MetricCI:
-    """Bootstrap confidence interval for a single metric."""
-
-    metric_name: str
-    point_estimate: float
-    ci_lower: float
-    ci_upper: float
-    ci_level: float = 0.95
-
-
-@dataclass
-class BootstrapCI:
-    """Bootstrap confidence intervals for all metrics of a model."""
-
-    model_name: str
-    n_resamples: int
-    metrics: List[MetricCI]
-
-
-@dataclass
-class SuccessTierResult:
-    """Success tier classification for a single model."""
-
-    model_name: str
-    auc_roc: float
-    achieves_minimum: bool
-    achieves_target: bool
-    achieves_stretch: bool
-    tier_achieved: str  # "below_minimum", "minimum", "target", "stretch"
-
-
-@dataclass
-class ThresholdResult:
-    """Result from optimal classification threshold selection."""
-
-    model_name: str
-    optimal_threshold: float
-    strategy: str  # "max_f1" or "precision_floor"
-    precision_at_threshold: float
-    recall_at_threshold: float
-    f1_at_threshold: float
-    precision_at_default: float
-    recall_at_default: float
-    f1_at_default: float
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialisation."""
-        return asdict(self)
-
-
-@dataclass
-class FinalSummary:
-    """Final evaluation summary encompassing all analysis results."""
-
-    best_model: str
-    best_auc_roc: float
-    overall_pass: bool
-    success_tier_achieved: str
-    model_metrics: Dict[str, Any]
-    mcnemar_results: List[Dict[str, Any]]
-    baseline_comparisons: Dict[str, Any]
-    tier_results: Dict[str, Any]
-    recommended_config: Dict[str, Any]
-    phase1_vs_phase2: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +165,7 @@ def mcnemar_pairwise_test(
 ) -> List[McNemarResult]:
     """Perform McNemar's pairwise test between all model pairs.
 
-    Builds a 2×2 contingency table for each pair of models based on
+    Builds a 2x contingency table for each pair of models based on
     record-level correct/incorrect predictions, then applies McNemar's
     exact test with Bonferroni correction.
 
@@ -309,7 +198,7 @@ def mcnemar_pairwise_test(
         correct_a = (pred_a == y_true).astype(int)
         correct_b = (pred_b == y_true).astype(int)
 
-        # 2×2 contingency: b (A correct, B wrong), c (A wrong, B correct)
+        # 2x contingency: b (A correct, B wrong), c (A wrong, B correct)
         b = int(np.sum((correct_a == 1) & (correct_b == 0)))  # A right, B wrong
         c = int(np.sum((correct_a == 0) & (correct_b == 1)))  # A wrong, B right
 
@@ -718,7 +607,7 @@ def compute_bootstrap_ci(
     ]
 
     logger.info(
-        "%s — Bootstrap CIs (%d resamples, %.0f%% level):",
+        "%s - Bootstrap CIs (%d resamples, %.0f%% level):",
         model_name, n_resamples, ci_level * 100,
     )
     for m in metrics:
@@ -735,7 +624,7 @@ def compute_bootstrap_ci(
 
 
 # ---------------------------------------------------------------------------
-# Figure configuration — matches eda_pipeline.py style
+# Figure configuration - matches eda_pipeline.py style
 # ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -779,25 +668,6 @@ def _save_figure(fig: plt.Figure, name: str, figures_dir: Path | None = None) ->
     plt.close(fig)
     logger.info("Saved figure: %s", path)
     return path
-
-
-@dataclass
-class EvaluationMetrics:
-    """Container for basic evaluation metrics on a single partition."""
-
-    model_name: str
-    partition: str
-    precision: float
-    recall: float
-    f1: float
-    roc_auc: float
-    support_positive: int
-    support_negative: int
-    confusion_matrix: List[List[int]]
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialisation."""
-        return asdict(self)
 
 
 def evaluate_model(
@@ -986,7 +856,7 @@ def plot_confusion_matrix(
 
     ax.set_xlabel("Predicted Label")
     ax.set_ylabel("True Label")
-    ax.set_title(f"Confusion Matrix — {model_name}")
+    ax.set_title(f"Confusion Matrix - {model_name}")
 
     return _save_figure(fig, f"10_confusion_matrix_{model_name}", figures_dir)
 
@@ -1042,7 +912,7 @@ def plot_roc_curve(
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title(f"ROC Curve — {model_name}")
+    ax.set_title(f"ROC Curve - {model_name}")
     ax.legend(loc="lower right")
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -1092,7 +962,7 @@ def plot_roc_curve_combined(
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curves — Model Comparison")
+    ax.set_title("ROC Curves - Model Comparison")
     ax.legend(loc="lower right")
     ax.set_xlim([-0.02, 1.02])
     ax.set_ylim([-0.02, 1.02])
@@ -1109,7 +979,7 @@ def plot_classification_threshold_sensitivity(
     """Produce a classification threshold sensitivity figure (R16-AC6).
 
     Shows precision, recall, and F1-score as functions of the decision
-    probability threshold (0.01–0.99).
+    probability threshold (0.01-“0.99).
 
     Parameters
     ----------
@@ -1173,7 +1043,7 @@ def plot_classification_threshold_sensitivity(
 
     ax.set_xlabel("Classification Threshold")
     ax.set_ylabel("Score")
-    ax.set_title(f"Classification Threshold Sensitivity — {model_name}")
+    ax.set_title(f"Classification Threshold Sensitivity - {model_name}")
     ax.legend(loc="center left", bbox_to_anchor=(0.0, 0.45))
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([-0.02, 1.05])
@@ -1186,36 +1056,6 @@ def plot_classification_threshold_sensitivity(
 # ---------------------------------------------------------------------------
 # Feature importance (P3)
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class FeatureImportanceResult:
-    """Result from feature importance computation for a single model."""
-
-    model_name: str
-    method: str  # "permutation" or "builtin_gain"
-    feature_names: List[str]
-    importances: List[float]
-    importances_std: List[float]
-    scoring: str
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialisation."""
-        return asdict(self)
-
-    def ranked(self) -> List[Tuple[str, float, float]]:
-        """Return features sorted by importance (descending).
-
-        Returns
-        -------
-        List[Tuple[str, float, float]]
-            List of (feature_name, importance, std) sorted descending.
-        """
-        indices = np.argsort(self.importances)[::-1]
-        return [
-            (self.feature_names[i], self.importances[i], self.importances_std[i])
-            for i in indices
-        ]
 
 
 def compute_feature_importance(
@@ -1260,7 +1100,7 @@ def compute_feature_importance(
     from sklearn.inspection import permutation_importance
 
     # Scale test data using the already-fitted scaler.
-    # permutation_importance shuffles columns of X then scores —
+    # permutation_importance shuffles columns of X then scores -
     # we pass scaled data so shuffling happens in scaled space.
     # This is standard practice: the model expects scaled input.
     X_test_scaled = scaler.transform(X_test)
@@ -1427,7 +1267,7 @@ def generate_evaluation_figures(
     # ROC curve and threshold sensitivity require two classes
     if n_classes < 2:
         logger.warning(
-            "Only one class in y_true — skipping ROC curve and threshold "
+            "Only one class in y_true - skipping ROC curve and threshold "
             "sensitivity figures for %s.",
             model_name,
         )
@@ -1439,318 +1279,3 @@ def generate_evaluation_figures(
     )
 
     return paths
-
-
-# ===========================================================================
-# Advanced Evaluation: Statistical Significance, Baselines, Success Tiers
-# Requirements: R19 (Statistical Significance), R21 (Success Criteria)
-# ===========================================================================
-
-# ---------------------------------------------------------------------------
-# Success tier constants
-# ---------------------------------------------------------------------------
-
-SUCCESS_TIER_MINIMUM: float = 0.60
-SUCCESS_TIER_TARGET: float = 0.70
-SUCCESS_TIER_STRETCH: float = 0.80
-
-# ---------------------------------------------------------------------------
-# Advanced dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ModelMetrics:
-    """Full evaluation metrics for a single model."""
-
-    model_name: str
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    auc_roc: float
-    confusion_matrix: List[List[int]]
-    n_test_samples: int
-
-
-@dataclass
-class McNemarResult:
-    """Result of McNemar's test for a single model pair."""
-
-    model_a: str
-    model_b: str
-    test_statistic: float
-    p_value: float
-    adjusted_alpha: float
-    is_significant: bool
-
-
-@dataclass
-class MetricCI:
-    """Confidence interval for a single metric."""
-
-    metric_name: str
-    point_estimate: float
-    ci_lower: float
-    ci_upper: float
-    confidence_level: float = 0.95
-
-
-@dataclass
-class BootstrapCI:
-    """Bootstrap confidence intervals for all metrics of one model."""
-
-    model_name: str
-    n_bootstrap: int
-    metric_cis: List[MetricCI]
-
-
-@dataclass
-class BaselineComparison:
-    """Comparison of a trained model against baselines."""
-
-    model_name: str
-    model_auc: float
-    random_baseline_auc: float
-    single_feature_aucs: Dict[str, float]
-    best_single_feature: str
-    best_single_feature_auc: float
-    beats_random: bool
-    improvement_over_best_feature: float
-
-
-@dataclass
-class SuccessTierResult:
-    """Success tier classification for one model."""
-
-    model_name: str
-    auc_roc: float
-    achieves_minimum: bool
-    achieves_target: bool
-    achieves_stretch: bool
-    tier_achieved: str  # "below_minimum", "minimum", "target", "stretch"
-
-
-# ---------------------------------------------------------------------------
-# McNemar's pairwise test with Bonferroni correction (R19)
-# ---------------------------------------------------------------------------
-
-
-def mcnemar_pairwise_test(
-    y_true: np.ndarray,
-    predictions: Dict[str, np.ndarray],
-    alpha: float = 0.05,
-) -> List[McNemarResult]:
-    """Perform pairwise McNemar's tests with Bonferroni correction.
-
-    For each pair of models, builds the 2x2 contingency table of
-    correct/incorrect predictions and applies McNemar's chi-squared test.
-
-    Parameters
-    ----------
-    y_true : np.ndarray
-        True labels (binary).
-    predictions : Dict[str, np.ndarray]
-        Model name → predicted labels (binary).
-    alpha : float
-        Significance level before Bonferroni correction.
-
-    Returns
-    -------
-    List[McNemarResult]
-        One result per model pair.
-    """
-    from itertools import combinations
-
-    model_names = sorted(predictions.keys())
-    n_comparisons = len(list(combinations(model_names, 2)))
-    adjusted_alpha = alpha / n_comparisons if n_comparisons > 0 else alpha
-
-    results: List[McNemarResult] = []
-
-    for name_a, name_b in combinations(model_names, 2):
-        pred_a = predictions[name_a].astype(int)
-        pred_b = predictions[name_b].astype(int)
-        y = y_true.astype(int)
-
-        # Correct/incorrect for each model
-        correct_a = (pred_a == y)
-        correct_b = (pred_b == y)
-
-        # Contingency table cells
-        # b: A correct, B incorrect
-        # c: A incorrect, B correct
-        b = int(np.sum(correct_a & ~correct_b))
-        c = int(np.sum(~correct_a & correct_b))
-
-        # McNemar's test statistic (with continuity correction)
-        if b + c == 0:
-            # No discordant pairs — no difference
-            test_stat = 0.0
-            p_value = 1.0
-        else:
-            test_stat = (abs(b - c) - 1) ** 2 / (b + c)
-            # Chi-squared distribution with 1 df
-            from scipy.stats import chi2
-            p_value = float(chi2.sf(test_stat, df=1))
-
-        is_significant = p_value < adjusted_alpha
-
-        results.append(McNemarResult(
-            model_a=name_a,
-            model_b=name_b,
-            test_statistic=test_stat,
-            p_value=p_value,
-            adjusted_alpha=adjusted_alpha,
-            is_significant=is_significant,
-        ))
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Baseline comparisons (R21)
-# ---------------------------------------------------------------------------
-
-
-def evaluate_baselines(
-    df: "pd.DataFrame",
-    model_metrics: Dict[str, ModelMetrics],
-) -> Dict[str, BaselineComparison]:
-    """Compare trained models against random and single-feature baselines.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Full dataset with features, partition, excluded, surge_label.
-    model_metrics : Dict[str, ModelMetrics]
-        Metrics for each trained model.
-
-    Returns
-    -------
-    Dict[str, BaselineComparison]
-        Baseline comparison for each model.
-    """
-    import pandas as pd
-    from sklearn.linear_model import LogisticRegression as LR
-    from sklearn.preprocessing import StandardScaler as SS
-
-    from surge_pipeline.features import FEATURE_COLUMNS
-
-    # Prepare train/test data
-    train_mask = (df["partition"] == "train") & (~df["excluded"].astype(bool))
-    test_mask = (df["partition"] == "test") & (~df["excluded"].astype(bool))
-
-    X_train = df.loc[train_mask, FEATURE_COLUMNS].values.astype(np.float64)
-    y_train = df.loc[train_mask, "surge_label"].values.astype(np.int64)
-    X_test = df.loc[test_mask, FEATURE_COLUMNS].values.astype(np.float64)
-    y_test = df.loc[test_mask, "surge_label"].values.astype(np.int64)
-
-    # Single-feature baselines: train LR on each feature individually
-    single_feature_aucs: Dict[str, float] = {}
-
-    for i, feature_name in enumerate(FEATURE_COLUMNS):
-        x_tr = X_train[:, i:i+1]
-        x_te = X_test[:, i:i+1]
-
-        scaler = SS()
-        x_tr_s = scaler.fit_transform(x_tr)
-        x_te_s = scaler.transform(x_te)
-
-        # Handle single-class edge case
-        if len(np.unique(y_test)) < 2:
-            single_feature_aucs[feature_name] = 0.5
-            continue
-
-        try:
-            lr = LR(random_state=42, max_iter=1000, solver="lbfgs")
-            lr.fit(x_tr_s, y_train)
-            y_prob = lr.predict_proba(x_te_s)[:, 1]
-            auc = float(roc_auc_score(y_test, y_prob))
-        except Exception:
-            auc = 0.5
-
-        single_feature_aucs[feature_name] = auc
-
-    # Find best single feature
-    best_feature = max(single_feature_aucs, key=single_feature_aucs.get)
-    best_feature_auc = single_feature_aucs[best_feature]
-
-    # Build comparisons for each model
-    comparisons: Dict[str, BaselineComparison] = {}
-
-    for model_name, metrics in model_metrics.items():
-        model_auc = metrics.auc_roc
-        comparisons[model_name] = BaselineComparison(
-            model_name=model_name,
-            model_auc=model_auc,
-            random_baseline_auc=0.5,
-            single_feature_aucs=single_feature_aucs.copy(),
-            best_single_feature=best_feature,
-            best_single_feature_auc=best_feature_auc,
-            beats_random=(model_auc > 0.5),
-            improvement_over_best_feature=model_auc - best_feature_auc,
-        )
-
-    return comparisons
-
-
-# ---------------------------------------------------------------------------
-# Success tier validation (R21)
-# ---------------------------------------------------------------------------
-
-
-def validate_success_tiers(
-    model_metrics: Dict[str, ModelMetrics],
-) -> Dict[str, SuccessTierResult]:
-    """Classify each model into a success tier based on AUC-ROC.
-
-    Tiers:
-      - stretch: AUC > 0.80
-      - target: AUC > 0.70
-      - minimum: AUC > 0.60
-      - below_minimum: AUC <= 0.60
-
-    Parameters
-    ----------
-    model_metrics : Dict[str, ModelMetrics]
-        Metrics for each model.
-
-    Returns
-    -------
-    Dict[str, SuccessTierResult]
-        Tier classification for each model.
-    """
-    results: Dict[str, SuccessTierResult] = {}
-
-    for name, metrics in model_metrics.items():
-        auc = metrics.auc_roc
-        achieves_stretch = auc > SUCCESS_TIER_STRETCH
-        achieves_target = auc > SUCCESS_TIER_TARGET
-        achieves_minimum = auc > SUCCESS_TIER_MINIMUM
-
-        if achieves_stretch:
-            tier = "stretch"
-        elif achieves_target:
-            tier = "target"
-        elif achieves_minimum:
-            tier = "minimum"
-        else:
-            tier = "below_minimum"
-
-        results[name] = SuccessTierResult(
-            model_name=name,
-            auc_roc=auc,
-            achieves_minimum=achieves_minimum,
-            achieves_target=achieves_target,
-            achieves_stretch=achieves_stretch,
-            tier_achieved=tier,
-        )
-
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Final summary report
-# ---------------------------------------------------------------------------
-
