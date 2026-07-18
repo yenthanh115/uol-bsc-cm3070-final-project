@@ -48,7 +48,7 @@ from surge_pipeline.evaluation_models import (
     SUCCESS_TIER_STRETCH,
 )
 from surge_pipeline.training import predict
-from surge_pipeline.training_models import TrainingResult
+from surge_pipeline.training_models import TrainedModel, TrainingResult
 
 logger = logging.getLogger(__name__)
 
@@ -208,12 +208,8 @@ def mcnemar_pairwise_test(
             # Use chi-squared approximation with continuity correction
             # or exact binomial for small counts
             if n_discordant < 25:
-                # Exact binomial test
-                p_value = float(
-                    stats.binom_test(b, n_discordant, 0.5)
-                    if hasattr(stats, "binom_test")
-                    else stats.binomtest(b, n_discordant, 0.5).pvalue
-                )
+                # Exact binomial test (SciPy >= 1.7 binomtest, removes deprecated binom_test)
+                p_value = float(stats.binomtest(b, n_discordant, 0.5).pvalue)
             else:
                 # Chi-squared approximation (McNemar's chi-squared)
                 p_value = float(1.0 - stats.chi2.cdf(test_stat, df=1))
@@ -679,6 +675,93 @@ def evaluate_model(
     # Log metrics
     logger.info("=" * 60)
     logger.info("EVALUATION: %s on %s partition", result.model_name, partition)
+    logger.info("=" * 60)
+    logger.info("  Precision : %.4f", metrics.precision)
+    logger.info("  Recall    : %.4f", metrics.recall)
+    logger.info("  F1-score  : %.4f", metrics.f1)
+    logger.info("  ROC-AUC   : %.4f", metrics.roc_auc)
+    logger.info(
+        "  Support   : positive=%d, negative=%d",
+        metrics.support_positive,
+        metrics.support_negative,
+    )
+    logger.info("  Confusion matrix:")
+    logger.info("    TN=%d  FP=%d", cm[0][0], cm[0][1])
+    logger.info("    FN=%d  TP=%d", cm[1][0], cm[1][1])
+
+    return metrics
+
+
+def evaluate_trained_model(
+    trained_model: "TrainedModel",
+    df: "pd.DataFrame",
+    partition: str = "test",
+) -> EvaluationMetrics:
+    """Evaluate a TrainedModel (from train_models) on a data partition.
+
+    This is the multi-model counterpart of evaluate_model, which accepts
+    the legacy TrainingResult. Use this when working with results from
+    train_models / TrainingPipelineResult.
+
+    Parameters
+    ----------
+    trained_model : TrainedModel
+        Trained model container from _train_single_model.
+    df : pd.DataFrame
+        Full dataset with features computed.
+    partition : str
+        Which partition to evaluate ('test' or 'train').
+
+    Returns
+    -------
+    EvaluationMetrics
+        Computed metrics for the model on the given partition.
+    """
+    from surge_pipeline.features import FEATURE_COLUMNS
+
+    mask = (df["partition"] == partition) & (~df["excluded"].astype(bool))
+    subset = df.loc[mask]
+
+    X = subset[FEATURE_COLUMNS].values.astype(np.float64)
+    y_true = subset["surge_label"].values.astype(np.int64)
+
+    X_scaled = trained_model.scaler.transform(X)
+    y_pred = trained_model.model.predict(X_scaled)
+    y_prob = trained_model.model.predict_proba(X_scaled)[:, 1]
+
+    n_classes = len(np.unique(y_true))
+    if n_classes < 2:
+        logger.warning(
+            "Only one class present in %s partition for %s. "
+            "ROC-AUC is undefined; setting to 0.5.",
+            partition,
+            trained_model.name,
+        )
+        auc = 0.5
+    else:
+        auc = float(roc_auc_score(y_true, y_prob))
+
+    prec = float(precision_score(y_true, y_pred, zero_division=0.0))
+    rec = float(recall_score(y_true, y_pred, zero_division=0.0))
+    f1 = float(f1_score(y_true, y_pred, zero_division=0.0))
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
+    support_pos = int(y_true.sum())
+    support_neg = int(len(y_true) - support_pos)
+
+    metrics = EvaluationMetrics(
+        model_name=trained_model.name,
+        partition=partition,
+        precision=prec,
+        recall=rec,
+        f1=f1,
+        roc_auc=auc,
+        support_positive=support_pos,
+        support_negative=support_neg,
+        confusion_matrix=cm,
+    )
+
+    logger.info("=" * 60)
+    logger.info("EVALUATION: %s on %s partition", trained_model.name, partition)
     logger.info("=" * 60)
     logger.info("  Precision : %.4f", metrics.precision)
     logger.info("  Recall    : %.4f", metrics.recall)
