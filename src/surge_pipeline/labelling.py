@@ -10,7 +10,7 @@ Design Decision: D2 — Training/test split before normalisation.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -390,15 +390,8 @@ def sweep_thresholds(
     results = []
 
     for tau in config.thresholds:
-        # Create a temporary config with the sweep threshold
-        sweep_config = PipelineConfig(
-            temporal_split_ratio=config.temporal_split_ratio,
-            weight_volume=config.weight_volume,
-            weight_sentiment=config.weight_sentiment,
-            threshold_tau=tau,
-            min_window_count=config.min_window_count,
-            random_seed=config.random_seed,
-        )
+        # Copy the full config and override only the threshold (preserves all fields)
+        sweep_config = dataclass_replace(config, threshold_tau=tau)
 
         result = apply_labelling(df.copy(), sweep_config)
         results.append(
