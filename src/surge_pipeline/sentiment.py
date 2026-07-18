@@ -29,6 +29,25 @@ logger = logging.getLogger(__name__)
 # 24 hours in seconds (same window size as windowing stage)
 _WINDOW_SECONDS: int = 24 * 60 * 60
 
+# ---------------------------------------------------------------------------
+# Module-level VADER analyzer cache (lazy-initialised on first use)
+# ---------------------------------------------------------------------------
+
+_vader_analyzer = None
+
+
+def _get_vader_analyzer():
+    """Return the module-level VADER analyzer, initialising it on first call.
+
+    Lazy initialisation avoids importing vaderSentiment at module load time
+    and allows tests to reset the cache by setting sentiment._vader_analyzer = None.
+    """
+    global _vader_analyzer
+    if _vader_analyzer is None:
+        from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+        _vader_analyzer = SentimentIntensityAnalyzer()
+    return _vader_analyzer
+
 
 # ---------------------------------------------------------------------------
 # Sentiment backend functions
@@ -50,13 +69,7 @@ def _compute_polarity_vader(title: str, selftext: str) -> float:
     float
         Compound score in [-1.0, 1.0]. Returns 0.0 if text is empty.
     """
-    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-
-    # Use module-level cache to avoid re-creating the analyzer per record
-    if not hasattr(_compute_polarity_vader, "_analyzer"):
-        _compute_polarity_vader._analyzer = SentimentIntensityAnalyzer()
-
-    analyzer = _compute_polarity_vader._analyzer
+    analyzer = _get_vader_analyzer()
 
     if selftext and str(selftext).strip():
         text = f"{title} {selftext}"
@@ -222,6 +235,14 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
             times = epoch_seconds[pos]
             group_polarities = polarities[pos]
 
+            # Sort by time within the group to guarantee searchsorted correctness.
+            # The loader guarantees chronological order on load, but downstream
+            # joins/merges could break that invariant for specific ticker groups.
+            sort_order = np.argsort(times, kind="stable")
+            times = times[sort_order]
+            group_polarities = group_polarities[sort_order]
+            sorted_pos = pos[sort_order]
+
             # Forward window: (t, t + 24h] — same logic as windowing.py
             forward_left = np.searchsorted(times, times, side="right")
             forward_right = np.searchsorted(
@@ -234,10 +255,10 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
             window_counts = forward_right - forward_left
 
             has_forward = window_counts > 0
-            mean_future[pos[has_forward]] = (
+            mean_future[sorted_pos[has_forward]] = (
                 window_sums[has_forward] / window_counts[has_forward]
             )
-            mean_future[pos[~has_forward]] = polarities[pos[~has_forward]]
+            mean_future[sorted_pos[~has_forward]] = group_polarities[~has_forward]
 
     # ------------------------------------------------------------------
     # Step 3: Sentiment change (AC3)
