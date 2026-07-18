@@ -47,7 +47,8 @@ from surge_pipeline.evaluation_models import (
     SUCCESS_TIER_TARGET,
     SUCCESS_TIER_STRETCH,
 )
-from surge_pipeline.training import TrainingResult, predict
+from surge_pipeline.training import predict
+from surge_pipeline.training_models import TrainingResult
 
 logger = logging.getLogger(__name__)
 
