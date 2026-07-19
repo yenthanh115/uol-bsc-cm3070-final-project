@@ -1,0 +1,231 @@
+{
+  "experiment": "feature_importance",
+  "method": "permutation",
+  "scoring": "roc_auc",
+  "n_repeats": 10,
+  "timestamp": "2026-07-19T13:28:58.083608",
+  "models": {
+    "logistic_regression": {
+      "model_name": "logistic_regression",
+      "method": "permutation",
+      "feature_names": [
+        "sentiment_score",
+        "hour_of_day",
+        "day_of_week",
+        "time_since_previous",
+        "ticker_post_rate_24h",
+        "ticker_post_acceleration",
+        "word_count",
+        "title_length",
+        "num_tickers_mentioned",
+        "word_count_x_hour",
+        "accel_x_time_since_prev"
+      ],
+      "importances": [
+        0.06840954926135288,
+        0.004558053587927324,
+        0.005632991247503905,
+        0.12797569965327796,
+        0.03755228151047617,
+        -0.0015061048908670328,
+        -0.004014623920840088,
+        0.007213606604607736,
+        0.004274913816227388,
+        0.0,
+        4.9673644157755e-06
+      ],
+      "importances_std": [
+        0.0369741755901548,
+        0.0024212415969454776,
+        0.00872844152563208,
+        0.03161323043472225,
+        0.020407569451923558,
+        0.002612826883261584,
+        0.006627172258765449,
+        0.005279422678907642,
+        0.0072044582808376625,
+        0.0,
+        0.0007712607117661977
+      ],
+      "scoring": "roc_auc"
+    },
+    "random_forest": {
+      "model_name": "random_forest",
+      "method": "permutation",
+      "feature_names": [
+        "sentiment_score",
+        "hour_of_day",
+        "day_of_week",
+        "time_since_previous",
+        "ticker_post_rate_24h",
+        "ticker_post_acceleration",
+        "word_count",
+        "title_length",
+        "num_tickers_mentioned",
+        "word_count_x_hour",
+        "accel_x_time_since_prev"
+      ],
+      "importances": [
+        0.1121596113534081,
+        0.010241215216030709,
+        0.004571465471849989,
+        0.07642737216487677,
+        0.012288762828218603,
+        -0.004998658811607692,
+        0.030847829758486767,
+        0.015175298290233197,
+        0.014113772514579247,
+        0.01952819972778842,
+        0.0035412340920154993
+      ],
+      "importances_std": [
+        0.02714719944021327,
+        0.014723559069954859,
+        0.009686524163063958,
+        0.018575809541970207,
+        0.02359873971032747,
+        0.0049157722170012465,
+        0.012293088787978437,
+        0.012877398807225392,
+        0.008353044749342604,
+        0.01879115472513787,
+        0.005723707354517816
+      ],
+      "scoring": "roc_auc"
+    },
+    "xgboost": {
+      "model_name": "xgboost",
+      "method": "permutation",
+      "feature_names": [
+        "sentiment_score",
+        "hour_of_day",
+        "day_of_week",
+        "time_since_previous",
+        "ticker_post_rate_24h",
+        "ticker_post_acceleration",
+        "word_count",
+        "title_length",
+        "num_tickers_mentioned",
+        "word_count_x_hour",
+        "accel_x_time_since_prev"
+      ],
+      "importances": [
+        0.16572170837597,
+        -0.00012915147481040723,
+        0.0026535660709142263,
+        0.05449248437763898,
+        0.01746674349523637,
+        -0.0005414427213208839,
+        0.009054511857098945,
+        -0.00013262862990144343,
+        0.0046186554338,
+        0.001148454652930353,
+        1.1921674597992205e-05
+      ],
+      "importances_std": [
+        0.03922570279352874,
+        7.582352703970686e-05,
+        0.006406610685278424,
+        0.024080312972103703,
+        0.026963931697439134,
+        0.0009243249494816278,
+        0.004582151652871374,
+        5.0999618634952094e-05,
+        0.004019244193176653,
+        0.0054837389497526794,
+        3.848986285664596e-05
+      ],
+      "scoring": "roc_auc"
+    }
+  },
+  "builtin_importances": {
+    "random_forest": {
+      "model_name": "random_forest",
+      "method": "builtin_gain",
+      "feature_names": [
+        "sentiment_score",
+        "hour_of_day",
+        "day_of_week",
+        "time_since_previous",
+        "ticker_post_rate_24h",
+        "ticker_post_acceleration",
+        "word_count",
+        "title_length",
+        "num_tickers_mentioned",
+        "word_count_x_hour",
+        "accel_x_time_since_prev"
+      ],
+      "importances": [
+        0.2071249824454972,
+        0.08355379726115557,
+        0.06760442489658533,
+        0.142187069712653,
+        0.10563222751335583,
+        0.02694028392342816,
+        0.09122579142391789,
+        0.0685070935090711,
+        0.04797250021101831,
+        0.10278451816251362,
+        0.05646731094080403
+      ],
+      "importances_std": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scoring": "gain"
+    },
+    "xgboost": {
+      "model_name": "xgboost",
+      "method": "builtin_gain",
+      "feature_names": [
+        "sentiment_score",
+        "hour_of_day",
+        "day_of_week",
+        "time_since_previous",
+        "ticker_post_rate_24h",
+        "ticker_post_acceleration",
+        "word_count",
+        "title_length",
+        "num_tickers_mentioned",
+        "word_count_x_hour",
+        "accel_x_time_since_prev"
+      ],
+      "importances": [
+        0.39812979102134705,
+        0.033993858844041824,
+        0.08436054736375809,
+        0.12079411000013351,
+        0.1451784074306488,
+        0.013471262529492378,
+        0.052277714014053345,
+        0.040808070451021194,
+        0.058164600282907486,
+        0.02378416620194912,
+        0.029037535190582275
+      ],
+      "importances_std": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scoring": "gain"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "file_path": "input/raw/r_pennystocks_submissions_reddit.csv",
+  "output_dir": "D:\\git\\uol-bsc-cm3070-final-project\\output\\processed",
+  "temporal_split_ratio": 0.8,
+  "surge_method": "forward_growth",
+  "min_window_count": 1,
+  "threshold_tau": 1.0,
+  "sentiment_model": "vader",
+  "weight_volume": 0.5,
+  "weight_sentiment": 0.5,
+  "thresholds": [
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    2.5
+  ],
+  "random_seed": 42
+}

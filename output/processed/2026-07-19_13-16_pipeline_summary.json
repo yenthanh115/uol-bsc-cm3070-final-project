@@ -1,0 +1,94 @@
+{
+  "normalisation_params": {
+    "mu_volume": 0.5652533456279906,
+    "sigma_volume": 2.1673156660482396,
+    "mu_sentiment": 0.23659005539929248,
+    "sigma_sentiment": 0.32642787803069834,
+    "train_size": 21549,
+    "test_size": 3278,
+    "split_timestamp": 1628120809.2
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 227,
+      "no_surge_count": 24600,
+      "total": 24827,
+      "surge_rate": 0.9143271438353405,
+      "imbalance_ratio": 108.37004405286343
+    },
+    "train": {
+      "surge_count": 221,
+      "no_surge_count": 21328,
+      "total": 21549,
+      "surge_rate": 1.0255696320014849,
+      "imbalance_ratio": 96.50678733031674
+    },
+    "test": {
+      "surge_count": 6,
+      "no_surge_count": 3272,
+      "total": 3278,
+      "surge_rate": 0.18303843807199513,
+      "imbalance_ratio": 545.3333333333334
+    }
+  },
+  "stage_counts": {
+    "after_load": 80212,
+    "after_windowing": 80212,
+    "excluded_count": 55385,
+    "after_sentiment": 80212,
+    "after_labelling": 80212
+  },
+  "stage_durations": {
+    "load": 1.692965299997013,
+    "windowing": 0.8165033999976004,
+    "sentiment": 68.28432410000823,
+    "labelling": 0.01479299999482464,
+    "threshold_sweep": 0.21888520001084544
+  },
+  "total_duration_seconds": 71.03297640000528,
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.5,
+    "weight_sentiment": 0.0,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 1,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 69.04827207899068,
+  "dataset_fingerprint": {
+    "sha256": "ad03dfd97283d03b9a4bf1fdcc20c681642d1a39e62dc365ff08a7f1218cf4b2",
+    "file_size_bytes": 39718787,
+    "columns": [
+      "archived",
+      "author",
+      "created",
+      "deleted",
+      "edited",
+      "gilded",
+      "id",
+      "is_original_content",
+      "is_self",
+      "is_video",
+      "link_flair_text",
+      "locked",
+      "num_comments",
+      "num_crossposts",
+      "pinned",
+      "removed",
+      "retrieved",
+      "score",
+      "selftext",
+      "shortlink",
+      "thumbnail",
+      "title",
+      "total_awards_received",
+      "upvote_ratio"
+    ],
+    "num_rows": 304524,
+    "timestamp_column": "created",
+    "timestamp_min": "2021-01-01 00:13:41",
+    "timestamp_max": "2021-12-31 23:30:46",
+    "has_tickers_column": false
+  }
+}
