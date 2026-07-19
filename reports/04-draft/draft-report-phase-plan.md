@@ -53,7 +53,7 @@
 - [x] Class distribution analysis (surge rates across configurations)
 - [x] Threshold sensitivity curves (surge rate vs τ for 5 thresholds)
 - [x] Classification threshold tuning (validation-fold selected thresholds)
-- [ ] Prediction examples (not generated — would need a script to extract sample TP/FP/FN records from saved models + test set; optional for report)
+- [x] Prediction examples (TP/FP/FN/TN records with features and context — generated via `src/generate_prediction_examples.py`)
 
 ### Evaluated using
 
