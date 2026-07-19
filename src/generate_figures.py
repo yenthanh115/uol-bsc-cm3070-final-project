@@ -35,7 +35,7 @@ from surge_pipeline.evaluation import (
     generate_evaluation_figures,
     plot_roc_curve_combined,
 )
-from surge_pipeline.features import FEATURE_COLUMNS
+from surge_pipeline.features import FEATURE_COLUMNS, compute_features
 
 
 MODEL_NAMES = ["logistic_regression", "random_forest", "xgboost"]
@@ -130,6 +130,13 @@ def main(argv: list[str] | None = None) -> None:
     # Load dataset and prepare test set
     print("\n  Loading dataset...")
     df = pd.read_csv(data_path)
+
+    # Compute features if not already present (supports older datasets)
+    missing_features = [c for c in FEATURE_COLUMNS if c not in df.columns]
+    if missing_features:
+        print(f"  Computing features (missing from CSV)...")
+        df = compute_features(df)
+
     test_mask = (df["partition"] == "test") & (~df["excluded"].astype(bool))
     test_df = df.loc[test_mask]
 

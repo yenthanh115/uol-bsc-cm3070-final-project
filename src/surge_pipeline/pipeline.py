@@ -24,6 +24,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
+from surge_pipeline.features import compute_features
 from surge_pipeline.labelling import apply_labelling, sweep_thresholds
 from surge_pipeline.loader import load_data
 from surge_pipeline.sentiment import compute_sentiment
@@ -290,12 +291,13 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     output_paths: Dict[str, str] = {}
 
     # ------------------------------------------------------------------
-    # 1. Labelled dataset (CSV)
+    # 1. Labelled dataset (CSV) — includes engineered features
     # ------------------------------------------------------------------
+    labelled_df = compute_features(results["labelled_df"])
     labelled_path = output_dir / f"{prefix}_labelled_dataset.csv"
-    results["labelled_df"].to_csv(labelled_path, index=False)
+    labelled_df.to_csv(labelled_path, index=False)
     output_paths["labelled_dataset"] = str(labelled_path)
-    logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(results["labelled_df"]))
+    logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(labelled_df))
 
     # ------------------------------------------------------------------
     # 2. Pipeline summary (JSON)
@@ -327,15 +329,15 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     }
 
     # Compute exclusion rate for summary
-    labelled_df = results["labelled_df"]
-    if "excluded" in labelled_df.columns:
-        total = len(labelled_df)
-        excluded = int(labelled_df["excluded"].sum())
+    raw_labelled_df = results["labelled_df"]
+    if "excluded" in raw_labelled_df.columns:
+        total = len(raw_labelled_df)
+        excluded = int(raw_labelled_df["excluded"].sum())
         summary["exclusion_rate"] = excluded / total * 100 if total > 0 else 0.0
 
     # Include dataset fingerprint if available
-    if "dataset_fingerprint" in labelled_df.attrs:
-        summary["dataset_fingerprint"] = labelled_df.attrs["dataset_fingerprint"]
+    if "dataset_fingerprint" in raw_labelled_df.attrs:
+        summary["dataset_fingerprint"] = raw_labelled_df.attrs["dataset_fingerprint"]
 
     summary_path = output_dir / f"{prefix}_pipeline_summary.json"
 

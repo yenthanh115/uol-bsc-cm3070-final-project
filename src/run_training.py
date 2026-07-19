@@ -43,7 +43,7 @@ from sklearn.metrics import (  # noqa: E402
 from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
 from surge_pipeline.config import PipelineConfig  # noqa: E402
 from surge_pipeline.experiment_log import append_experiment  # noqa: E402
-from surge_pipeline.features import compute_features, FEATURE_COLUMNS  # noqa: E402
+from surge_pipeline.features import FEATURE_COLUMNS  # noqa: E402
 from surge_pipeline.training import (  # noqa: E402
     train_models,
     get_training_summary,
@@ -212,14 +212,17 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     logger.info("Dataset shape: %s", df.shape)
 
     # ------------------------------------------------------------------
-    # 2. Compute features (if not already present)
+    # 2. Verify feature columns are present
     # ------------------------------------------------------------------
     missing_features = [c for c in FEATURE_COLUMNS if c not in df.columns]
     if missing_features:
-        logger.info("Computing features (missing: %s)...", missing_features)
-        df = compute_features(df)
-    else:
-        logger.info("All features already present in dataset.")
+        logger.error(
+            "Feature columns missing from dataset: %s. "
+            "Re-run the labelling pipeline to produce a dataset with engineered features.",
+            missing_features,
+        )
+        sys.exit(1)
+    logger.info("All feature columns present.")
 
     # ------------------------------------------------------------------
     # 3. Multi-model training (LR, RF, XGBoost)

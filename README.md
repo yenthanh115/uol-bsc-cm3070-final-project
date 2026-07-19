@@ -176,6 +176,10 @@ python -m pytest tests/ -x -q --tb=short
 
 # Save test results to a file (merges stderr into stdout)
 python -m pytest src/tests/ -v --tb=short > output/logs/pytest_%date:~-4%-%date:~3,2%-%date:~0,2%_%time:~0,2%-%time:~3,2%.log 2>&1
+
+# Test a specific file
+python -m pytest src/tests/test_pipeline.py -x --tb=short --no-header -q 2>&1 | Out-File -FilePath d:\git\uol-bsc-cm3070-final-project\test_out.txt -Encoding utf8
+
 ```
 
 Useful pytest flags:
