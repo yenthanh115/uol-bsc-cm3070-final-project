@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export PYTHONIOENCODING=utf-8
 
 # Machine 3: WSB Weight Sensitivity Sweep (G2, G4, G5)
 # Run from project root: bash admin/m3.sh

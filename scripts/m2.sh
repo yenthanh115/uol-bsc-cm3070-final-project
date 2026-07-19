@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export PYTHONIOENCODING=utf-8
 
 # Machine 2: Pennystocks All (A1, B3, C2, F2)
 # Run from project root: bash admin/m2.sh

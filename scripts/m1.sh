@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export PYTHONIOENCODING=utf-8
 
 # Machine 1: WSB Core (A2, B1, C1)
 # Run from project root: bash admin/m1.sh
