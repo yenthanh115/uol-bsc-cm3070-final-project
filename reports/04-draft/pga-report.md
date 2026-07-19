@@ -58,14 +58,9 @@ A record is labelled as a surge if $C > \tau$, where $\tau$ is the threshold par
 
 Standard k-fold cross-validation is inappropriate for time-series data because it allows future information to leak into training. Instead, the pipeline divides training data into k=4 chronological folds and creates expanding-window splits: split $i$ trains on folds $0..i$ and validates on fold $i+1$. This produces 3 train/validation splits that respect temporal ordering.
 
-The following diagram illustrates the expanding-window scheme:
+![Expanding-Window Temporal Cross-Validation](figures/expanding_window_cv.png)
 
-```
-Fold:   [  1  ][  2  ][  3  ][  4  ]  ← chronological order
-Split 1: TRAIN   VAL
-Split 2: TRAIN   TRAIN  VAL
-Split 3: TRAIN   TRAIN  TRAIN  VAL
-```
+*Figure 2: Expanding-window temporal CV scheme. Each split uses all prior folds for training and the next fold for validation, ensuring no future data leaks into training.*
 
 ### Class Imbalance Handling
 
@@ -152,6 +147,12 @@ c = int((correct_a & (~correct_b)).sum())
 
 ## Results
 
+### Pipeline Architecture
+
+![Pipeline Architecture](figures/pipeline_architecture.png)
+
+*Figure 1: End-to-end pipeline architecture showing the five processing stages from raw Reddit CSV to model evaluation. Each stage produces intermediate outputs for auditability.*
+
 ### Model Performance
 
 The pipeline was evaluated on two Reddit communities with 14 experiments across 3 machines:
@@ -167,6 +168,10 @@ The pipeline was evaluated on two Reddit communities with 14 experiments across 
 
 All models significantly outperform the random baseline (AUC=0.50) with p < 0.001 (McNemar's test, Bonferroni-corrected).
 
+![ROC Curves](../../output/figures/evaluation/A2/11_roc_curves_combined.png)
+
+*Figure 3: Combined ROC curves for all three models on the r/wallstreetbets test set (experiment A2, τ=1.5). XGBoost (AUC=0.862) and Random Forest (AUC=0.854) both achieve the stretch tier (>0.80). The dashed diagonal represents a random classifier.*
+
 ### Cross-Dataset Transfer
 
 Models trained on WSB and evaluated on pennystocks (D1) achieved AUC 0.676, demonstrating partial generalisability. The reverse transfer (D2: pennystocks→WSB) performed better at AUC 0.871, suggesting patterns learned from the sparse community transfer well to the dense community.
@@ -179,7 +184,11 @@ Multi-seed experiments (5 seeds: 42, 123, 456, 789, 2024) produced standard devi
 
 The Phase 1 (volume-only) vs Phase 2 (composite volume+sentiment) comparison shows sentiment adds +0.18 AUC on WSB, validating the composite approach. A weight sensitivity sweep confirmed that balanced 50/50 weighting is optimal.
 
-> **Note:** ROC curves, confusion matrices, and threshold sensitivity plots are generated automatically by the pipeline and stored in `output/figures/evaluation/`. Representative figures are included on the following pages.
+> **Note:** Additional figures (threshold sensitivity plots per model) are stored in `output/figures/evaluation/` and included on following pages.
+
+![Confusion Matrix — XGBoost](../../output/figures/evaluation/A2/10_confusion_matrix_xgboost.png)
+
+*Figure 4: Confusion matrix for XGBoost on r/wallstreetbets (experiment A2). The extreme class imbalance is visible — the surge class (positive) represents only 1.4% of test records, making precision inherently challenging despite strong AUC-ROC.*
 
 ## Evaluation and Improvements
 
