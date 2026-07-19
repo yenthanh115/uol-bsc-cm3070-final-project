@@ -175,7 +175,7 @@ python -m pytest tests/
 python -m pytest tests/ -x -q --tb=short
 
 # Save test results to a file (merges stderr into stdout)
-python -m pytest tests/ -x -q --tb=short 2>&1 > test_results.txt
+python -m pytest src/tests/ -v --tb=short > output/logs/pytest_%date:~-4%-%date:~3,2%-%date:~0,2%_%time:~0,2%-%time:~3,2%.log 2>&1
 ```
 
 Useful pytest flags:
