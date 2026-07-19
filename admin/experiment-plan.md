@@ -670,7 +670,7 @@ cat machine1/output/experiment_log.jsonl \
 
 python src/run_cross_validation.py \
     --model-dir output/models/A2 \
-    --eval-data output/processed/<A1_TIMESTAMP>_labelled_dataset.csv \
+    --eval-data output/processed/2026-07-18_17-42_labelled_dataset.csv \
     --partition test \
     --output-dir output/evaluation \
     --notes "D1: WSB-trained models → pennystocks test set"
@@ -699,7 +699,7 @@ python src/run_cross_validation.py \
 # Identify A2's labelled dataset (from Machine 1's output)
 python src/run_cross_validation.py \
     --model-dir output/models/A1 \
-    --eval-data output/processed/<A2_TIMESTAMP>_labelled_dataset.csv \
+    --eval-data output/processed/2026-07-19_07-49_labelled_dataset.csv \
     --partition test \
     --output-dir output/evaluation \
     --notes "D2: Pennystocks-trained models → WSB test set"
@@ -723,36 +723,36 @@ python src/run_cross_validation.py \
 ```bash
 # Generate figures for A2 (WSB baseline — the primary result)
 python src/generate_figures.py \
-    --data-path output/processed/<A2_TIMESTAMP>_labelled_dataset.csv \
+    --data-path output/processed/2026-07-19_07-49_labelled_dataset.csv \
     --models-dir output/models/A2 \
     --phase phase2 \
     --seed 42 \
-    --figures-dir output/figures/evaluation
+    --figures-dir output/figures/evaluation/A2
 
 # Generate figures for A1 (Pennystocks baseline)
 python src/generate_figures.py \
-    --data-path output/processed/<A1_TIMESTAMP>_labelled_dataset.csv \
+    --data-path output/processed/2026-07-18_17-42_labelled_dataset.csv \
     --models-dir output/models/A1 \
     --phase phase2 \
     --seed 42 \
-    --prefix "pennystocks_" \
-    --figures-dir output/figures/evaluation
+    --figures-dir output/figures/evaluation/A1
 
 # Generate figures for B1 (WSB Phase 1 — for comparison)
 python src/generate_figures.py \
-    --data-path output/processed/<B1_TIMESTAMP>_labelled_dataset.csv \
+    --data-path output/processed/2026-07-19_08-36_labelled_dataset.csv \
     --models-dir output/models/B1 \
     --phase phase1 \
     --seed 42 \
-    --prefix "phase1_" \
-    --figures-dir output/figures/evaluation
+    --figures-dir output/figures/evaluation/B1
 ```
 
-**Expected outputs:**
-- `output/figures/evaluation/10_confusion_matrix_{model}.png` (per model)
-- `output/figures/evaluation/11_roc_curve_{model}.png` (per model)
-- `output/figures/evaluation/12_threshold_sensitivity_{model}.png` (per model)
-- `output/figures/evaluation/14_roc_combined.png`
+**Note:** Each experiment gets its own `--figures-dir` subdirectory to prevent `11_roc_curves_combined.png` (which has no prefix) from being overwritten across runs.
+
+**Expected outputs per experiment:**
+- `output/figures/evaluation/{exp}/10_confusion_matrix_{model}.png` (×3 models)
+- `output/figures/evaluation/{exp}/11_roc_curve_{model}.png` (×3 models)
+- `output/figures/evaluation/{exp}/11_roc_curves_combined.png`
+- `output/figures/evaluation/{exp}/12_classification_threshold_sensitivity_{model}.png` (×3 models)
 
 **Estimated runtime:** ~5 min (no retraining — just loads models and generates plots)
 
