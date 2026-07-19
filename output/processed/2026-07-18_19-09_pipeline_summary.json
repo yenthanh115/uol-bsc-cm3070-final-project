@@ -1,0 +1,94 @@
+{
+  "normalisation_params": {
+    "mu_volume": 1.205234450219935,
+    "sigma_volume": 9.639273570407878,
+    "mu_sentiment": 0.3107402548035554,
+    "sigma_sentiment": 0.31032904001259276,
+    "train_size": 388149,
+    "test_size": 68923,
+    "split_timestamp": 1623997269.2
+  },
+  "class_distributions": {
+    "all": {
+      "surge_count": 4608,
+      "no_surge_count": 452464,
+      "total": 457072,
+      "surge_rate": 1.0081562642209543,
+      "imbalance_ratio": 98.19097222222223
+    },
+    "train": {
+      "surge_count": 4515,
+      "no_surge_count": 383634,
+      "total": 388149,
+      "surge_rate": 1.163213096001793,
+      "imbalance_ratio": 84.9687707641196
+    },
+    "test": {
+      "surge_count": 93,
+      "no_surge_count": 68830,
+      "total": 68923,
+      "surge_rate": 0.13493318630935974,
+      "imbalance_ratio": 740.1075268817204
+    }
+  },
+  "stage_counts": {
+    "after_load": 577872,
+    "after_windowing": 577872,
+    "excluded_count": 120800,
+    "after_sentiment": 577872,
+    "after_labelling": 577872
+  },
+  "stage_durations": {
+    "load": 14.680148600004031,
+    "windowing": 0.9299102000004495,
+    "sentiment": 451.68665680000413,
+    "labelling": 0.35549580000224523,
+    "threshold_sweep": 2.595413600000029
+  },
+  "total_duration_seconds": 470.2770862999969,
+  "config": {
+    "threshold_tau": 1.5,
+    "weight_volume": 0.75,
+    "weight_sentiment": 0.25,
+    "temporal_split_ratio": 0.8,
+    "min_window_count": 1,
+    "random_seed": 42,
+    "sentiment_model": "vader"
+  },
+  "exclusion_rate": 20.90428330149237,
+  "dataset_fingerprint": {
+    "sha256": "3ce3697de550f013bb45446a0807b46cafb015e172971b6d40d8ca256096eec7",
+    "file_size_bytes": 232426316,
+    "columns": [
+      "archived",
+      "author",
+      "created",
+      "deleted",
+      "edited",
+      "gilded",
+      "id",
+      "is_original_content",
+      "is_self",
+      "is_video",
+      "link_flair_text",
+      "locked",
+      "num_comments",
+      "num_crossposts",
+      "pinned",
+      "removed",
+      "retrieved",
+      "score",
+      "selftext",
+      "shortlink",
+      "thumbnail",
+      "title",
+      "total_awards_received",
+      "upvote_ratio"
+    ],
+    "num_rows": 1293981,
+    "timestamp_column": "created",
+    "timestamp_min": "2021-01-01 00:02:06",
+    "timestamp_max": "2021-12-31 23:55:51",
+    "has_tickers_column": false
+  }
+}

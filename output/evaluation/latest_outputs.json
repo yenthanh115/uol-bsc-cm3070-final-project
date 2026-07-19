@@ -1,7 +1,7 @@
 {
-  "prefix": "2026-07-16_18-52",
+  "prefix": "2026-07-19_00-27",
   "outputs": {
-    "evaluation_metrics": "..\\output\\evaluation\\2026-07-16_18-52_evaluation_metrics.json",
-    "final_summary": "..\\output\\evaluation\\2026-07-16_18-52_final_summary.json"
+    "evaluation_metrics": "D:\\git\\uol-bsc-cm3070-final-project\\output\\evaluation\\2026-07-19_00-27_evaluation_metrics.json",
+    "final_summary": "D:\\git\\uol-bsc-cm3070-final-project\\output\\evaluation\\2026-07-19_00-27_final_summary.json"
   }
 }
