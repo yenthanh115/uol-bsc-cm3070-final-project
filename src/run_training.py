@@ -334,7 +334,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     for name, comp in baseline_comparisons.items():
         print(f"    {name}: AUC={comp.model_auc:.4f} | "
               f"beats_random={'✓' if comp.beats_random else '✗'} | "
-              f"improvement_over_best_feature={comp.improvement_over_best_feature:+.4f}")
+              f"improvement_over_best_feature={comp.improvement_over_best_single_feature:+.4f}")
 
     # ------------------------------------------------------------------
     # 7. Bootstrap confidence intervals (Phase 2.3)
