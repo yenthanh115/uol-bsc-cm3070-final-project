@@ -229,7 +229,7 @@ output/processed/*.csv
 output/processed/threshold_sensitivity.csv
 
 # Trained model files (large binaries)
-output/models/*.joblib
+output/models/**/*.joblib
 
 # Generated figures (reproducible – regenerate with pipeline/training scripts)
 output/figures/
