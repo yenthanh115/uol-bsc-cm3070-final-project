@@ -72,37 +72,65 @@ Rather than using the default 0.5 probability threshold, the pipeline sweeps thr
 
 ## Code Explanation
 
-### Pipeline Orchestration
+### Composite Surge Metric Computation
 
-The pipeline is controlled by a `PipelineConfig` dataclass that captures all parameters (threshold, weights, seed, paths) and serialises to JSON for reproducibility:
-
-```python
-@dataclass
-class PipelineConfig:
-    threshold_tau: float = 1.5
-    weight_volume: float = 0.5
-    weight_sentiment: float = 0.5
-    temporal_split_ratio: float = 0.8
-    random_seed: int = 42
-    # ... additional parameters
-```
-
-Every experiment run saves its configuration alongside results, enabling exact reproduction of any historical experiment.
-
-### Feature Engineering (Backward-Only)
-
-All 11 features are computed using only information available at or before observation time, preventing temporal leakage. The most important feature — `ticker_post_rate_24h` — simply reuses the backward window count from the windowing stage:
+The labelling stage implements the mathematical formulation directly: it computes normalisation statistics from the training partition only, then applies z-score normalisation and weighted combination to all records. The critical leakage-prevention boundary is visible in the code structure — `train_mask` gates which records contribute to μ and σ:
 
 ```python
-# Feature 5: ticker_post_rate_24h (backward-only)
-df = df.assign(ticker_post_rate_24h=df["backward_count"].values.copy())
+# Step 2: Compute μ/σ from training partition ONLY
+train_volume = df.loc[train_mask, "posting_volume_growth"].values.astype(np.float64)
+train_sentiment = np.abs(
+    df.loc[train_mask, "sentiment_change"].values.astype(np.float64)
+)
 
-# Feature 6: ticker_post_acceleration (ratio of recent vs older activity)
-# Uses searchsorted on sorted timestamps for O(n log n) computation
-ticker_post_acceleration = _compute_ticker_post_acceleration(df, created_utc)
+mu_vol = float(np.mean(train_volume))
+sigma_vol = float(np.std(train_volume, ddof=0))  # population std
+mu_sent = float(np.mean(train_sentiment))
+sigma_sent = float(np.std(train_sentiment, ddof=0))
+
+# Step 3: Z-score normalise ALL records using training stats only
+z_volume = _compute_z_scores(all_volume, mu_vol, sigma_vol)
+z_sentiment = _compute_z_scores(all_sentiment, mu_sent, sigma_sent)
+
+# Step 4: Composite metric — weighted combination
+w1 = config.weight_volume
+w2 = config.weight_sentiment
+composite = (w1 * z_volume) + (w2 * z_sentiment)
+
+# Step 5: Binary labelling at threshold τ
+surge_label = np.where(composite > tau, 1.0, 0.0)
 ```
 
-The acceleration feature captures whether posting about a ticker is accelerating (ratio of 12h-recent to 12h-older backward counts), providing the model with momentum information beyond raw volume.
+This directly implements $C = w_v \cdot z_v + w_s \cdot z_s$ with the label assigned as $\mathbb{1}[C > \tau]$. The `ddof=0` (population standard deviation) is deliberate — the training partition is treated as the full reference population rather than a sample from a larger distribution.
+
+### Backward-Only Feature Engineering (Leakage Prevention)
+
+The strongest originality claim of this pipeline is that all 11 prediction features are strictly backward-looking — they use only information available at or before observation time $t$. The `ticker_post_acceleration` feature demonstrates this constraint most clearly. It computes the ratio of posting activity in the recent 12 hours versus the prior 12 hours, using `searchsorted` on pre-sorted per-ticker timestamps for $O(n \log n)$ computation:
+
+```python
+def _compute_ticker_post_acceleration(df, created_utc):
+    """acceleration = count_in_(t-12h, t] / max(count_in_(t-24h, t-12h], 1)"""
+    for ticker, group in df.groupby("ticker", sort=False):
+        idx = group.index.values
+        times = epoch_seconds[idx]
+
+        # Count posts in (t-12h, t]: recent activity
+        recent_left = np.searchsorted(times, times - _12H_SECONDS, side="right")
+        recent_right = np.searchsorted(times, times, side="left")
+        count_recent = recent_right - recent_left
+
+        # Count posts in (t-24h, t-12h]: older baseline
+        older_left = np.searchsorted(times, times - _24H_SECONDS, side="right")
+        older_right = np.searchsorted(times, times - _12H_SECONDS, side="right")
+        count_older = older_right - older_left
+
+        # Acceleration = recent / max(older, 1)
+        denominator = np.maximum(count_older, 1)
+        acceleration = count_recent.astype(np.float64) / denominator.astype(np.float64)
+        result[idx] = acceleration
+```
+
+Both half-open intervals `(t−12h, t]` and `(t−24h, t−12h]` are bounded by the current timestamp — no future information leaks in. The `side="left"` on `recent_right` ensures the current record excludes itself from its own count. The `max(older, 1)` denominator prevents division-by-zero when a ticker has no history in the 12–24h window, treating silence as a baseline of 1 (so acceleration equals the raw recent count).
 
 ### Temporal Cross-Validation and Model Training
 
@@ -202,17 +230,43 @@ The Phase 1 (volume-only) vs Phase 2 (composite volume+sentiment) comparison sho
 
 ### Successes
 
-The prototype successfully achieves the project's "stretch" success criterion (AUC > 0.80) on r/wallstreetbets with both XGBoost and Random Forest. The pipeline is fully reproducible — configuration serialisation, fixed seeds, and timestamped outputs ensure any experiment can be exactly replicated. The modular architecture allows individual stages to be swapped or extended independently.
+The prototype achieves the project's "stretch" success criterion (AUC > 0.80) on r/wallstreetbets with both XGBoost (0.892) and Random Forest (0.880). Threshold tuning proves essential: for XGBoost, moving from the default 0.5 threshold to the tuned 0.85 threshold raises precision from 4.3% to 21.7% — a fivefold improvement — while F1 improves from 0.081 to 0.226. The pipeline is fully reproducible through configuration serialisation, fixed seeds, and timestamped outputs, enabling exact replication of any historical experiment across machines.
+
+The cross-dataset transfer experiments reveal an encouraging result: models trained on the smaller r/pennystocks community (80k records) achieve AUC 0.871 when evaluated on r/wallstreetbets, only 0.021 below in-domain performance. This suggests that surge patterns learned from sparse communities generalise well to dense, high-volume communities — a finding with practical implications for bootstrapping detectors in new communities with limited data.
 
 ### Limitations
 
-1. **Extreme class imbalance** — the surge rate is only 1.4–2.8%, making precision at any threshold very low. Even the best model achieves practical precision of only ~4% at default settings.
-2. **VADER sentiment limitations** — feature importance analysis shows `sentiment_score` ranks low across all models. A more domain-specific financial sentiment model could improve this.
-3. **Single-subreddit training** — cross-dataset transfer is asymmetric and imperfect, suggesting community-specific patterns that don't fully generalise.
+#### 1. Precision Remains Impractical Despite Strong AUC
 
-### Planned Improvements
+The extreme class imbalance (1.4% surge rate on WSB) means that even at the tuned threshold of 0.85, the XGBoost model produces 565 false positives for every 157 true positives — a positive predictive value of only 21.7%. In a practical deployment, roughly 4 out of every 5 flagged posts would be false alarms. This is substantially better than the default threshold (where 12,296 false positives accompany 547 true positives, yielding 4.3% precision), but still insufficient for an unmonitored alert system. The confusion matrix reveals the core tension: at 0.85, the model catches only 157 of 668 actual surges (23.5% recall), meaning 76.5% of genuine surges go undetected to maintain even this modest precision.
 
-1. **Domain-specific sentiment** — replace VADER with a financial sentiment model (e.g., FinBERT) that understands stock-specific language.
-2. **Threshold tuning on validation set** — current experiments show threshold tuning dramatically improves F1 (e.g., XGBoost F1 from 0.00 at default to 0.12 at tuned threshold of 0.16). Systematic per-dataset tuning should be part of the final pipeline.
-3. **Additional features** — incorporate cross-ticker correlation features and subreddit-level activity baselines to capture community-wide momentum shifts.
-4. **Real-time inference** — extend the batch pipeline to support streaming Reddit data with online prediction, enabling practical early-warning alerts.
+#### 2. VADER Misreads Financial Community Language
+
+VADER, designed for general social media sentiment, systematically misinterprets WSB-specific language. Inspection of prediction examples reveals two failure modes:
+
+- **Bullish language scored as negative:** The post *"DNUT. Rocket is leaving soon, no shares left to buy because of mandatory diamond hands"* — a textbook bullish WSB post using community slang ("rocket", "diamond hands") — receives a VADER score of −0.97, near the floor of the scale. VADER treats "no shares left to buy" as negative while the community meaning is supply exhaustion signalling price increase.
+- **Neutral scores for price-action posts:** Posts like *"DWAC is now a buy"* and *"DWACW up 488% / DWAC up 26% premarket"* both receive VADER scores of exactly 0.0. These are clearly high-conviction, bullish posts that signal the early stages of community attention — precisely the surges the system aims to detect — yet VADER assigns them no sentiment signal whatsoever because they contain no lexicon-matched terms.
+
+Despite these limitations, permutation importance analysis shows `sentiment_score` is the single most important feature for XGBoost (importance = 0.203, more than 3× the next feature `ticker_post_rate_24h` at 0.067). This seemingly paradoxical result suggests the model exploits VADER's systematic biases as a noisy proxy: strongly negative VADER scores correlate with posts containing WSB-specific language ("rocket", "moon", "diamond hands", "tendies"), which in turn correlates with coordinated community surges. The model effectively uses VADER's misclassification pattern as an indirect community-language detector — a strategy that works but is fragile and unlikely to transfer to communities with different vernacular.
+
+#### 3. Asymmetric Cross-Domain Transfer
+
+Transfer from WSB-trained models to pennystocks (D1: AUC 0.684) degrades substantially more than the reverse direction (D2: AUC 0.871). The asymmetry suggests r/wallstreetbets contains community-specific patterns (rapid-fire meme posting, extreme language, coordinated pump behaviour) that do not manifest in the more measured r/pennystocks community. The D1 model encounters surge patterns it never learned — smaller, slower-building attention waves that characterise a community with 16× fewer posts.
+
+### Improvements Addressing Observed Failure Modes
+
+#### 1. Domain-Specific Sentiment (addresses Limitation 2)
+
+Replace VADER with a financial sentiment model such as FinBERT or a custom lexicon incorporating WSB terminology. The prediction examples show that correctly scoring "rocket is leaving soon" as bullish (+0.8 instead of −0.97) and "DWAC up 488%" as strongly bullish (+0.9 instead of 0.0) would give the model a genuine sentiment signal rather than a noisy proxy. Given that `sentiment_score` already dominates feature importance despite systematic miscalibration, a model receiving accurate sentiment could plausibly improve both precision and recall.
+
+#### 2. Threshold Tuning as a First-Class Pipeline Stage (addresses Limitation 1)
+
+Current experiments demonstrate that threshold tuning improves XGBoost F1 from 0.081 to 0.226 (a +0.145 gain). However, the tuned threshold was selected on a single validation fold. A more robust approach would perform threshold selection via the full expanding-window CV procedure, selecting the operating point that maximises a user-specified metric (F1, precision-at-recall-k, or a cost-weighted combination). This should be configurable per deployment: a human-in-the-loop system can tolerate lower precision (favouring recall at threshold ~0.3), while an automated alert system requires higher precision (threshold ~0.9).
+
+#### 3. Community-Adaptive Features (addresses Limitation 3)
+
+The cross-dataset transfer gap suggests the need for features that adapt to community characteristics. Candidates include: normalised post rate (ticker posts relative to subreddit daily baseline), cross-ticker momentum (fraction of active tickers experiencing simultaneous acceleration), and community participation breadth (unique authors posting about a ticker in the backward window). These features would make surge detection relative to community norms rather than absolute thresholds, improving transfer between communities of different sizes and activity levels.
+
+#### 4. Real-Time Streaming Inference
+
+The batch pipeline processes historical data retrospectively. Extending to streaming Reddit data (via the Reddit API or Pushshift) would enable live early-warning alerts. The backward-only feature design already ensures compatibility with streaming — all 11 features can be computed from data available at observation time. The primary engineering challenge is maintaining efficient per-ticker state (rolling windows, last-post timestamps) across a high-throughput event stream.
