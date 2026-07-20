@@ -41,7 +41,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from surge_pipeline.features import FEATURE_COLUMNS, compute_features
+from surge_pipeline.features import FEATURE_COLUMNS
 from surge_pipeline.experiment_log import append_experiment
 
 logger = logging.getLogger(__name__)
@@ -263,14 +263,17 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  Dataset shape: {df.shape}")
 
     # ------------------------------------------------------------------
-    # 3. Compute features if not present
+    # 3. Verify feature columns are present
     # ------------------------------------------------------------------
     missing_features = [c for c in FEATURE_COLUMNS if c not in df.columns]
     if missing_features:
-        print(f"  Computing features (missing: {missing_features})...")
-        df = compute_features(df)
-    else:
-        print("  All features already present.")
+        logger.error(
+            "Feature columns missing from dataset: %s. "
+            "Re-run the labelling pipeline to produce a dataset with engineered features.",
+            missing_features,
+        )
+        sys.exit(1)
+    print("  All feature columns present.")
 
     # ------------------------------------------------------------------
     # 4. Evaluate models on the cross-dataset

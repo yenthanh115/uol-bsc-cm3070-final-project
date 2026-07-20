@@ -250,16 +250,16 @@ class TestHyperparameterGrids:
         grid = _get_rf_param_grid()
         assert len(grid) == 36
 
-    def test_xgb_grid_within_50_configs(self):
-        """XGBoost grid should have ≤50 configs."""
+    def test_xgb_grid_within_75_configs(self):
+        """XGBoost grid should have ≤75 configs (raised for P6 scale_pos_weight)."""
         grid = _get_xgb_param_grid(random_seed=42)
-        assert len(grid) <= 50
+        assert len(grid) <= 75
 
-    def test_all_grids_within_50(self):
-        """All model grids respect the ≤50 config limit."""
+    def test_all_grids_within_limits(self):
+        """All model grids respect their config limits."""
         assert len(_get_lr_param_grid()) <= 50
         assert len(_get_rf_param_grid()) <= 50
-        assert len(_get_xgb_param_grid(42)) <= 50
+        assert len(_get_xgb_param_grid(42)) <= 75
 
 
 # ============================================================================

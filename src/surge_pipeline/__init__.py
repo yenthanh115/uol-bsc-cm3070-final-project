@@ -2,5 +2,19 @@
 
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.normalisation import NormalisationParams, load_normalisation_params
+from surge_pipeline.training_models import (
+    CVResult,
+    TrainedModel,
+    TrainingPipelineResult,
+    TrainingResult,
+)
 
-__all__ = ["PipelineConfig", "NormalisationParams", "load_normalisation_params"]
+__all__ = [
+    "PipelineConfig",
+    "NormalisationParams",
+    "load_normalisation_params",
+    "CVResult",
+    "TrainedModel",
+    "TrainingPipelineResult",
+    "TrainingResult",
+]

@@ -78,8 +78,6 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.array([], dtype="float64")
         return df
 
-    n = len(df)
-
     # ------------------------------------------------------------------
     # Feature 1: sentiment_score (R11-AC1)
     # Reuse sentiment_polarity computed at observation time

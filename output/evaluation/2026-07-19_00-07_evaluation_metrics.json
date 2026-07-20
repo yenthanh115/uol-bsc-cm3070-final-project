@@ -1,0 +1,69 @@
+{
+  "models": [
+    {
+      "model_name": "logistic_regression",
+      "partition": "test",
+      "precision": 0.126202205019939,
+      "recall": 0.6095166163141994,
+      "f1": 0.2091079873032325,
+      "roc_auc": 0.7807438366186845,
+      "support_positive": 2648,
+      "support_negative": 66275,
+      "confusion_matrix": [
+        [
+          55100,
+          11175
+        ],
+        [
+          1034,
+          1614
+        ]
+      ]
+    },
+    {
+      "model_name": "random_forest",
+      "partition": "test",
+      "precision": 0.1371853240492769,
+      "recall": 0.7737915407854985,
+      "f1": 0.23305277525022747,
+      "roc_auc": 0.8558646141625859,
+      "support_positive": 2648,
+      "support_negative": 66275,
+      "confusion_matrix": [
+        [
+          53388,
+          12887
+        ],
+        [
+          599,
+          2049
+        ]
+      ]
+    },
+    {
+      "model_name": "xgboost",
+      "partition": "test",
+      "precision": 0.1671066525871172,
+      "recall": 0.7171450151057401,
+      "f1": 0.27105338281473024,
+      "roc_auc": 0.8609741720903358,
+      "support_positive": 2648,
+      "support_negative": 66275,
+      "confusion_matrix": [
+        [
+          56810,
+          9465
+        ],
+        [
+          749,
+          1899
+        ]
+      ]
+    }
+  ],
+  "summary": {
+    "num_models": 3,
+    "best_model_by_auc": "xgboost",
+    "best_auc": 0.8609741720903358
+  }
+}

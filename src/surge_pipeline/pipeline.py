@@ -24,6 +24,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from surge_pipeline.config import PipelineConfig
+from surge_pipeline.features import compute_features
 from surge_pipeline.labelling import apply_labelling, sweep_thresholds
 from surge_pipeline.loader import load_data
 from surge_pipeline.sentiment import compute_sentiment
@@ -218,29 +219,7 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     sweep_results = sweep_thresholds(df, config)
 
     # Build summary table (R8-AC1, AC2)
-    rows: List[Dict] = []
-    for result in sweep_results:
-        dist = result["class_distributions"].get("all", {})
-        tau = result["threshold"]
-        surge_count = dist.get("surge_count", 0)
-        no_surge_count = dist.get("no_surge_count", 0)
-        surge_rate = dist.get("surge_rate", 0.0)
-        imbalance_ratio = dist.get("imbalance_ratio", 0.0)
-
-        # R8-AC4: Viable if surge rate between 5% and 10%
-        viable = 5.0 <= surge_rate <= 10.0
-
-        rows.append(
-            {
-                "threshold": tau,
-                "surge_count": surge_count,
-                "no_surge_count": no_surge_count,
-                "surge_rate": surge_rate,
-                "imbalance_ratio": imbalance_ratio,
-                "viable": viable,
-            }
-        )
-
+    rows = _sweep_results_to_rows(sweep_results)
     sweep_df = pd.DataFrame(rows)
 
     # Log the summary table (R8-AC3)
@@ -312,12 +291,13 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     output_paths: Dict[str, str] = {}
 
     # ------------------------------------------------------------------
-    # 1. Labelled dataset (CSV)
+    # 1. Labelled dataset (CSV) — includes engineered features
     # ------------------------------------------------------------------
+    labelled_df = compute_features(results["labelled_df"])
     labelled_path = output_dir / f"{prefix}_labelled_dataset.csv"
-    results["labelled_df"].to_csv(labelled_path, index=False)
+    labelled_df.to_csv(labelled_path, index=False)
     output_paths["labelled_dataset"] = str(labelled_path)
-    logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(results["labelled_df"]))
+    logger.info("Labelled dataset saved: %s (%d records)", labelled_path, len(labelled_df))
 
     # ------------------------------------------------------------------
     # 2. Pipeline summary (JSON)
@@ -349,15 +329,15 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     }
 
     # Compute exclusion rate for summary
-    labelled_df = results["labelled_df"]
-    if "excluded" in labelled_df.columns:
-        total = len(labelled_df)
-        excluded = int(labelled_df["excluded"].sum())
+    raw_labelled_df = results["labelled_df"]
+    if "excluded" in raw_labelled_df.columns:
+        total = len(raw_labelled_df)
+        excluded = int(raw_labelled_df["excluded"].sum())
         summary["exclusion_rate"] = excluded / total * 100 if total > 0 else 0.0
 
     # Include dataset fingerprint if available
-    if "dataset_fingerprint" in labelled_df.attrs:
-        summary["dataset_fingerprint"] = labelled_df.attrs["dataset_fingerprint"]
+    if "dataset_fingerprint" in raw_labelled_df.attrs:
+        summary["dataset_fingerprint"] = raw_labelled_df.attrs["dataset_fingerprint"]
 
     summary_path = output_dir / f"{prefix}_pipeline_summary.json"
 
@@ -380,23 +360,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     # 3. Threshold sensitivity table (CSV) (R8-AC3)
     # ------------------------------------------------------------------
     if results.get("sweep_results"):
-        sweep_rows: List[Dict] = []
-        for result in results["sweep_results"]:
-            dist = result["class_distributions"].get("all", {})
-            tau = result["threshold"]
-            surge_rate = dist.get("surge_rate", 0.0)
-            sweep_rows.append(
-                {
-                    "threshold": tau,
-                    "surge_count": dist.get("surge_count", 0),
-                    "no_surge_count": dist.get("no_surge_count", 0),
-                    "surge_rate": surge_rate,
-                    "imbalance_ratio": dist.get("imbalance_ratio", 0.0),
-                    "viable": 5.0 <= surge_rate <= 10.0,
-                }
-            )
-
-        sweep_df = pd.DataFrame(sweep_rows)
+        sweep_df = pd.DataFrame(_sweep_results_to_rows(results["sweep_results"]))
         sweep_path = output_dir / f"{prefix}_threshold_sensitivity.csv"
         sweep_df.to_csv(sweep_path, index=False)
         output_paths["threshold_sensitivity"] = str(sweep_path)
@@ -422,3 +386,44 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
 
     logger.info("All outputs saved to: %s", output_dir)
     return output_paths
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _sweep_results_to_rows(sweep_results: list) -> list:
+    """Convert raw sweep_results list to a list of row dicts.
+
+    Used by both run_threshold_sweep and save_outputs to avoid duplicating
+    the same iteration logic.
+
+    Parameters
+    ----------
+    sweep_results : list
+        Each entry is a dict with keys 'threshold' and 'class_distributions'.
+
+    Returns
+    -------
+    list of dict
+        Each row has keys: threshold, surge_count, no_surge_count,
+        surge_rate, imbalance_ratio, viable.
+    """
+    rows = []
+    for result in sweep_results:
+        dist = result["class_distributions"].get("all", {})
+        tau = result["threshold"]
+        surge_count = dist.get("surge_count", 0)
+        no_surge_count = dist.get("no_surge_count", 0)
+        surge_rate = dist.get("surge_rate", 0.0)
+        imbalance_ratio = dist.get("imbalance_ratio", 0.0)
+        rows.append({
+            "threshold": tau,
+            "surge_count": surge_count,
+            "no_surge_count": no_surge_count,
+            "surge_rate": surge_rate,
+            "imbalance_ratio": imbalance_ratio,
+            "viable": 5.0 <= surge_rate <= 10.0,
+        })
+    return rows

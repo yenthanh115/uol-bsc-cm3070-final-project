@@ -14,6 +14,7 @@ Requirements: R2 (Exploratory Data Analysis)
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -30,10 +31,53 @@ logger = logging.getLogger(__name__)
 
 # Resolve paths relative to the project root (two levels up from this file)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-
-LABELLED_DATASET_PATH = _PROJECT_ROOT / "output" / "processed" / "labelled_dataset.csv"
-THRESHOLD_SENSITIVITY_PATH = _PROJECT_ROOT / "output" / "processed" / "threshold_sensitivity.csv"
+_PROCESSED_DIR = _PROJECT_ROOT / "output" / "processed"
+_LATEST_OUTPUTS = _PROCESSED_DIR / "latest_outputs.json"
 FIGURES_DIR = _PROJECT_ROOT / "output" / "figures" / "eda"
+
+
+def _resolve_latest_path(output_key: str, fallback_filename: str) -> Path:
+    """Resolve the latest output path from latest_outputs.json.
+
+    Resolution strategy:
+    1. Read manifest and try path relative to processed dir
+    2. Try path relative to project root
+    3. Try just the filename from the manifest
+    4. Scan the processed directory for the most recent file matching the suffix
+    5. Fall back to the unprefixed filename
+    """
+    if _LATEST_OUTPUTS.exists():
+        try:
+            data = json.loads(_LATEST_OUTPUTS.read_text(encoding="utf-8"))
+            rel_path = data.get("outputs", {}).get(output_key, "")
+            if rel_path:
+                # 1. Relative to latest_outputs.json directory
+                candidate = (_LATEST_OUTPUTS.parent / rel_path).resolve()
+                if candidate.exists():
+                    return candidate
+                # 2. Relative to project root
+                candidate = (_PROJECT_ROOT / rel_path).resolve()
+                if candidate.exists():
+                    return candidate
+                # 3. Just use the filename in the processed directory
+                filename = Path(rel_path).name
+                candidate = _PROCESSED_DIR / filename
+                if candidate.exists():
+                    return candidate
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # 4. Scan for the most recent file with a matching suffix (prefixed files
+    #    sort chronologically, so max() gives the latest).
+    matches = sorted(_PROCESSED_DIR.glob(f"*_{fallback_filename}"))
+    if matches:
+        return matches[-1]
+
+    return _PROCESSED_DIR / fallback_filename
+
+
+LABELLED_DATASET_PATH = _resolve_latest_path("labelled_dataset", "labelled_dataset.csv")
+THRESHOLD_SENSITIVITY_PATH = _resolve_latest_path("threshold_sensitivity", "threshold_sensitivity.csv")
 
 # Publication defaults
 DPI = 300

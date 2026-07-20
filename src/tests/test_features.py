@@ -2,7 +2,7 @@
 
 Tests:
   1. No feature uses future information (backward-only computation)
-  2. Feature matrix has expected shape (n_records × 9 features)
+  2. Feature matrix has expected shape (n_records × 11 features)
   3. No NaN values exist in non-excluded records
   4. ticker_post_acceleration with zero denominator (AC10)
   5. time_since_previous first occurrence (AC11)
@@ -202,12 +202,12 @@ class TestNoFutureLeakage:
 class TestFeatureMatrixShape:
     """Verify feature matrix has expected shape."""
 
-    def test_feature_matrix_has_9_columns(self, labelled_df: pd.DataFrame):
-        """Feature matrix should have exactly 9 feature columns."""
+    def test_feature_matrix_has_11_columns(self, labelled_df: pd.DataFrame):
+        """Feature matrix should have exactly 11 feature columns (9 base + 2 interaction)."""
         result = compute_features(labelled_df.copy())
         feature_matrix = get_feature_matrix(result)
 
-        assert feature_matrix.shape[1] == 9
+        assert feature_matrix.shape[1] == 11
         assert list(feature_matrix.columns) == FEATURE_COLUMNS
 
     def test_feature_matrix_preserves_row_count(self, labelled_df: pd.DataFrame):
@@ -419,7 +419,7 @@ class TestDeterminism:
         pd.testing.assert_frame_equal(result1, result2)
 
     def test_feature_values_are_deterministic(self, labelled_df: pd.DataFrame):
-        """All 9 feature columns are bit-identical across runs."""
+        """All 11 feature columns are bit-identical across runs."""
         result1 = compute_features(labelled_df.copy())
         result2 = compute_features(labelled_df.copy())
 

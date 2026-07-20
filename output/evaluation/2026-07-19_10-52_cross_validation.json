@@ -1,0 +1,125 @@
+{
+  "experiment": "cross_dataset_validation",
+  "model_source": "D:\\git\\uol-bsc-cm3070-final-project\\output\\models\\A2",
+  "eval_dataset": "D:\\git\\uol-bsc-cm3070-final-project\\output\\processed\\2026-07-18_17-42_labelled_dataset.csv",
+  "partition": "test",
+  "timestamp": "2026-07-19T10:52:17.973722",
+  "results": [
+    {
+      "model_name": "logistic_regression",
+      "roc_auc": 0.6518572975550634,
+      "precision": 0.012965050732807215,
+      "recall": 0.7419354838709677,
+      "f1": 0.02548476454293629,
+      "accuracy": 0.46339231238560097,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          1496,
+          1751
+        ],
+        [
+          8,
+          23
+        ]
+      ],
+      "optimal_threshold": 0.81,
+      "tuned_threshold_metrics": {
+        "precision": 0.017985611510791366,
+        "recall": 0.16129032258064516,
+        "f1": 0.032362459546925564,
+        "accuracy": 0.9087858450274557,
+        "confusion_matrix": [
+          [
+            2974,
+            273
+          ],
+          [
+            26,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "model_name": "random_forest",
+      "roc_auc": 0.6756410383778575,
+      "precision": 0.032,
+      "recall": 0.12903225806451613,
+      "f1": 0.05128205128205128,
+      "accuracy": 0.9548505186089079,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          3126,
+          121
+        ],
+        [
+          27,
+          4
+        ]
+      ],
+      "optimal_threshold": 0.88,
+      "tuned_threshold_metrics": {
+        "precision": 0.09090909090909091,
+        "recall": 0.03225806451612903,
+        "f1": 0.047619047619047616,
+        "accuracy": 0.987797437461867,
+        "confusion_matrix": [
+          [
+            3237,
+            10
+          ],
+          [
+            30,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "model_name": "xgboost",
+      "roc_auc": 0.6839067327657291,
+      "precision": 0.017369727047146403,
+      "recall": 0.6774193548387096,
+      "f1": 0.03387096774193549,
+      "accuracy": 0.6345332519829164,
+      "support_positive": 31,
+      "support_negative": 3247,
+      "confusion_matrix": [
+        [
+          2059,
+          1188
+        ],
+        [
+          10,
+          21
+        ]
+      ],
+      "optimal_threshold": 0.85,
+      "tuned_threshold_metrics": {
+        "precision": 0.05555555555555555,
+        "recall": 0.03225806451612903,
+        "f1": 0.04081632653061224,
+        "accuracy": 0.9856619890176938,
+        "confusion_matrix": [
+          [
+            3230,
+            17
+          ],
+          [
+            30,
+            1
+          ]
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "best_model": "xgboost",
+    "best_auc": 0.6839067327657291,
+    "num_models": 3
+  }
+}

@@ -27,38 +27,22 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Stopwords: common English words and Reddit/finance terms that look like tickers
+#
+# Split into named sub-sets by category for easier auditing and extension.
+# The public TICKER_STOPWORDS is their union.
 # ---------------------------------------------------------------------------
-TICKER_STOPWORDS: Set[str] = {
-    # Common English words (2-5 chars uppercase)
+
+_COMMON_ENGLISH_WORDS: Set[str] = {
+    # 1-2 char words
+    "TO", "IS", "IT", "IF", "IN", "OR", "SO", "UP",
+    "AT", "AN", "AS", "BE", "BY", "DO", "GO", "HE", "ME", "MY", "NO",
+    "OF", "OH", "ON", "WE",
+    # 3-5 char words
     "THE", "FOR", "AND", "BUT", "NOT", "ARE", "WAS", "HAS", "HAD", "CAN",
     "ALL", "NEW", "OLD", "BIG", "LOW", "HIGH", "BUY", "PUT", "GET", "GOT",
     "SET", "RUN", "SAW", "MAY", "OUR", "HIS", "HER", "WHO", "HOW", "WHY",
     "ITS", "OWN", "NOW", "ANY", "FEW", "ONE", "TWO", "TEN", "TOP", "RED",
-    "HOT", "DAY", "DID", "TO", "IS", "IT", "IF", "IN", "OR", "SO", "UP",
-    "AT", "AN", "AS", "BE", "BY", "DO", "GO", "HE", "ME", "MY", "NO",
-    "OF", "OH", "ON", "WE",
-    # Reddit/finance terms
-    "DD", "CEO", "CFO", "IPO", "ETF", "OTC", "SEC", "FDA", "EPS", "ATH",
-    "ATL", "APE", "YOLO", "FOMO", "FUD", "WSB", "IMO", "IMHO", "EDIT",
-    "TLDR", "NSFW", "USA", "NYSE", "EOD", "EOW", "EOM", "GDP", "CPI",
-    "ROI", "ITM", "OTM", "RSI", "MACD", "EMA", "SMA", "LOL", "WTF", "OMG",
-    "SMH", "TBH", "LMAO", "ROFL", "PM", "AM", "EST", "PST", "UTC", "MON",
-    "TUE", "WED", "THU", "FRI", "SAT", "SUN", "JAN", "FEB", "MAR", "APR",
-    "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "EV", "AI", "AR",
-    "VR", "US", "UK", "EU", "PT", "FT", "LB", "OZ", "AVG", "MAX", "MIN",
-    "VS",
-    # Stock exchange and market terms (not tickers)
-    "OTCQB", "OTCQX", "TSX", "TSXV", "CSE", "NASDAQ", "AMEX", "SP",
-    "USD", "CAD", "GBP", "EUR", "BTC", "CRYPTO",
-    "LLC", "INC", "LTD", "CORP", "CO",
-    # Common false positives from Reddit penny stock posts
-    "COVID", "ZERO", "GLOBE", "PINK", "XXXX", "PR", "CEO", "CBD",
-    "NFT", "DM", "OP", "EDIT", "TL", "DR", "ICYMI", "STOCK", "SHARE",
-    "SHARES", "PRICE", "TRADE", "PENNY", "CA", "NY", "TX", "FL",
-    # Post-related words
-    "UPDATE", "HOLD", "SELL", "SHORT", "LONG", "CALL", "PUTS", "MOON",
-    "PUMP", "DUMP", "GAIN", "LOSS", "PLAY", "PICK", "MOVE", "DROP", "RISE",
-    "FALL", "FREE", "DOWN", "NEXT", "LAST", "WEEK", "YEAR", "LINK", "POST",
+    "HOT", "DAY", "DID",
     "DONT", "INFO", "JUST", "LIKE", "MAKE", "MUCH", "SOME", "THAN", "THEM",
     "THEN", "THEY", "THIS", "THAT", "VERY", "WHAT", "WHEN", "WILL", "WITH",
     "BEEN", "FROM", "HAVE", "HERE", "INTO", "KEEP", "KNOW", "LETS", "LOOK",
@@ -70,6 +54,72 @@ TICKER_STOPWORDS: Set[str] = {
     "SIDE", "SURE", "TECH", "TERM", "TIME", "TYPE", "USED", "WAIT", "WELL",
     "WENT", "WORK",
 }
+
+_REDDIT_SLANG: Set[str] = {
+    # Reddit community terms
+    "DD", "APE", "YOLO", "FOMO", "FUD", "WSB", "IMO", "IMHO", "EDIT",
+    "TLDR", "NSFW", "LOL", "WTF", "OMG", "SMH", "TBH", "LMAO", "ROFL",
+    "DM", "OP", "TL", "DR", "ICYMI",
+    # Trading-post verbs and nouns that are not tickers
+    "UPDATE", "HOLD", "SELL", "SHORT", "LONG", "CALL", "PUTS", "MOON",
+    "PUMP", "DUMP", "GAIN", "LOSS", "PLAY", "PICK", "MOVE", "DROP", "RISE",
+    "FALL", "FREE", "DOWN", "NEXT", "LAST", "WEEK", "YEAR", "LINK", "POST",
+    "STOCK", "SHARE", "SHARES", "PRICE", "TRADE", "PENNY",
+}
+
+_FINANCE_ABBREVIATIONS: Set[str] = {
+    # Corporate/financial abbreviations
+    "CEO", "CFO", "IPO", "ETF", "OTC", "SEC", "FDA", "EPS", "ATH", "ATL",
+    "NYSE", "EOD", "EOW", "EOM", "GDP", "CPI", "ROI", "ITM", "OTM",
+    "RSI", "MACD", "EMA", "SMA", "AVG", "MAX", "MIN", "VS",
+    # Entity suffixes
+    "LLC", "INC", "LTD", "CORP", "CO",
+}
+
+_MARKET_VENUES: Set[str] = {
+    # Exchange names and market identifiers (never valid tickers in context)
+    "OTCQB", "OTCQX", "TSX", "TSXV", "CSE", "NASDAQ", "AMEX", "SP",
+}
+
+_CURRENCIES_AND_ASSETS: Set[str] = {
+    "USD", "CAD", "GBP", "EUR", "BTC", "CRYPTO",
+}
+
+_DATETIME_AND_UNITS: Set[str] = {
+    # Time zones and units
+    "PM", "AM", "EST", "PST", "UTC",
+    "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN",
+    "JAN", "FEB", "MAR", "APR", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    "FT", "LB", "OZ",
+}
+
+_GEOGRAPHY: Set[str] = {
+    "USA", "US", "UK", "EU", "CA", "NY", "TX", "FL",
+    "PT",  # Portugal (common in EU context)
+}
+
+_TECHNOLOGY_BUZZWORDS: Set[str] = {
+    # Tech acronyms frequently false-positive matched in WSB/pennystocks posts
+    "EV", "AI", "AR", "VR", "NFT", "CBD", "COVID",
+}
+
+_REDDIT_FP: Set[str] = {
+    # Remaining high-frequency false positives specific to penny stock posts
+    "ZERO", "GLOBE", "PINK", "XXXX", "PR",
+}
+
+#: Union of all stopword sub-sets. Use this for ticker filtering.
+TICKER_STOPWORDS: Set[str] = (
+    _COMMON_ENGLISH_WORDS
+    | _REDDIT_SLANG
+    | _FINANCE_ABBREVIATIONS
+    | _MARKET_VENUES
+    | _CURRENCIES_AND_ASSETS
+    | _DATETIME_AND_UNITS
+    | _GEOGRAPHY
+    | _TECHNOLOGY_BUZZWORDS
+    | _REDDIT_FP
+)
 
 # Regex patterns for ticker extraction
 _DOLLAR_SIGN_PATTERN = re.compile(r"\$([A-Z]{1,5})")
@@ -238,7 +288,8 @@ def compute_dataset_fingerprint(file_path: Path) -> Dict[str, object]:
     # Structural metadata (fast — only reads headers + first/last rows)
     df_head = pd.read_csv(file_path, nrows=5)
     columns = sorted(df_head.columns.tolist())
-    num_rows = sum(1 for _ in open(file_path, encoding="utf-8")) - 1  # minus header
+    with open(file_path, encoding="utf-8") as _f:
+        num_rows = sum(1 for _ in _f) - 1  # minus header
 
     # Timestamp column detection
     ts_col = None
