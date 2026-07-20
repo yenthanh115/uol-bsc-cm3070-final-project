@@ -21,12 +21,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from surge_pipeline.config import PipelineConfig
+from surge_pipeline.config import PipelineConfig, WINDOW_SECONDS
 
 logger = logging.getLogger(__name__)
 
-# 24 hours in seconds
-_WINDOW_SECONDS: int = 24 * 60 * 60
+# Alias for internal use (preserves existing references without renaming)
+_WINDOW_SECONDS = WINDOW_SECONDS
 
 
 def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:

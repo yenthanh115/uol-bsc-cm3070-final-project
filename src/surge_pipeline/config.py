@@ -10,6 +10,10 @@ from typing import List, Optional
 # Project root is two levels up from this file (src/surge_pipeline/config.py -> project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+#: Temporal window size in seconds (24 hours).
+#: Used by windowing (forward/backward counts) and sentiment (forward mean).
+WINDOW_SECONDS: int = 24 * 60 * 60
+
 
 @dataclass
 class PipelineConfig:
