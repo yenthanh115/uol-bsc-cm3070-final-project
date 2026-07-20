@@ -34,6 +34,100 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Shared stage runner (eliminates duplication between full pipeline and sweep)
+# ---------------------------------------------------------------------------
+
+
+def _run_through_sentiment(
+    config: PipelineConfig,
+    stage_progress: tqdm | None = None,
+) -> tuple:
+    """Execute pipeline stages 1–3: load → window → sentiment.
+
+    This is the shared backbone used by both run_pipeline (full execution)
+    and run_threshold_sweep (sweep-only mode), eliminating duplicated
+    stage logic.
+
+    Parameters
+    ----------
+    config : PipelineConfig
+        Complete pipeline configuration.
+    stage_progress : tqdm | None
+        Optional progress bar to update after each stage.
+
+    Returns
+    -------
+    tuple of (pd.DataFrame, dict, dict)
+        - df: DataFrame after sentiment computation
+        - stage_counts: record counts after each stage
+        - stage_durations: elapsed time per stage
+    """
+    stage_counts: Dict[str, int] = {}
+    stage_durations: Dict[str, float] = {}
+
+    # ------------------------------------------------------------------
+    # Stage 1: Load data
+    # ------------------------------------------------------------------
+    logger.info("=" * 60)
+    logger.info("STAGE 1: Loading data")
+    logger.info("=" * 60)
+
+    t0 = time.perf_counter()
+    df = load_data(config)
+    stage_durations["load"] = time.perf_counter() - t0
+    stage_counts["after_load"] = len(df)
+    logger.info("After load: %d records (%.2fs)", len(df), stage_durations["load"])
+    if stage_progress:
+        stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['load']:.1f}s")
+        stage_progress.update(1)
+
+    # ------------------------------------------------------------------
+    # Stage 2: Windowing
+    # ------------------------------------------------------------------
+    logger.info("=" * 60)
+    logger.info("STAGE 2: Computing windowed counts")
+    logger.info("=" * 60)
+
+    t0 = time.perf_counter()
+    df = compute_windowed_counts(df, config)
+    stage_durations["windowing"] = time.perf_counter() - t0
+    stage_counts["after_windowing"] = len(df)
+    logger.info("After windowing: %d records (%.2fs)", len(df), stage_durations["windowing"])
+    if stage_progress:
+        stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['windowing']:.1f}s")
+        stage_progress.update(1)
+
+    # Log exclusion summary
+    if "excluded" in df.columns:
+        excluded_count = df["excluded"].sum()
+        exclusion_rate = excluded_count / len(df) * 100 if len(df) > 0 else 0
+        logger.info(
+            "Exclusion summary — excluded: %d (%.1f%%)",
+            excluded_count,
+            exclusion_rate,
+        )
+        stage_counts["excluded_count"] = int(excluded_count)
+
+    # ------------------------------------------------------------------
+    # Stage 3: Sentiment
+    # ------------------------------------------------------------------
+    logger.info("=" * 60)
+    logger.info("STAGE 3: Computing sentiment")
+    logger.info("=" * 60)
+
+    t0 = time.perf_counter()
+    df = compute_sentiment(df, config)
+    stage_durations["sentiment"] = time.perf_counter() - t0
+    stage_counts["after_sentiment"] = len(df)
+    logger.info("After sentiment: %d records (%.2fs)", len(df), stage_durations["sentiment"])
+    if stage_progress:
+        stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['sentiment']:.1f}s")
+        stage_progress.update(1)
+
+    return df, stage_counts, stage_durations
+
+
+# ---------------------------------------------------------------------------
 # Core pipeline
 # ---------------------------------------------------------------------------
 
@@ -67,68 +161,15 @@ def run_pipeline(config: PipelineConfig) -> dict:
     np.random.seed(config.random_seed)
     logger.info("Random seeds set to %d for deterministic execution.", config.random_seed)
 
-    stage_counts: Dict[str, int] = {}
-    stage_durations: Dict[str, float] = {}
     pipeline_start = time.perf_counter()
 
     stages = ["Load", "Windowing", "Sentiment", "Labelling", "Threshold sweep"]
     stage_progress = tqdm(stages, desc="Pipeline", unit="stage", leave=True)
 
     # ------------------------------------------------------------------
-    # Stage 1: Load data
+    # Stages 1–3: Load → Window → Sentiment (shared)
     # ------------------------------------------------------------------
-    logger.info("=" * 60)
-    logger.info("STAGE 1: Loading data")
-    logger.info("=" * 60)
-
-    t0 = time.perf_counter()
-    df = load_data(config)
-    stage_durations["load"] = time.perf_counter() - t0
-    stage_counts["after_load"] = len(df)
-    logger.info("After load: %d records (%.2fs)", len(df), stage_durations["load"])
-    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['load']:.1f}s")
-    stage_progress.update(1)
-
-    # ------------------------------------------------------------------
-    # Stage 2: Windowing
-    # ------------------------------------------------------------------
-    logger.info("=" * 60)
-    logger.info("STAGE 2: Computing windowed counts")
-    logger.info("=" * 60)
-
-    t0 = time.perf_counter()
-    df = compute_windowed_counts(df, config)
-    stage_durations["windowing"] = time.perf_counter() - t0
-    stage_counts["after_windowing"] = len(df)
-    logger.info("After windowing: %d records (%.2fs)", len(df), stage_durations["windowing"])
-    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['windowing']:.1f}s")
-    stage_progress.update(1)
-
-    # Log exclusion summary
-    if "excluded" in df.columns:
-        excluded_count = df["excluded"].sum()
-        exclusion_rate = excluded_count / len(df) * 100 if len(df) > 0 else 0
-        logger.info(
-            "Exclusion summary — excluded: %d (%.1f%%)",
-            excluded_count,
-            exclusion_rate,
-        )
-        stage_counts["excluded_count"] = int(excluded_count)
-
-    # ------------------------------------------------------------------
-    # Stage 3: Sentiment
-    # ------------------------------------------------------------------
-    logger.info("=" * 60)
-    logger.info("STAGE 3: Computing sentiment")
-    logger.info("=" * 60)
-
-    t0 = time.perf_counter()
-    df = compute_sentiment(df, config)
-    stage_durations["sentiment"] = time.perf_counter() - t0
-    stage_counts["after_sentiment"] = len(df)
-    logger.info("After sentiment: %d records (%.2fs)", len(df), stage_durations["sentiment"])
-    stage_progress.set_postfix_str(f"{len(df)} records, {stage_durations['sentiment']:.1f}s")
-    stage_progress.update(1)
+    df, stage_counts, stage_durations = _run_through_sentiment(config, stage_progress)
 
     # ------------------------------------------------------------------
     # Stage 4: Labelling
@@ -191,9 +232,9 @@ def run_pipeline(config: PipelineConfig) -> dict:
 def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     """Run pipeline through sentiment, then sweep thresholds.
 
-    Executes load → window → sentiment stages, then applies labelling
-    at each threshold in config.thresholds. Returns a summary table
-    with class distribution metrics and viability flags.
+    Executes load → window → sentiment stages (via shared helper), then
+    applies labelling at each threshold in config.thresholds. Returns a
+    summary table with class distribution metrics and viability flags.
 
     Parameters
     ----------
@@ -210,10 +251,8 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
 
-    # Run through sentiment stage
-    df = load_data(config)
-    df = compute_windowed_counts(df, config)
-    df = compute_sentiment(df, config)
+    # Run stages 1–3 via shared helper
+    df, _, _ = _run_through_sentiment(config)
 
     # Sweep thresholds
     sweep_results = sweep_thresholds(df, config)
