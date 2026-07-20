@@ -2,7 +2,7 @@
 
 ## Template
 
-This project uses the **Data Science** template (CM3070 Final Project).
+This project uses the **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence**
 
 ## Project Overview
 
@@ -159,22 +159,22 @@ The pipeline was evaluated on two Reddit communities with 14 experiments across 
 
 | Dataset | Model | AUC-ROC | Tier |
 |---------|-------|---------|------|
-| r/wallstreetbets (τ=1.0) | XGBoost | 0.892 | Stretch |
-| r/wallstreetbets (τ=1.0) | Random Forest | 0.876 | Stretch |
-| r/wallstreetbets (τ=1.5) | XGBoost | 0.862 | Stretch |
-| r/wallstreetbets (τ=1.5) | Random Forest | 0.854 | Stretch |
-| r/pennystocks (τ=1.5) | Random Forest | 0.746 | Target |
+| r/wallstreetbets (τ=1.5) | XGBoost | 0.892 | Stretch |
+| r/wallstreetbets (τ=1.5) | Random Forest | 0.880 | Stretch |
+| r/wallstreetbets (τ=1.0) | XGBoost | 0.862 | Stretch |
+| r/wallstreetbets (τ=1.0) | Random Forest | 0.854 | Stretch |
+| r/pennystocks (τ=1.5) | Random Forest | 0.753 | Target |
 | r/pennystocks (τ=1.5) | XGBoost | 0.734 | Target |
 
 All models significantly outperform the random baseline (AUC=0.50) with p < 0.001 (McNemar's test, Bonferroni-corrected).
 
 ![ROC Curves](../../output/figures/evaluation/A2/11_roc_curves_combined.png)
 
-*Figure 3: Combined ROC curves for all three models on the r/wallstreetbets test set (experiment A2, τ=1.5). XGBoost (AUC=0.862) and Random Forest (AUC=0.854) both achieve the stretch tier (>0.80). The dashed diagonal represents a random classifier.*
+*Figure 3: Combined ROC curves for all three models on the r/wallstreetbets test set (experiment A2, τ=1.5). XGBoost (AUC=0.892) and Random Forest (AUC=0.880) both achieve the stretch tier (>0.80). The dashed diagonal represents a random classifier.*
 
 ### Cross-Dataset Transfer
 
-Models trained on WSB and evaluated on pennystocks (D1) achieved AUC 0.676, demonstrating partial generalisability. The reverse transfer (D2: pennystocks→WSB) performed better at AUC 0.871, suggesting patterns learned from the sparse community transfer well to the dense community.
+Models trained on WSB and evaluated on pennystocks (D1) achieved AUC 0.684, demonstrating partial generalisability. The reverse transfer (D2: pennystocks→WSB) performed better at AUC 0.871, suggesting patterns learned from the sparse community transfer well to the dense community.
 
 ### Robustness
 
@@ -182,13 +182,21 @@ Multi-seed experiments (5 seeds: 42, 123, 456, 789, 2024) produced standard devi
 
 ### Key Finding: Sentiment Improves Detection
 
-The Phase 1 (volume-only) vs Phase 2 (composite volume+sentiment) comparison shows sentiment adds +0.18 AUC on WSB, validating the composite approach. A weight sensitivity sweep confirmed that balanced 50/50 weighting is optimal.
+The Phase 1 (volume-only) vs Phase 2 (composite volume+sentiment) comparison shows sentiment adds +0.182 AUC on WSB, validating the composite approach. A weight sensitivity sweep confirmed that balanced 50/50 weighting is optimal.
 
 > **Note:** Additional figures (threshold sensitivity plots per model) are stored in `output/figures/evaluation/` and included on following pages.
 
 ![Confusion Matrix — XGBoost](../../output/figures/evaluation/A2/10_confusion_matrix_xgboost.png)
 
 *Figure 4: Confusion matrix for XGBoost on r/wallstreetbets (experiment A2). The extreme class imbalance is visible — the surge class (positive) represents only 1.4% of test records, making precision inherently challenging despite strong AUC-ROC.*
+
+![Feature Importance Comparison](figures/feature_importance_comparison.png)
+
+*Figure 5: Permutation-based feature importance across all three models. `ticker_post_rate_24h` dominates for tree-based models, while Logistic Regression distributes weight more evenly across temporal features.*
+
+![Classification Threshold Sensitivity — XGBoost](figures/threshold_sensitivity_xgboost.png)
+
+*Figure 6: Classification threshold sensitivity for XGBoost on r/wallstreetbets. Precision and recall trade off sharply — the tuned threshold (0.85) sacrifices recall to achieve practical precision, while the default (0.5) produces near-zero precision due to extreme class imbalance.*
 
 ## Evaluation and Improvements
 

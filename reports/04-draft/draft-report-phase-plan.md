@@ -90,7 +90,7 @@ Key analytical findings available:
 - [x] Default classification threshold produces near-zero precision (threshold tuning essential)
 - [x] Class imbalance is extreme (1.4% surge rate on WSB, 2.8% on pennystocks)
 - [x] Cross-dataset transfer is asymmetric (pennystocks→WSB much better than reverse)
-- [x] Sentiment in label definition adds +0.18 AUC on WSB (Phase 2 >> Phase 1)
+- [x] Sentiment in label definition adds +0.182 AUC on WSB (Phase 2 >> Phase 1)
 - [x] Weight sweep shows non-monotonic curve: balanced 50/50 is optimal
 - [x] Results are reproducible: 5-seed std = 0.008
 - [x] VADER sentiment limitations visible in feature importance (sentiment_score ranks low)
