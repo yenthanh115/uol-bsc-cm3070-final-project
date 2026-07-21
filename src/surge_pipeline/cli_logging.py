@@ -126,8 +126,8 @@ def tee_output(log_path: Path | None) -> Generator[Path | None, None, None]:
     original_stderr = sys.stderr
     tee_stdout = TeeStream(original_stdout, log_file)
     tee_stderr = TeeStream(original_stderr, log_file)
-    sys.stdout = tee_stdout  # type: ignore[assignment]
-    sys.stderr = tee_stderr  # type: ignore[assignment]
+    sys.stdout = tee_stdout
+    sys.stderr = tee_stderr
 
     # Also add a file handler to the root logger so that logging.info() etc.
     # are captured even if they bypass print().

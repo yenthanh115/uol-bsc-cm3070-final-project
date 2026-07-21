@@ -197,8 +197,8 @@ def plot_roc_curve(
     ax.set_ylabel("True Positive Rate")
     ax.set_title(f"ROC Curve — {model_name}")
     ax.legend(loc="lower right")
-    ax.set_xlim([-0.02, 1.02])
-    ax.set_ylim([-0.02, 1.02])
+    ax.set_xlim((-0.02, 1.02))
+    ax.set_ylim((-0.02, 1.02))
 
     return _save_figure(fig, f"11_roc_curve_{model_name}", figures_dir)
 
@@ -247,8 +247,8 @@ def plot_roc_curve_combined(
     ax.set_ylabel("True Positive Rate")
     ax.set_title("ROC Curves — Model Comparison")
     ax.legend(loc="lower right")
-    ax.set_xlim([-0.02, 1.02])
-    ax.set_ylim([-0.02, 1.02])
+    ax.set_xlim((-0.02, 1.02))
+    ax.set_ylim((-0.02, 1.02))
 
     return _save_figure(fig, "11_roc_curves_combined", figures_dir)
 
@@ -328,8 +328,8 @@ def plot_classification_threshold_sensitivity(
     ax.set_ylabel("Score")
     ax.set_title(f"Classification Threshold Sensitivity — {model_name}")
     ax.legend(loc="center left", bbox_to_anchor=(0.0, 0.45))
-    ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([-0.02, 1.05])
+    ax.set_xlim((0.0, 1.0))
+    ax.set_ylim((-0.02, 1.05))
 
     return _save_figure(
         fig, f"12_classification_threshold_sensitivity_{model_name}", figures_dir
