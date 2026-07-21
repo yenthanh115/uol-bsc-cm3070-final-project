@@ -10,7 +10,7 @@ Requirements: R13 (Model Training with Temporal Cross-Validation),
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -26,8 +26,8 @@ N_FOLDS: int = 4
 class CVResult:
     """Result from a single hyperparameter configuration evaluated over CV folds."""
 
-    params: Dict[str, Any]
-    fold_scores: List[float]
+    params: dict[str, Any]
+    fold_scores: list[float]
     mean_score: float
     std_score: float
 
@@ -39,12 +39,12 @@ class TrainedModel:
     name: str
     model: Any
     scaler: StandardScaler
-    best_params: Dict[str, Any]
+    best_params: dict[str, Any]
     best_cv_auc: float
-    cv_results: List[CVResult]
+    cv_results: list[CVResult]
     training_duration_seconds: float
     n_configs_evaluated: int
-    feature_columns: List[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
+    feature_columns: list[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
     # Validation predictions from the last CV fold (for threshold tuning)
     val_y_true: np.ndarray | None = field(default=None, repr=False)
     val_y_prob: np.ndarray | None = field(default=None, repr=False)
@@ -54,7 +54,7 @@ class TrainedModel:
 class TrainingPipelineResult:
     """Result from the full multi-model training pipeline."""
 
-    models: Dict[str, TrainedModel]
+    models: dict[str, TrainedModel]
     phase: str
     random_seed: int
     n_folds: int = N_FOLDS
@@ -69,11 +69,11 @@ class TrainingResult:
     """
 
     model_name: str
-    best_params: Dict[str, Any]
-    cv_scores: List[float]
+    best_params: dict[str, Any]
+    cv_scores: list[float]
     mean_cv_score: float
     std_cv_score: float
     training_duration_seconds: float
     model: Any
     scaler: StandardScaler
-    feature_columns: List[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
+    feature_columns: list[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))

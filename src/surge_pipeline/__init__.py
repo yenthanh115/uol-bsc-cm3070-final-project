@@ -10,11 +10,11 @@ from surge_pipeline.training_models import (
 )
 
 __all__ = [
-    "PipelineConfig",
-    "NormalisationParams",
-    "load_normalisation_params",
     "CVResult",
+    "NormalisationParams",
+    "PipelineConfig",
     "TrainedModel",
     "TrainingPipelineResult",
     "TrainingResult",
+    "load_normalisation_params",
 ]

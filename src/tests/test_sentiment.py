@@ -29,11 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.sentiment import (
-    compute_sentiment,
-    _compute_polarity_vader,
     _compute_polarity_textblob,
+    _compute_polarity_vader,
+    compute_sentiment,
 )
-
 
 # ============================================================================
 # Fixtures

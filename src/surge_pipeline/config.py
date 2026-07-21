@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 # Project root is two levels up from this file (src/surge_pipeline/config.py -> project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -60,7 +59,7 @@ class PipelineConfig:
     weight_sentiment: float = 0.5
 
     # --- Threshold sweep (batch mode) ---
-    thresholds: List[float] = field(
+    thresholds: list[float] = field(
         default_factory=lambda: [0.5, 1.0, 1.5, 2.0, 2.5]
     )
 
@@ -75,7 +74,7 @@ class PipelineConfig:
         """Serialise configuration to a JSON string."""
         return json.dumps(asdict(self), indent=indent)
 
-    def save_json(self, path: Optional[str] = None) -> Path:
+    def save_json(self, path: str | None = None) -> Path:
         """Write configuration to a JSON file for audit trail."""
         out = Path(path) if path else Path(self.output_dir) / "pipeline_config.json"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -83,13 +82,13 @@ class PipelineConfig:
         return out
 
     @classmethod
-    def from_json(cls, json_str: str) -> "PipelineConfig":
+    def from_json(cls, json_str: str) -> PipelineConfig:
         """Deserialise configuration from a JSON string."""
         data = json.loads(json_str)
         return cls(**data)
 
     @classmethod
-    def load_json(cls, path: str) -> "PipelineConfig":
+    def load_json(cls, path: str) -> PipelineConfig:
         """Load configuration from a JSON file."""
         text = Path(path).read_text(encoding="utf-8")
         return cls.from_json(text)

@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from surge_pipeline.config import PipelineConfig, WINDOW_SECONDS
+from surge_pipeline.config import WINDOW_SECONDS, PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
         )
         included_df = df.loc[included_mask]
 
-        for ticker, group in included_df.groupby("ticker", sort=False):
+        for _ticker, group in included_df.groupby("ticker", sort=False):
             idx = group.index.values
             pos = index_to_pos.loc[idx].values.astype(int)
             times = epoch_seconds[pos]

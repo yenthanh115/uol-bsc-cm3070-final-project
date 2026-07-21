@@ -15,25 +15,22 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from surge_pipeline.config import PipelineConfig
 from surge_pipeline.evaluation import (
+    SUCCESS_TIER_MINIMUM,
+    SUCCESS_TIER_STRETCH,
+    SUCCESS_TIER_TARGET,
     BaselineComparison,
-    BootstrapCI,
     FinalSummary,
     McNemarResult,
-    MetricCI,
     ModelMetrics,
     SuccessTierResult,
     evaluate_baselines,
     mcnemar_pairwise_test,
     produce_final_summary,
     validate_success_tiers,
-    SUCCESS_TIER_MINIMUM,
-    SUCCESS_TIER_TARGET,
-    SUCCESS_TIER_STRETCH,
 )
-from surge_pipeline.config import PipelineConfig
 from surge_pipeline.features import FEATURE_COLUMNS
-
 
 # =============================================================================
 # Fixtures

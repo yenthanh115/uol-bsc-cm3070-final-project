@@ -16,7 +16,6 @@ import re
 import string
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 # The public TICKER_STOPWORDS is their union.
 # ---------------------------------------------------------------------------
 
-_COMMON_ENGLISH_WORDS: Set[str] = {
+_COMMON_ENGLISH_WORDS: set[str] = {
     # 1-2 char words
     "TO", "IS", "IT", "IF", "IN", "OR", "SO", "UP",
     "AT", "AN", "AS", "BE", "BY", "DO", "GO", "HE", "ME", "MY", "NO",
@@ -55,7 +54,7 @@ _COMMON_ENGLISH_WORDS: Set[str] = {
     "WENT", "WORK",
 }
 
-_REDDIT_SLANG: Set[str] = {
+_REDDIT_SLANG: set[str] = {
     # Reddit community terms
     "DD", "APE", "YOLO", "FOMO", "FUD", "WSB", "IMO", "IMHO", "EDIT",
     "TLDR", "NSFW", "LOL", "WTF", "OMG", "SMH", "TBH", "LMAO", "ROFL",
@@ -67,7 +66,7 @@ _REDDIT_SLANG: Set[str] = {
     "STOCK", "SHARE", "SHARES", "PRICE", "TRADE", "PENNY",
 }
 
-_FINANCE_ABBREVIATIONS: Set[str] = {
+_FINANCE_ABBREVIATIONS: set[str] = {
     # Corporate/financial abbreviations
     "CEO", "CFO", "IPO", "ETF", "OTC", "SEC", "FDA", "EPS", "ATH", "ATL",
     "NYSE", "EOD", "EOW", "EOM", "GDP", "CPI", "ROI", "ITM", "OTM",
@@ -76,16 +75,16 @@ _FINANCE_ABBREVIATIONS: Set[str] = {
     "LLC", "INC", "LTD", "CORP", "CO",
 }
 
-_MARKET_VENUES: Set[str] = {
+_MARKET_VENUES: set[str] = {
     # Exchange names and market identifiers (never valid tickers in context)
     "OTCQB", "OTCQX", "TSX", "TSXV", "CSE", "NASDAQ", "AMEX", "SP",
 }
 
-_CURRENCIES_AND_ASSETS: Set[str] = {
+_CURRENCIES_AND_ASSETS: set[str] = {
     "USD", "CAD", "GBP", "EUR", "BTC", "CRYPTO",
 }
 
-_DATETIME_AND_UNITS: Set[str] = {
+_DATETIME_AND_UNITS: set[str] = {
     # Time zones and units
     "PM", "AM", "EST", "PST", "UTC",
     "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN",
@@ -93,23 +92,23 @@ _DATETIME_AND_UNITS: Set[str] = {
     "FT", "LB", "OZ",
 }
 
-_GEOGRAPHY: Set[str] = {
+_GEOGRAPHY: set[str] = {
     "USA", "US", "UK", "EU", "CA", "NY", "TX", "FL",
     "PT",  # Portugal (common in EU context)
 }
 
-_TECHNOLOGY_BUZZWORDS: Set[str] = {
+_TECHNOLOGY_BUZZWORDS: set[str] = {
     # Tech acronyms frequently false-positive matched in WSB/pennystocks posts
     "EV", "AI", "AR", "VR", "NFT", "CBD", "COVID",
 }
 
-_REDDIT_FP: Set[str] = {
+_REDDIT_FP: set[str] = {
     # Remaining high-frequency false positives specific to penny stock posts
     "ZERO", "GLOBE", "PINK", "XXXX", "PR",
 }
 
 #: Union of all stopword sub-sets. Use this for ticker filtering.
-TICKER_STOPWORDS: Set[str] = (
+TICKER_STOPWORDS: set[str] = (
     _COMMON_ENGLISH_WORDS
     | _REDDIT_SLANG
     | _FINANCE_ABBREVIATIONS
@@ -131,7 +130,7 @@ _UPPERCASE_WORD_PATTERN = re.compile(r"\b([A-Z]{2,5})\b")
 # ---------------------------------------------------------------------------
 
 
-def extract_tickers(title: str, selftext: str) -> List[str]:
+def extract_tickers(title: str, selftext: str) -> list[str]:
     """Extract stock tickers from post title and selftext.
 
     Strategy:
@@ -152,7 +151,7 @@ def extract_tickers(title: str, selftext: str) -> List[str]:
     List[str]
         Sorted list of unique extracted tickers (may be empty).
     """
-    tickers: Set[str] = set()
+    tickers: set[str] = set()
 
     combined_text = f"{title} {selftext}"
 
@@ -262,7 +261,7 @@ def generate_synthetic_data(
 # ---------------------------------------------------------------------------
 
 
-def compute_dataset_fingerprint(file_path: Path) -> Dict[str, object]:
+def compute_dataset_fingerprint(file_path: Path) -> dict[str, object]:
     """Compute a reproducibility fingerprint for the raw CSV.
 
     Produces a SHA-256 hash of the file content plus structural metadata

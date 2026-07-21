@@ -26,13 +26,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surge_pipeline.evaluation import (
+    generate_evaluation_figures,
+    plot_classification_threshold_sensitivity,
     plot_confusion_matrix,
     plot_roc_curve,
     plot_roc_curve_combined,
-    plot_classification_threshold_sensitivity,
-    generate_evaluation_figures,
 )
-
 
 # ============================================================================
 # Fixtures

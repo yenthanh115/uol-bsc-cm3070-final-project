@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from surge_pipeline.config import PipelineConfig, WINDOW_SECONDS
+from surge_pipeline.config import WINDOW_SECONDS, PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
 
     # Group by ticker and process each group with vectorised searchsorted
     ticker_groups = df.groupby("ticker", sort=False)
-    for ticker, group in tqdm(ticker_groups, desc="Windowing", unit="ticker", leave=True):
+    for _ticker, group in tqdm(ticker_groups, desc="Windowing", unit="ticker", leave=True):
         idx = group.index.values  # Original DataFrame indices for this group
         times = epoch_seconds[idx]  # Already sorted (loader guarantees chrono order)
 
@@ -196,7 +196,7 @@ def _compute_backward_surge_ratio(
     n = len(df)
     result = np.zeros(n, dtype=np.float64)
 
-    for ticker, group in df.groupby("ticker", sort=False):
+    for _ticker, group in df.groupby("ticker", sort=False):
         idx = group.index.values
         counts = backward_counts[idx].astype(np.float64)
 

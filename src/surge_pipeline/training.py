@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import joblib
 import numpy as np
@@ -29,8 +29,8 @@ from tqdm import tqdm
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.features import FEATURE_COLUMNS
 from surge_pipeline.training_models import (
-    CVResult,
     N_FOLDS,
+    CVResult,
     TrainedModel,
     TrainingPipelineResult,
     TrainingResult,
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_lr_param_grid() -> List[Dict[str, Any]]:
+def _get_lr_param_grid() -> list[dict[str, Any]]:
     """Logistic Regression grid: C(5) x l1_ratio(2) = 10 configs."""
     return [
         {"C": c, "l1_ratio": l1_ratio, "solver": "saga"}
@@ -52,7 +52,7 @@ def _get_lr_param_grid() -> List[Dict[str, Any]]:
     ]
 
 
-def _get_rf_param_grid() -> List[Dict[str, Any]]:
+def _get_rf_param_grid() -> list[dict[str, Any]]:
     """Random Forest grid: n_estimators(3) x max_depth(4) x min_samples_leaf(3) = 36 configs."""
     return [
         {
@@ -68,7 +68,7 @@ def _get_rf_param_grid() -> List[Dict[str, Any]]:
 
 def _get_xgb_param_grid(
     random_seed: int = 42, imbalance_ratio: float = 1.0
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """XGBoost grid with scale_pos_weight for class imbalance handling (P6).
 
     n_estimators(3) x max_depth(3) x learning_rate(3) x scale_pos_weight(2-3)
@@ -111,7 +111,7 @@ def _get_xgb_param_grid(
 
 def create_temporal_folds(
     df: pd.DataFrame, n_folds: int = N_FOLDS
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Create n_folds sequential groups from the dataframe by timestamp order.
 
     Parameters
@@ -133,7 +133,7 @@ def create_temporal_folds(
     n = len(sorted_indices)
 
     fold_size = n // n_folds
-    folds: List[np.ndarray] = []
+    folds: list[np.ndarray] = []
     for i in range(n_folds):
         start = i * fold_size
         end = (i + 1) * fold_size if i < n_folds - 1 else n
@@ -143,8 +143,8 @@ def create_temporal_folds(
 
 
 def get_expanding_window_splits(
-    folds: List[np.ndarray],
-) -> List[Tuple[np.ndarray, np.ndarray]]:
+    folds: list[np.ndarray],
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """Convert sequential folds into expanding-window train/val splits.
 
     For k folds, produces k-1 splits where split i uses folds 0..i as
@@ -160,7 +160,7 @@ def get_expanding_window_splits(
     List[Tuple[np.ndarray, np.ndarray]]
         List of (train_indices, val_indices) tuples.
     """
-    splits: List[Tuple[np.ndarray, np.ndarray]] = []
+    splits: list[tuple[np.ndarray, np.ndarray]] = []
     for i in range(1, len(folds)):
         train_idx = np.concatenate(folds[:i])
         val_idx = folds[i]
@@ -170,8 +170,8 @@ def get_expanding_window_splits(
 
 def _verify_temporal_ordering(
     df: pd.DataFrame,
-    folds: List[np.ndarray],
-    splits: List[Tuple[np.ndarray, np.ndarray]],
+    folds: list[np.ndarray],
+    splits: list[tuple[np.ndarray, np.ndarray]],
 ) -> None:
     """Verify that all splits respect chronological ordering.
 
@@ -207,7 +207,7 @@ def _verify_temporal_ordering(
 # ---------------------------------------------------------------------------
 
 
-def _make_lr(params: Dict[str, Any], random_seed: int) -> LogisticRegression:
+def _make_lr(params: dict[str, Any], random_seed: int) -> LogisticRegression:
     """Create a LogisticRegression instance from params."""
     return LogisticRegression(
         C=params["C"],
@@ -219,7 +219,7 @@ def _make_lr(params: Dict[str, Any], random_seed: int) -> LogisticRegression:
     )
 
 
-def _make_rf(params: Dict[str, Any], random_seed: int) -> RandomForestClassifier:
+def _make_rf(params: dict[str, Any], random_seed: int) -> RandomForestClassifier:
     """Create a RandomForestClassifier instance from params."""
     return RandomForestClassifier(
         n_estimators=params["n_estimators"],
@@ -231,7 +231,7 @@ def _make_rf(params: Dict[str, Any], random_seed: int) -> RandomForestClassifier
     )
 
 
-def _make_xgb(params: Dict[str, Any], random_seed: int):
+def _make_xgb(params: dict[str, Any], random_seed: int):
     """Create an XGBClassifier instance from params.
 
     Passes scale_pos_weight for class imbalance handling (P6).
@@ -258,10 +258,10 @@ def _make_xgb(params: Dict[str, Any], random_seed: int):
 
 def _train_single_model(
     model_name: str,
-    param_grid: List[Dict[str, Any]],
+    param_grid: list[dict[str, Any]],
     X_train_full: np.ndarray,
     y_train_full: np.ndarray,
-    splits: List[Tuple[np.ndarray, np.ndarray]],
+    splits: list[tuple[np.ndarray, np.ndarray]],
     random_seed: int,
     make_model_fn,
 ) -> TrainedModel:
@@ -292,12 +292,12 @@ def _train_single_model(
     start_time = time.time()
 
     best_mean_auc: float = -1.0
-    best_params: Dict[str, Any] = {}
-    best_fold_scores: List[float] = []
-    all_cv_results: List[CVResult] = []
+    best_params: dict[str, Any] = {}
+    best_fold_scores: list[float] = []
+    all_cv_results: list[CVResult] = []
 
     for params in tqdm(param_grid, desc=f"  {model_name}", unit="cfg", leave=True):
-        fold_aucs: List[float] = []
+        fold_aucs: list[float] = []
 
         for train_idx, val_idx in splits:
             scaler = StandardScaler()
@@ -343,7 +343,7 @@ def _train_single_model(
     # Generate validation predictions on the last CV fold for threshold tuning.
     # Use the final model's scaler (fitted on full training data) for consistency
     # with how test-set predictions will be generated.
-    last_train_idx, last_val_idx = splits[-1]
+    _last_train_idx, last_val_idx = splits[-1]
     X_val_last = final_scaler.transform(X_train_full[last_val_idx])
     val_y_true = y_train_full[last_val_idx]
     val_y_prob = final_model.predict_proba(X_val_last)[:, 1]
@@ -447,7 +447,7 @@ def train_models(
     _verify_temporal_ordering(train_df, folds, splits)
 
     # Train each model type
-    models: Dict[str, TrainedModel] = {}
+    models: dict[str, TrainedModel] = {}
 
     # --- Logistic Regression ---
     logger.info("Training Logistic Regression...")
@@ -534,7 +534,7 @@ def train_models(
     return result
 
 
-def get_training_summary(result: TrainingPipelineResult) -> Dict[str, Any]:
+def get_training_summary(result: TrainingPipelineResult) -> dict[str, Any]:
     """Generate a summary dict of the training pipeline result.
 
     Parameters
@@ -547,7 +547,7 @@ def get_training_summary(result: TrainingPipelineResult) -> Dict[str, Any]:
     Dict[str, Any]
         Summary with per-model metrics and metadata.
     """
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "phase": result.phase,
         "random_seed": result.random_seed,
         "n_folds": result.n_folds,
@@ -637,7 +637,7 @@ def predict(
     result: TrainingResult,
     df: pd.DataFrame,
     partition: str = "test",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate predictions on a data partition.
 
     Parameters

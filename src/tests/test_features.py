@@ -27,11 +27,7 @@ from surge_pipeline.features import (
     FEATURE_COLUMNS,
     compute_features,
     get_feature_matrix,
-    _compute_time_since_previous,
-    _compute_ticker_post_acceleration,
-    _compute_num_tickers_mentioned,
 )
-
 
 # ============================================================================
 # Fixtures

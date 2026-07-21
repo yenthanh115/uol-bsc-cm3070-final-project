@@ -17,22 +17,26 @@ import logging
 from dataclasses import asdict
 from itertools import combinations
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
+    confusion_matrix,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
     roc_auc_score,
-    confusion_matrix,
 )
 from sklearn.preprocessing import StandardScaler
 
+from surge_pipeline.config import PipelineConfig
 from surge_pipeline.evaluation_models import (
+    SUCCESS_TIER_MINIMUM,
+    SUCCESS_TIER_STRETCH,
+    SUCCESS_TIER_TARGET,
     BaselineComparison,
     BootstrapCI,
     EvaluationMetrics,
@@ -43,9 +47,6 @@ from surge_pipeline.evaluation_models import (
     ModelMetrics,
     SuccessTierResult,
     ThresholdResult,
-    SUCCESS_TIER_MINIMUM,
-    SUCCESS_TIER_TARGET,
-    SUCCESS_TIER_STRETCH,
 )
 from surge_pipeline.training import predict
 from surge_pipeline.training_models import TrainedModel, TrainingResult
@@ -153,9 +154,9 @@ def find_optimal_threshold(
 
 def mcnemar_pairwise_test(
     y_true: np.ndarray,
-    predictions: Dict[str, np.ndarray],
+    predictions: dict[str, np.ndarray],
     alpha: float = 0.05,
-) -> List[McNemarResult]:
+) -> list[McNemarResult]:
     """Perform McNemar's pairwise test between all model pairs.
 
     Builds a 2x contingency table for each pair of models based on
@@ -181,7 +182,7 @@ def mcnemar_pairwise_test(
     n_comparisons = len(pairs)
     adjusted_alpha = alpha / n_comparisons if n_comparisons > 0 else alpha
 
-    results: List[McNemarResult] = []
+    results: list[McNemarResult] = []
 
     for name_a, name_b in pairs:
         pred_a = predictions[name_a]
@@ -235,8 +236,8 @@ def mcnemar_pairwise_test(
 
 def evaluate_baselines(
     df: pd.DataFrame,
-    model_metrics: Dict[str, ModelMetrics],
-) -> Dict[str, BaselineComparison]:
+    model_metrics: dict[str, ModelMetrics],
+) -> dict[str, BaselineComparison]:
     """Compare each model against random and single-feature baselines.
 
     For each of the 9 features, trains a single-feature Logistic Regression
@@ -267,7 +268,7 @@ def evaluate_baselines(
     y_test = test_df["surge_label"].values.astype(np.int64)
 
     # Compute single-feature AUCs
-    single_feature_aucs: Dict[str, float] = {}
+    single_feature_aucs: dict[str, float] = {}
     for feature in FEATURE_COLUMNS:
         X_train_f = train_df[[feature]].values.astype(np.float64)
         X_test_f = test_df[[feature]].values.astype(np.float64)
@@ -299,7 +300,7 @@ def evaluate_baselines(
     best_feature_auc = single_feature_aucs[best_feature]
 
     # Build comparison for each model
-    comparisons: Dict[str, BaselineComparison] = {}
+    comparisons: dict[str, BaselineComparison] = {}
     for model_name, metrics in model_metrics.items():
         model_auc = metrics.auc_roc
         comparisons[model_name] = BaselineComparison(
@@ -322,8 +323,8 @@ def evaluate_baselines(
 
 
 def validate_success_tiers(
-    model_metrics: Dict[str, ModelMetrics],
-) -> Dict[str, SuccessTierResult]:
+    model_metrics: dict[str, ModelMetrics],
+) -> dict[str, SuccessTierResult]:
     """Classify each model into a success tier based on AUC-ROC.
 
     Tiers:
@@ -342,7 +343,7 @@ def validate_success_tiers(
     Dict[str, SuccessTierResult]
         Mapping model_name -> SuccessTierResult.
     """
-    results: Dict[str, SuccessTierResult] = {}
+    results: dict[str, SuccessTierResult] = {}
 
     for model_name, metrics in model_metrics.items():
         auc = metrics.auc_roc
@@ -377,14 +378,14 @@ def validate_success_tiers(
 
 
 def produce_final_summary(
-    model_metrics: Dict[str, ModelMetrics],
-    mcnemar_results: List[McNemarResult],
-    baseline_comparisons: Dict[str, BaselineComparison],
-    tier_results: Dict[str, SuccessTierResult],
-    config: "PipelineConfig",
+    model_metrics: dict[str, ModelMetrics],
+    mcnemar_results: list[McNemarResult],
+    baseline_comparisons: dict[str, BaselineComparison],
+    tier_results: dict[str, SuccessTierResult],
+    config: PipelineConfig,
     output_dir: str = "output/evaluation",
-    phase1_vs_phase2: Optional[Dict[str, Any]] = None,
-    timestamp_prefix: Optional[str] = None,
+    phase1_vs_phase2: dict[str, Any] | None = None,
+    timestamp_prefix: str | None = None,
 ) -> FinalSummary:
     """Produce the final evaluation summary and save to JSON.
 
@@ -413,7 +414,6 @@ def produce_final_summary(
     FinalSummary
         The assembled final summary.
     """
-    from surge_pipeline.config import PipelineConfig
 
     # Identify best model by AUC-ROC
     best_model_name = max(model_metrics, key=lambda k: model_metrics[k].auc_roc)
@@ -614,7 +614,7 @@ def compute_bootstrap_ci(
 
 def evaluate_model(
     result: TrainingResult,
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     partition: str = "test",
 ) -> EvaluationMetrics:
     """Evaluate a trained model on a data partition.
@@ -635,7 +635,6 @@ def evaluate_model(
     EvaluationMetrics
         Computed metrics for the model on the given partition.
     """
-    import pandas as pd
 
     y_true, y_pred, y_prob = predict(result, df, partition=partition)
 
@@ -693,8 +692,8 @@ def evaluate_model(
 
 
 def evaluate_trained_model(
-    trained_model: "TrainedModel",
-    df: "pd.DataFrame",
+    trained_model: TrainedModel,
+    df: pd.DataFrame,
     partition: str = "test",
 ) -> EvaluationMetrics:
     """Evaluate a TrainedModel (from train_models) on a data partition.
@@ -780,9 +779,9 @@ def evaluate_trained_model(
 
 
 def save_evaluation_results(
-    metrics_list: List[EvaluationMetrics],
+    metrics_list: list[EvaluationMetrics],
     output_dir: str = "output/evaluation",
-    timestamp_prefix: Optional[str] = None,
+    timestamp_prefix: str | None = None,
 ) -> Path:
     """Save evaluation metrics to a JSON file.
 
@@ -830,11 +829,11 @@ def save_evaluation_results(
 
 def compute_feature_importance(
     model,
-    scaler: "StandardScaler",
+    scaler: StandardScaler,
     X_test: np.ndarray,
     y_test: np.ndarray,
     model_name: str,
-    feature_names: List[str],
+    feature_names: list[str],
     n_repeats: int = 10,
     random_seed: int = 42,
 ) -> FeatureImportanceResult:
@@ -898,8 +897,8 @@ def compute_feature_importance(
 def compute_builtin_importance(
     model,
     model_name: str,
-    feature_names: List[str],
-) -> Optional[FeatureImportanceResult]:
+    feature_names: list[str],
+) -> FeatureImportanceResult | None:
     """Extract built-in feature importances (gain-based) if available.
 
     Works for tree-based models (RF, XGBoost) that expose

@@ -12,15 +12,13 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from surge_pipeline.config import PipelineConfig, PROJECT_ROOT
-
+from surge_pipeline.config import PROJECT_ROOT, PipelineConfig
 
 # ============================================================================
 # Defaults

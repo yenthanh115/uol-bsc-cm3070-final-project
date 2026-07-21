@@ -15,13 +15,13 @@ Usage:
 
 from __future__ import annotations
 
-import io
 import logging
 import sys
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, TextIO
+from typing import TextIO
 
 # Default log directory relative to project root (../output/logs from src/)
 DEFAULT_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "output" / "logs"

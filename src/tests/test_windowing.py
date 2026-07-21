@@ -23,8 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surge_pipeline.config import PipelineConfig
-from surge_pipeline.windowing import compute_windowed_counts, _WINDOW_SECONDS
-
+from surge_pipeline.windowing import _WINDOW_SECONDS, compute_windowed_counts
 
 # ============================================================================
 # Fixtures

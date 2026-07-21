@@ -20,9 +20,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surge_pipeline.config import PipelineConfig
-from surge_pipeline.labelling import apply_labelling, _compute_z_scores, _temporal_split
+from surge_pipeline.labelling import _compute_z_scores, apply_labelling
 from surge_pipeline.windowing import compute_windowed_counts
-
 
 # ============================================================================
 # Fixtures

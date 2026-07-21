@@ -6,11 +6,10 @@ importable without pulling in heavy dependencies (matplotlib, sklearn).
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import asdict, dataclass
+from typing import Any
 
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # Success tier constants (R21)
@@ -41,7 +40,7 @@ class ModelMetrics:
     recall: float
     f1: float
     auc_roc: float
-    confusion_matrix: List[List[int]]
+    confusion_matrix: list[list[int]]
     n_test_samples: int
 
 
@@ -74,7 +73,7 @@ class BootstrapCI:
 
     model_name: str
     n_bootstrap: int
-    metric_cis: List[MetricCI]
+    metric_cis: list[MetricCI]
 
 
 @dataclass
@@ -85,7 +84,7 @@ class BaselineComparison:
     model_auc: float
     random_baseline_auc: float
     beats_random: bool
-    single_feature_aucs: Dict[str, float]
+    single_feature_aucs: dict[str, float]
     best_single_feature: str
     best_single_feature_auc: float
     improvement_over_best_single_feature: float
@@ -117,7 +116,7 @@ class ThresholdResult:
     recall_at_default: float
     f1_at_default: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialisation."""
         return asdict(self)
 
@@ -130,12 +129,12 @@ class FinalSummary:
     best_auc_roc: float
     overall_pass: bool
     success_tier_achieved: str
-    model_metrics: Dict[str, Any]
-    mcnemar_results: List[Dict[str, Any]]
-    baseline_comparisons: Dict[str, Any]
-    tier_results: Dict[str, Any]
-    recommended_config: Dict[str, Any]
-    phase1_vs_phase2: Optional[Dict[str, Any]] = None
+    model_metrics: dict[str, Any]
+    mcnemar_results: list[dict[str, Any]]
+    baseline_comparisons: dict[str, Any]
+    tier_results: dict[str, Any]
+    recommended_config: dict[str, Any]
+    phase1_vs_phase2: dict[str, Any] | None = None
 
 
 @dataclass
@@ -150,9 +149,9 @@ class EvaluationMetrics:
     roc_auc: float
     support_positive: int
     support_negative: int
-    confusion_matrix: List[List[int]]
+    confusion_matrix: list[list[int]]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialisation."""
         return asdict(self)
 
@@ -163,16 +162,16 @@ class FeatureImportanceResult:
 
     model_name: str
     method: str  # "permutation" or "builtin_gain"
-    feature_names: List[str]
-    importances: List[float]
-    importances_std: List[float]
+    feature_names: list[str]
+    importances: list[float]
+    importances_std: list[float]
     scoring: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialisation."""
         return asdict(self)
 
-    def ranked(self) -> List[Tuple[str, float, float]]:
+    def ranked(self) -> list[tuple[str, float, float]]:
         """Return features sorted by importance (descending).
 
         Returns

@@ -14,10 +14,8 @@ import json
 import logging
 import random
 import time
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -62,8 +60,8 @@ def _run_through_sentiment(
         - stage_counts: record counts after each stage
         - stage_durations: elapsed time per stage
     """
-    stage_counts: Dict[str, int] = {}
-    stage_durations: Dict[str, float] = {}
+    stage_counts: dict[str, int] = {}
+    stage_durations: dict[str, float] = {}
 
     # ------------------------------------------------------------------
     # Stage 1: Load data
@@ -327,7 +325,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     # Timestamp prefix for experiment comparison (YYYY-MM-DD_HH-MM)
     prefix = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-    output_paths: Dict[str, str] = {}
+    output_paths: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # 1. Labelled dataset (CSV) — includes engineered features

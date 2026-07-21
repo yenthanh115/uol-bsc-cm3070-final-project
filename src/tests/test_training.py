@@ -27,16 +27,15 @@ from surge_pipeline.config import PipelineConfig
 from surge_pipeline.features import FEATURE_COLUMNS
 from surge_pipeline.training import (
     N_FOLDS,
-    create_temporal_folds,
-    get_expanding_window_splits,
-    train_models,
-    get_training_summary,
     _get_lr_param_grid,
     _get_rf_param_grid,
     _get_xgb_param_grid,
     _verify_temporal_ordering,
+    create_temporal_folds,
+    get_expanding_window_splits,
+    get_training_summary,
+    train_models,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -447,7 +446,7 @@ class TestTrainingSummary:
         result = train_models(small_training_df, config, output_dir=str(tmp_path))
         summary = get_training_summary(result)
 
-        for name, model_summary in summary["models"].items():
+        for _name, model_summary in summary["models"].items():
             assert "best_params" in model_summary
             assert "best_cv_auc" in model_summary
             assert "fold_scores" in model_summary

@@ -10,8 +10,8 @@ Design Decision: D2 — Training/test split before normalisation.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace as dataclass_replace
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from dataclasses import replace as dataclass_replace
 
 import numpy as np
 import pandas as pd
@@ -40,12 +40,12 @@ class LabellingResult:
 
     df: pd.DataFrame
     stats: NormalisationStats
-    class_distributions: Dict[str, Dict[str, float]]
+    class_distributions: dict[str, dict[str, float]]
 
 
 def _temporal_split(
     df: pd.DataFrame, ratio: float
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     """Assign train/test partition labels based on temporal split.
 
     Parameters
@@ -95,7 +95,7 @@ def _compute_z_scores(
 
 def _compute_class_distribution(
     labels: np.ndarray, partition_name: str
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute and log class distribution statistics.
 
     Parameters
@@ -200,8 +200,6 @@ def apply_labelling(
             split_timestamp=0.0,
         )
         return LabellingResult(df=df, stats=stats, class_distributions={})
-
-    n = len(df)
 
     # ------------------------------------------------------------------
     # Step 1: Temporal train/test split (R5-AC1)
@@ -331,7 +329,7 @@ def apply_labelling(
     # ------------------------------------------------------------------
     # Step 6: Report class distribution (R6-AC5)
     # ------------------------------------------------------------------
-    class_distributions: Dict[str, Dict[str, float]] = {}
+    class_distributions: dict[str, dict[str, float]] = {}
 
     # Overall (included only)
     class_distributions["all"] = _compute_class_distribution(
@@ -370,7 +368,7 @@ def apply_labelling(
 
 def sweep_thresholds(
     df: pd.DataFrame, config: PipelineConfig
-) -> List[Dict[str, object]]:
+) -> list[dict[str, object]]:
     """Run labelling across multiple thresholds for empirical selection.
 
     This supports R6-AC3: threshold sweep across configurable values.

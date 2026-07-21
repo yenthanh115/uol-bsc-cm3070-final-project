@@ -10,3 +10,6 @@ xgboost>=1.7
 joblib>=1.2
 tqdm>=4.60
 pytest>=7.0
+mypy>=1.10
+ruff>=0.4
+pandas-stubs>=2.0

@@ -24,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

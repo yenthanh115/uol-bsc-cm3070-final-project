@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Tuple
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -204,7 +204,7 @@ def plot_roc_curve(
 
 
 def plot_roc_curve_combined(
-    results: List[Tuple[str, np.ndarray, np.ndarray]],
+    results: list[tuple[str, np.ndarray, np.ndarray]],
     figures_dir: Path | None = None,
 ) -> Path:
     """Produce a combined ROC curve with multiple models overlaid (R16-AC2).
@@ -342,7 +342,7 @@ def plot_classification_threshold_sensitivity(
 
 
 def plot_feature_importance(
-    results: List[FeatureImportanceResult],
+    results: list[FeatureImportanceResult],
     figures_dir: Path | None = None,
 ) -> Path:
     """Generate a grouped horizontal bar chart comparing feature importance.
@@ -418,7 +418,7 @@ def generate_evaluation_figures(
     y_prob: np.ndarray,
     model_name: str = "Model",
     figures_dir: Path | None = None,
-) -> List[Path]:
+) -> list[Path]:
     """Generate all evaluation figures for a single model.
 
     Convenience function that calls all three plot functions.

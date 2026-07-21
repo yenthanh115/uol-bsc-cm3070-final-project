@@ -14,7 +14,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -22,12 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from surge_pipeline.config import PipelineConfig
 from surge_pipeline.loader import (
-    extract_tickers,
-    load_data,
-    generate_synthetic_data,
     TICKER_STOPWORDS,
+    extract_tickers,
+    generate_synthetic_data,
+    load_data,
 )
-
 
 # ============================================================================
 # Ticker extraction — dollar-sign pattern
