@@ -13,13 +13,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Ensure the src directory is on the path so surge_pipeline is importable.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
-from surge_pipeline.config import PipelineConfig, PROJECT_ROOT  # noqa: E402
-from surge_pipeline.experiment_log import append_experiment  # noqa: E402
-from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs  # noqa: E402
+from surge_pipeline.cli_logging import resolve_log_path, tee_output
+from surge_pipeline.config import PipelineConfig, PROJECT_ROOT
+from surge_pipeline.experiment_log import append_experiment
+from surge_pipeline.pipeline import run_pipeline, run_threshold_sweep, save_outputs
 
 # Default paths resolved from project root (works regardless of CWD)
 _DEFAULT_OUTPUT_DIR = str(PROJECT_ROOT / "output" / "processed")

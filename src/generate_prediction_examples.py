@@ -26,10 +26,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from surge_pipeline.features import FEATURE_COLUMNS  # noqa: E402
+from surge_pipeline.features import FEATURE_COLUMNS
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

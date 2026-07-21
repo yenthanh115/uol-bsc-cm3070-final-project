@@ -26,12 +26,9 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-# Ensure the src directory is on the path so surge_pipeline is importable.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from sklearn.metrics import (  # noqa: E402
+import numpy as np
+import pandas as pd
+from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
@@ -40,17 +37,17 @@ from sklearn.metrics import (  # noqa: E402
     roc_auc_score,
 )
 
-from surge_pipeline.cli_logging import resolve_log_path, tee_output  # noqa: E402
-from surge_pipeline.config import PipelineConfig  # noqa: E402
-from surge_pipeline.experiment_log import append_experiment  # noqa: E402
-from surge_pipeline.features import FEATURE_COLUMNS  # noqa: E402
-from surge_pipeline.training import (  # noqa: E402
+from surge_pipeline.cli_logging import resolve_log_path, tee_output
+from surge_pipeline.config import PipelineConfig
+from surge_pipeline.experiment_log import append_experiment
+from surge_pipeline.features import FEATURE_COLUMNS
+from surge_pipeline.training import (
     train_models,
     get_training_summary,
     predict_with_threshold,
     TrainingPipelineResult,
 )
-from surge_pipeline.evaluation import (  # noqa: E402
+from surge_pipeline.evaluation import (
     ModelMetrics,
     ThresholdResult,
     compute_bootstrap_ci,

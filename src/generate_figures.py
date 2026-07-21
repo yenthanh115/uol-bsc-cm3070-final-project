@@ -31,9 +31,6 @@ import joblib
 import numpy as np
 import pandas as pd
 
-# Ensure surge_pipeline is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from surge_pipeline.evaluation import (
     generate_evaluation_figures,
     plot_roc_curve_combined,

@@ -27,8 +27,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import joblib
 import numpy as np
 import pandas as pd
