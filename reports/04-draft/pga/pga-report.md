@@ -55,16 +55,20 @@ The labelling mechanism uses z-score normalisation followed by a weighted compos
 <!-- 
 $$z_v = \frac{g_v - \mu_v}{\sigma_v}, \quad z_s = \frac{g_s - \mu_s}{\sigma_s}$$
  -->
-![Pipeline Architecture](figures/f1.png)
+![Z-score normalisation: z_v = (g_v - μ_v) / σ_v, z_s = (g_s - μ_s) / σ_s](figures/f1.png)
 
 These are combined with configurable weights:
 <!-- 
 $$C = w_v \cdot z_v + w_s \cdot z_s$$
  -->
 
-![Pipeline Architecture](figures/f2.png)
+![Composite score: C = w_v · z_v + w_s · z_s](figures/f2.png)
 
 A record is labelled as a surge if $C > \tau$, where $\tau$ is the threshold parameter (default 1.5). Normalisation statistics come from the training partition only — no test-set information leaks into the labelling process.
+
+![Pipeline Architecture](figures/pipeline_architecture.png)
+
+*Figure 1: End-to-end pipeline architecture showing the five processing stages from raw Reddit CSV to model evaluation. Each stage produces intermediate outputs for auditability.*
 
 ### 3.2. Expanding-Window Temporal Cross-Validation
 
@@ -171,31 +175,11 @@ for params in param_grid:
 
 The best configuration is then retrained on the full training partition before final test-set evaluation — the model sees all available training data, while hyperparameters were selected without any test-set contamination.
 
-### 4.4. Statistical Evaluation
-
-McNemar's pairwise test compares models at the record level. It builds a 2×2 contingency table of correct/incorrect predictions for each model pair, with Bonferroni correction for multiple comparisons:
-
-```python
-# Record-level correct/incorrect comparison
-correct_a = (predictions[name_a] == y_true)
-correct_b = (predictions[name_b] == y_true)
-
-# Cells: b = A wrong & B right; c = A right & B wrong
-b = int(((~correct_a) & correct_b).sum())
-c = int((correct_a & (~correct_b)).sum())
-```
-
 <div style="page-break-after: always;"></div>
 
 ## 5. Results
 
-### 5.1. Pipeline Architecture
-
-![Pipeline Architecture](figures/pipeline_architecture.png)
-
-*Figure 1: End-to-end pipeline architecture showing the five processing stages from raw Reddit CSV to model evaluation. Each stage produces intermediate outputs for auditability.*
-
-### 5.2. Model Performance
+### 5.1. Model Performance
 
 The pipeline was evaluated on two Reddit communities across 14 experiments on 3 machines:
 
@@ -210,25 +194,25 @@ The pipeline was evaluated on two Reddit communities across 14 experiments on 3 
 
 All models significantly outperform the random baseline (AUC=0.50) with p < 0.001 (McNemar's test, Bonferroni-corrected).
 
-![ROC Curves](../../output/figures/evaluation/A2/11_roc_curves_combined.png)
+![ROC Curves](figures/roc_curves_combined.png)
 
 *Figure 3: Combined ROC curves for all three models on the r/wallstreetbets test set (experiment A2, τ=1.5). XGBoost (AUC=0.892) and Random Forest (AUC=0.880) both hit the stretch tier (>0.80). The dashed diagonal represents a random classifier.*
 
-### 5.3. Cross-Dataset Transfer
+### 5.2. Cross-Dataset Transfer
 
 Models trained on WSB and evaluated on pennystocks (D1) achieved AUC 0.684, showing partial generalisability. The reverse transfer (D2: pennystocks→WSB) performed better at AUC 0.871, suggesting patterns learned from the sparse community transfer well to the dense one.
 
-### 5.4. Robustness
+### 5.3. Robustness
 
 Multi-seed experiments (5 seeds: 42, 123, 456, 789, 2024) produced a standard deviation of 0.008, confirming stable results.
 
-### 5.5. Key Finding: Sentiment Improves Detection
+### 5.4. Key Finding: Sentiment Improves Detection
 
 Comparing Phase 1 (volume-only) against Phase 2 (composite volume+sentiment) shows sentiment adds +0.182 AUC on WSB, validating the composite approach. A weight sensitivity sweep confirmed that balanced 50/50 weighting works best.
 
-> **Note:** Additional figures (threshold sensitivity plots per model) are stored in `output/figures/evaluation/` and included on following pages.
+**Research question verdict:** Yes — social media posting patterns can predict emerging surge behaviour (AUC 0.892), and incorporating sentiment alongside volume significantly improves detection (+0.182 AUC over volume-only baseline).
 
-![Confusion Matrix — XGBoost](../../output/figures/evaluation/A2/10_confusion_matrix_xgboost.png)
+![Confusion Matrix — XGBoost](figures/confusion_matrix_xgboost.png)
 
 *Figure 4: Confusion matrix for XGBoost on r/wallstreetbets (experiment A2). The extreme class imbalance is visible — surges represent only 1.4% of test records, making precision inherently challenging despite strong AUC-ROC.*
 
@@ -283,4 +267,4 @@ The cross-dataset transfer gap points to the need for features that adapt to com
 
 #### 6.3.4. Real-Time Streaming Inference
 
-The batch pipeline processes historical data retrospectively. Extending to streaming Reddit data (via the Reddit API or Pushshift) would enable live early-warning alerts. The backward-only feature design already ensures compatibility with streaming — all 11 features can be computed from data available at observation time. The main engineering challenge is maintaining efficient per-ticker state (rolling windows, last-post timestamps) across a high-throughput event stream.
+The batch pipeline processes historical data retrospectively. The backward-only feature design already ensures compatibility with streaming — all 11 features can be computed from data available at observation time, making live early-warning alerts architecturally feasible without redesigning the feature layer.
