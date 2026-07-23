@@ -18,26 +18,48 @@ SIDE NOTE (DELETE LATER)
 - why use validation-fold
 - why not k=5 or k=10 but k=4?
 - what are stretch tier vs target tier
+- have we set goal for this project (musthave tier, target tier, and stretch tier)
+- discuss about data drift ? aware of it and provide solution 
 -->
 ---
 
 ## 1. Introduction
 
-### 1.1 Project Motivation
+This project follows **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence**, focusing on a machine learning system.
 
-<!-- Why predicting posting-volume surges on r/pennystocks matters for market participants and researchers -->
+### 1.1 Project Concept and Objectives
 
-### 1.2 Project Aims
+The system predicts whether discussion about a specific stock ticker will experience a significant engagement and sentiment surge within 24 hours, using only information available at observation time. The objectives are:
 
-<!-- Binary classification of ticker-level 24h posting-volume surges using backward-looking features -->
+- Develop a predictive model using early-stage discussion features (temporal, textual, activity-frequency, and sentiment signals) to forecast per-ticker surges
+- Compare traditional ML approaches (Logistic Regression, Random Forest, XGBoost) for binary surge classification
+- Evaluate performance using standard metrics (precision, recall, F1, AUC-ROC) with temporal train-test splits that prevent data leakage
 
-### 1.3 Project Concept
+### 1.2 Problem Statement and Motivation
 
-<!-- Composite surge metric, temporal CV methodology, multi-model comparison approach -->
+Financial discussions on social media platforms experience sudden increases in posting activity and emotional intensity. Stock-related discussions can rapidly attract attention following news events, earnings announcements, or speculative activity. These surges develop within hours, making them difficult to anticipate through manual monitoring.
 
-### 1.4 Scope and Research Question
+This problem affects financial analysts who need early warning of discussions gaining momentum, market surveillance teams tracking potential manipulation, quantitative researchers studying social media dynamics, and platform operators allocating moderation resources. In large social media environments, thousands of stock-related discussions occur daily, making automated prediction essential.
 
-<!-- Can posting-volume surges on r/pennystocks be predicted from backward-looking features? -->
+Existing research focuses on predicting overall popularity [1][3] or sentiment-to-market correlations [4] rather than forecasting whether a specific stock's discussion is about to surge. The 2021 GameStop short squeeze demonstrated how rapidly escalating social media discussion can translate into real market impact [5], underscoring the need for early detection systems.
+
+### 1.3 Prediction Scope and Surge Definition
+
+The prediction operates at the record level but measures surges scoped per-ticker. For a record mentioning ticker $X at time *t*, the system asks: *"Will discussion about $X experience a surge within the next 24 hours?"*
+
+A **surge** is defined using a composite metric combining z-score normalised posting volume growth and sentiment change:
+
+> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
+
+where z-scores are computed using training-partition statistics only (preventing leakage), and a record is labelled surge (1) if composite exceeds threshold *τ*. The target uses posting volume (timestamp-derived record counts) rather than engagement scores (which are future-contaminated snapshot values). Default configuration: w₁ = w₂ = 0.5, τ = 1.5 standard deviations.
+
+A two-phase experimental approach validates the composite design: Phase 1 uses volume-only (w₂ = 0) as baseline; Phase 2 uses equal composite (w₂ = 0.5) to test whether sentiment adds predictive value.
+
+### 1.4 Scope
+
+**In scope:** Pre-collected static Reddit dataset (r/pennystocks: 80,212 records; r/wallstreetbets: 1,293,981 records), feature engineering, binary classification, traditional ML models, reproducible pipeline with seeded randomness, cross-dataset transfer evaluation.
+
+**Out of scope:** Real-time ingestion, production deployment, trading signals, multi-class targets, cross-platform fusion.
 
 ---
 
