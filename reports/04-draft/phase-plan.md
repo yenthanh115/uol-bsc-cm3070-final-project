@@ -1,3 +1,26 @@
+## Assignment Requirements (Draft Report)
+
+The draft report consists of 6 chapters with a **strict total maximum of 9,500 words** (individual section limits are also strict, but their sum exceeds 9,500 to allow flexibility in distribution).
+
+| Chapter | Max Words | Content |
+|---------|-----------|---------|
+| 1. Introduction | 1,000 | Project concept, motivation, which project template is used |
+| 2. Literature Review | 2,500 | Revised from preliminary report |
+| 3. Design | 2,000 | Revised from preliminary report |
+| 4. Implementation | 2,000 | Major algorithms/techniques, key code explanations, visual results (screenshots/graphs) |
+| 5. Evaluation | 2,500 | Testing results (unit testing, user studies, data testing), critical evaluation of achievements and areas for improvement |
+| 6. Conclusion | 1,000 | Summary, broader themes, further work |
+
+**Excluded from word count:** diagrams, figures, tables, references, title page.
+
+**Key notes:**
+- Figures/tables must be appropriate and clearly linked to written sections.
+- The project does not need to be completed — the draft is for feedback on what will ultimately be submitted as the final report.
+- Incorporate feedback from earlier submissions and peer reviews.
+- The word limits are the same for the final report.
+
+---
+
 ## Improvement Plan
 
 ### Phase 1: Foundation & Folder Reorganisation (2–3 days)
@@ -205,20 +228,22 @@ python src/run_training.py --data-path output/processed/labelled_dataset.csv --o
 
 ### Phase 7: Report Writing (5 days)
 
-**Goal:** Produce a near-submission-quality academic report (90–95% complete) following the prescribed 6-section structure.
+**Goal:** Produce a near-submission-quality academic report (90–95% complete) following the prescribed 6-chapter structure. Strict total limit: **9,500 words** (references, title page, diagrams/figures/tables excluded from count).
 
 ---
 
-#### Report Structure
+#### Report Structure & Word Budget
 
-| Section | Content Focus |
-|---|---|
-| 1. Introduction | Motivation, aims, concept |
-| 2. Literature Review | Revised review, feedback improvements, additional references |
-| 3. Design | Architecture, technologies, methods |
-| 4. Implementation | Features, algorithms, technical methods, progress |
-| 5. Evaluation | Strengths, weaknesses, performance, improvements needed |
-| 6. Conclusion | Achievements, findings, remaining work, future developments |
+| Chapter | Max Words | Instruction Requirement |
+|---|---|---|
+| 1. Introduction | 1,000 | Project concept, motivation, **state which project template is used** |
+| 2. Literature Review | 2,500 | Revised from preliminary report |
+| 3. Design | 2,000 | Revised from preliminary report |
+| 4. Implementation | 2,000 | Major algorithms/techniques, key code explanation, visual results (screenshots/graphs) |
+| 5. Evaluation | 2,500 | Initial evaluations carried out, results, critical evaluation of achievements and improvements |
+| 6. Conclusion | 1,000 | Summary, broader themes, further work |
+
+**Budget strategy:** Individual caps sum to 12,000 but total is capped at 9,500. Allocate aggressively to Evaluation (2,500) and Implementation (2,000) as these carry the most marks. Keep Introduction and Conclusion lean (~800 each) to preserve headroom.
 
 ---
 
@@ -237,20 +262,21 @@ Each report section draws from specific artifacts produced by the earlier phases
 
 ---
 
-#### 7.1 — Introduction (0.5 day)
+#### 7.1 — Introduction (max 1,000 words · 0.5 day)
 
-Describe the project motivation, aims, and concept. Build directly on the proposal and preliminary report.
+Explain the project concept and motivation. Based on the proposal but refined. **Must explicitly state the project template used.**
 
 - Project motivation: why predicting posting-volume surges on r/pennystocks matters for market participants and researchers.
 - Project aims: binary classification of ticker-level 24h posting-volume surges using backward-looking features.
 - Project concept: composite surge metric, temporal CV methodology, multi-model comparison approach.
+- **Project template declaration** (required by instruction): state which CM3070 project template this follows.
 - Scope and research question.
 
 **Input:** Proposal, preliminary report, literature review conclusions, `admin/decision-log.md`.
 
-#### 7.2 — Literature Review (0.5 day)
+#### 7.2 — Literature Review (max 2,500 words · 0.5 day)
 
-Include the revised literature review with improvements from previous feedback and additional references.
+Revised version of the literature review submitted in the preliminary report. Incorporate any feedback received.
 
 - Polish existing literature review (already written in `reports/01-literature-review/`).
 - Address improvements based on previous feedback (reviewer comments, gaps identified).
@@ -259,9 +285,9 @@ Include the revised literature review with improvements from previous feedback a
 
 **Input:** `reports/01-literature-review/literature-review-v1.0.md`, previous feedback, any new papers found during implementation.
 
-#### 7.3 — Design (0.75 day)
+#### 7.3 — Design (max 2,000 words · 0.75 day)
 
-Present the system architecture, project design, technologies, and methods. Focus on the *what* and *why* — design decisions, rationale, and justification. Refine the design document developed earlier.
+Revised version of the design chapter from the preliminary report. Focus on the *what* and *why* — design decisions, rationale, and justification.
 
 - System architecture: pipeline stages (loading → preprocessing → feature engineering → labelling → training → evaluation).
 - Data flow diagram: input sources → intermediate outputs → final artifacts.
@@ -277,22 +303,23 @@ Present the system architecture, project design, technologies, and methods. Focu
 
 **Input:** `src/surge_pipeline/config.py`, `features.py`, `labelling.py`, `normalisation.py`, `training.py`, `pipeline_config.json`, EDA figures 05–09.
 
-#### 7.4 — Implementation (0.75 day)
+#### 7.4 — Implementation (max 2,000 words · 0.75 day)
 
-Describe the *how* — code structure, algorithms as implemented, challenges encountered, and deviations from design. Expand the implementation write-up created during development.
+Describe the implementation of the project. Follow the style of the topic 6 peer review but expanded. Must include: major algorithms/techniques used, explanation of the most important parts of the code, and a visual representation of results (screenshots or graphs).
 
 - Code organisation and module structure (`src/surge_pipeline/` layout).
-- Features completed:
-  - Data loading and preprocessing (text cleaning, ticker extraction, sentiment scoring).
-  - Feature engineering (9 features with temporal windowing).
-  - Surge labelling with composite metric and configurable threshold.
-  - Multi-model training with hyperparameter search (LR: 10 configs, RF: 36 configs, XGB: ≤50 configs).
-  - Evaluation pipeline with statistical tests.
-- Algorithms and technical detail:
+- **Major algorithms/techniques:**
   - Ticker extraction: regex patterns, stopword filtering, known-ticker validation — specifics of implementation.
   - Sentiment analysis: VADER compound scoring, deduplication optimisation.
   - Temporal CV: expanding-window split logic, fold construction.
   - Model selection: GridSearchCV with custom scorer, final retraining procedure.
+- **Key code explanation** (include annotated code snippets or pseudocode for the most important logic):
+  - Feature engineering pipeline (9 features with temporal windowing).
+  - Surge labelling with composite metric and configurable threshold.
+  - Multi-model training with hyperparameter search (LR: 10 configs, RF: 36 configs, XGB: ≤50 configs).
+- **Visual representation of results:**
+  - Include relevant figures/screenshots showing pipeline output, EDA results, or model outputs.
+  - Reference figures from `output/figures/eda/` and `output/figures/evaluation/`.
 - Challenges encountered and how they were resolved:
   - Any deviations from original design (reference decision log).
   - Performance bottlenecks and optimisations applied.
@@ -301,9 +328,9 @@ Describe the *how* — code structure, algorithms as implemented, challenges enc
 
 **Input:** `src/surge_pipeline/` (all modules), `output/models/*.joblib`, `output/processed/pipeline_summary.json`, `admin/decision-log.md`.
 
-#### 7.5 — Evaluation (1.5 days) ⭐ KEY SECTION
+#### 7.5 — Evaluation (max 2,500 words · 1.5 days) ⭐ KEY SECTION
 
-This is the most important section of the report. It must evaluate the project against its stated objectives, provide comprehensive coverage of all major components, present results clearly with appropriate evidence, and critically analyse outcomes.
+Describe the evaluations carried out (unit testing, testing on data) and give results. Provide a **critical evaluation** of the project so far, making clear what has been achieved and what can be improved. Must extend beyond the feature prototype to cover the whole project.
 
 ---
 
@@ -357,7 +384,7 @@ Use appropriate evidence for each claim:
 
 ##### 7.5.4 — Critical Analysis
 
-Go beyond reporting numbers. For each result, discuss WHY:
+Go beyond reporting numbers. For each result, discuss WHY. The instruction requires a **critical evaluation** — demonstrate reflective judgement, not just metric reporting.
 
 - **Why did the best model outperform others?**
   - Feature importance differences between models.
@@ -381,9 +408,9 @@ Go beyond reporting numbers. For each result, discuss WHY:
 
 ---
 
-##### 7.5.5 — Limitations & Improvement Proposals
+##### 7.5.5 — What Can Be Improved
 
-Identify limitations honestly, then propose concrete improvements:
+The instruction explicitly asks to make clear "what you can improve." Identify limitations honestly, then propose concrete improvements:
 
 | Limitation | Impact | Proposed Improvement |
 |---|---|---|
@@ -409,9 +436,9 @@ Frame as contributions rather than "groundbreaking" — demonstrate awareness th
 
 **Input:** `evaluation_metrics.json`, `final_summary.json`, all evaluation figures, confusion matrices, `risk-and-challenges.md`, `pipeline_config.json`, feature importance data.
 
-#### 7.6 — Conclusion (0.5 day)
+#### 7.6 — Conclusion (max 1,000 words · 0.5 day)
 
-Summarise current achievements, key findings, remaining work, and possible future developments.
+Short summary of the project as a whole. Can also bring out broader themes or suggest further work.
 
 - **Current achievements:**
   - Functional end-to-end pipeline from raw Reddit data to trained classifiers.
@@ -423,28 +450,30 @@ Summarise current achievements, key findings, remaining work, and possible futur
   - Which features contributed most to prediction (link to RF feature importance).
   - Whether posting-volume surges are predictable from backward-looking features (answer to research question).
   - Relationship between findings and existing literature.
-- **Remaining work** (tie back to limitations in 7.5.5):
+- **Broader themes:**
+  - Implications for social media-based financial prediction research.
+  - Temporal validity as a general concern in time-series ML projects.
+- **Further work:**
   - Sentiment model upgrade (VADER → FinBERT) to address financial language ceiling.
   - Ticker validation refinement to reduce extraction false positives.
   - Class imbalance handling (cost-sensitive learning, threshold optimisation).
   - Multi-subreddit expansion for generalisability.
-- **Possible future developments:**
   - Real-time inference system with streaming Reddit data.
-  - Graph-based diffusion features (cross-ticker mention networks).
-  - Multi-scale temporal windows (6h, 24h, 72h).
   - Integration with market data for downstream trading signal validation.
 
 **Input:** `final_summary.json`, `admin/decision-log.md`, `risk-and-challenges.md`.
 
 #### 7.7 — Formatting & Polish (0.5 day)
 
-- ACM citation format.
+- Diagrams, figures, and tables: ensure all are appropriate and clearly linked to written sections (instruction requirement).
 - Figure captions with numbering.
 - Table formatting (consistent decimal places).
+- ACM citation format.
 - Abstract (written last).
 - Proofread for grammar, flow, and consistency.
 - Check all figures are referenced in text.
-- Verify word count / page limit compliance.
+- **Word count verification:** total ≤ 9,500; each section within its individual cap.
+- Incorporate feedback from earlier submissions and peer reviews (instruction requirement).
 
 ---
 
