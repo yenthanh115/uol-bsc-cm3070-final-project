@@ -25,41 +25,37 @@ SIDE NOTE (DELETE LATER)
 
 ## 1. Introduction
 
-This project follows **CM3005 Data Science Project Idea: Predictive Modelling of Social Media Trend Emergence**, focusing on a machine learning system.
-
 ### 1.1 Project Concept and Objectives
 
-The system predicts whether discussion about a specific stock ticker will experience a significant engagement and sentiment surge within 24 hours, using only information available at observation time. The objectives are:
+This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge — using only backward-looking features available at observation time. Three classifiers — Logistic Regression, Random Forest, and XGBoost — are trained and compared on this binary task.
 
-- Develop a predictive model using early-stage discussion features (temporal, textual, activity-frequency, and sentiment signals) to forecast per-ticker surges
-- Compare traditional ML approaches (Logistic Regression, Random Forest, XGBoost) for binary surge classification
-- Evaluate performance using standard metrics (precision, recall, F1, AUC-ROC) with temporal train-test splits that prevent data leakage
+The project has three objectives:
+
+- Develop a predictive model using early-stage discussion features (temporal patterns, activity frequency, sentiment) to forecast per-ticker surges before they occur
+- Compare multiple ML approaches to determine whether model complexity improves prediction over simpler baselines
+- Validate that predictions generalise to unseen future time periods through temporal evaluation protocols that prevent data leakage — a common methodological weakness in social media prediction studies
 
 ### 1.2 Problem Statement and Motivation
 
-Financial discussions on social media platforms experience sudden increases in posting activity and emotional intensity. Stock-related discussions can rapidly attract attention following news events, earnings announcements, or speculative activity. These surges develop within hours, making them difficult to anticipate through manual monitoring.
+Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
 
-This problem affects financial analysts who need early warning of discussions gaining momentum, market surveillance teams tracking potential manipulation, quantitative researchers studying social media dynamics, and platform operators allocating moderation resources. In large social media environments, thousands of stock-related discussions occur daily, making automated prediction essential.
+This is primarily a research problem: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities.
 
-Existing research focuses on predicting overall popularity [1][3] or sentiment-to-market correlations [4] rather than forecasting whether a specific stock's discussion is about to surge. The 2021 GameStop short squeeze demonstrated how rapidly escalating social media discussion can translate into real market impact [5], underscoring the need for early detection systems.
+Existing research predicts overall content popularity [1][3] or models sentiment-to-market correlations [4], but these address different problems. Popularity prediction forecasts *eventual* reach rather than detecting rapid *onset*; sentiment-market studies predict price movements rather than social media dynamics. The reviewed literature does not appear to address predicting the onset of a composite engagement-and-sentiment surge within a bounded short-term window for individual tickers — the gap this project aims to fill (see Section 2.5).
+
+The 2021 GameStop episode illustrated the stakes: rapidly escalating discussion translated into market impact within days [5], with no automated system flagging the surge early. This project explores whether such surges are predictable from the discussion patterns that precede them.
 
 ### 1.3 Prediction Scope and Surge Definition
 
-The prediction operates at the record level but measures surges scoped per-ticker. For a record mentioning ticker $X at time *t*, the system asks: *"Will discussion about $X experience a surge within the next 24 hours?"*
-
-A **surge** is defined using a composite metric combining z-score normalised posting volume growth and sentiment change:
-
-> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
-
-where z-scores are computed using training-partition statistics only (preventing leakage), and a record is labelled surge (1) if composite exceeds threshold *τ*. The target uses posting volume (timestamp-derived record counts) rather than engagement scores (which are future-contaminated snapshot values). Default configuration: w₁ = w₂ = 0.5, τ = 1.5 standard deviations.
-
-A two-phase experimental approach validates the composite design: Phase 1 uses volume-only (w₂ = 0) as baseline; Phase 2 uses equal composite (w₂ = 0.5) to test whether sentiment adds predictive value.
+A **surge** is a statistically significant increase in both posting volume and sentiment intensity for a specific ticker within a 24-hour window, measured by a composite metric combining normalised volume growth with sentiment change magnitude. The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.3.2.
 
 ### 1.4 Scope
 
-**In scope:** Pre-collected static Reddit dataset (r/pennystocks: 80,212 records; r/wallstreetbets: 1,293,981 records), feature engineering, binary classification, traditional ML models, reproducible pipeline with seeded randomness, cross-dataset transfer evaluation.
+**In scope:** Two pre-collected Reddit datasets representing opposite ends of the data density spectrum — r/pennystocks (80,212 records), a sparse niche community, and r/wallstreetbets (1,293,981 records), a high-volume mainstream forum. This dual-dataset design tests whether the methodology generalises across community sizes or whether data density is a binding constraint. Also in scope: feature engineering from text and timestamps, binary classification, a reproducible pipeline with seeded randomness, and cross-dataset transfer evaluation.
 
-**Out of scope:** Real-time ingestion, production deployment, trading signals, multi-class targets, cross-platform fusion.
+**Out of scope:** Real-time ingestion, production deployment, trading signal generation, multi-class targets, cross-platform fusion.
+
+The system achieves AUC-ROC of 0.889 on the high-density dataset and 0.754 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
 
 ---
 
@@ -125,6 +121,15 @@ This project addresses all three gaps by defining a composite binary surge targe
 #### 3.3.2 Surge Definition
 
 <!-- Why a composite surge metric rather than raw volume threshold -->
+
+A surge is defined using a composite metric combining z-score normalised posting volume growth and sentiment change:
+
+> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
+
+where z-scores are computed using training-partition statistics only (preventing leakage), and a record is labelled surge (1) if composite exceeds threshold *τ*. The target uses posting volume (timestamp-derived record counts) rather than engagement scores (which are future-contaminated snapshot values). Default configuration: w₁ = w₂ = 0.5, τ = 1.5 standard deviations.
+
+A two-phase experimental approach validates the composite design: Phase 1 uses volume-only (w₂ = 0) as baseline; Phase 2 uses equal composite (w₂ = 0.5) to test whether sentiment adds predictive value.
+
 <!-- Formula: S = w1 * z_volume + w2 * z_sentiment -->
 <!-- Threshold τ selection via sensitivity sweep -->
 
