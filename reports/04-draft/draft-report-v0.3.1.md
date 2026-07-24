@@ -81,6 +81,8 @@ Lerman and Hogg [2] modelled the interplay between social network structure and 
 
 Bandari et al. [3] advanced the field by demonstrating that content metadata (source, category, subjectivity, named entities) could predict popularity *before* engagement accumulates, achieving ~84% classification accuracy. This was a methodologically important shift toward pre-publication prediction. However, the study used coarse popularity bins rather than continuous or binary surge targets, and the feature set was designed for news articles rather than user-generated financial discussion. Their reliance on manually engineered features also limits transferability — features like "news source reputation" have no direct analogue in anonymous forum posts. The 84% accuracy figure, while frequently cited, should also be interpreted cautiously: it was measured on a four-class classification task with uneven class sizes, meaning that majority-class baselines already achieve substantial accuracy. Importantly, the evaluation used random train-test splits rather than temporal partitions, meaning the model may have been tested on articles published *before* some of its training data — a form of temporal leakage that inflates reported performance.
 
+Fernández-Delgado et al. [16] evaluated 179 classifier implementations across 121 datasets and found that random forests achieved the highest overall accuracy, followed by support vector machines and boosting ensembles. While the study did not address social media prediction specifically, it provides empirical justification for the model family selection in this project: a linear baseline (Logistic Regression), a strong ensemble method (Random Forest), and a gradient boosting approach (XGBoost) cover the three top-performing classifier families identified in that large-scale comparison.
+
 ### 2.4. NLP and Sentiment Analysis
 
 Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify.
@@ -119,7 +121,7 @@ Four critical gaps remain:
 
 3. **Domain transfer problem** — Reviewed studies draw on general social media (YouTube, Digg, Facebook, Twitter) rather than finance-specific discussion platforms. Financial discussions have distinctive characteristics — event-driven reactions, domain-specific language, speculative behaviour — that may invalidate assumptions from general popularity research. Bollen et al. [4] address financial context but predict market outcomes rather than social media dynamics themselves.
 
-4. **Temporal evaluation weakness** — A recurring pattern across the reviewed literature is the use of random or unspecified train-test splits for time-series prediction tasks. Szabo and Huberman [1], Bandari et al. [3], and Cheng et al. [5] all evaluate without strict temporal partitioning, risking information leakage from future observations into training data. This inflates reported performance and leaves unresolved whether models generalise to genuinely unseen future periods — a critical requirement for any system intended for real-time deployment.
+4. **Temporal evaluation weakness** — A recurring pattern across the reviewed literature is the use of random or unspecified train-test splits for time-series prediction tasks. Szabo and Huberman [1], Bandari et al. [3], and Cheng et al. [5] all evaluate without strict temporal partitioning, risking information leakage from future observations into training data. Tashman [14] demonstrated that rolling-origin evaluation — where the forecasting origin advances forward through time — produces more reliable accuracy estimates for temporal prediction tasks than fixed holdout splits. Bergmeir and Benítez [15] showed empirically that random cross-validation overestimates predictive accuracy for time-dependent data, recommending blocked or expanding-window schemes that preserve temporal ordering. Despite these methodological advances being well-established in the forecasting literature, they remain largely unadopted in social media prediction studies. This inflates reported performance and leaves unresolved whether models generalise to genuinely unseen future periods — a critical requirement for any system intended for real-time deployment.
 
 This project aims to address all four gaps by defining a composite binary surge target within a fixed 24-hour window, combining temporal, activity-frequency, sentiment, and textual features, applying the framework specifically to stock-related social media discussions, and evaluating with expanding-window temporal cross-validation that ensures no future data leaks into training. Whether this integration yields meaningful predictive performance remains an empirical question that the evaluation (Section 5) examines.
 
@@ -400,4 +402,34 @@ A two-phase experimental approach validates the composite design: Phase 1 uses v
 
 ## References
 
-<!-- ACM citation format -->
+[1] G. Szabo and B. A. Huberman, "Predicting the popularity of online content," *Communications of the ACM*, vol. 53, no. 8, pp. 80–88, 2010.
+
+[2] K. Lerman and T. Hogg, "Using a model of social dynamics to predict popularity of news," in *Proc. 19th International Conference on World Wide Web (WWW '10)*, pp. 621–630, 2010.
+
+[3] R. Bandari, S. Asur, and B. A. Huberman, "The pulse of news in social media: Forecasting popularity," in *Proc. 6th International AAAI Conference on Weblogs and Social Media (ICWSM '12)*, pp. 26–33, 2012.
+
+[4] J. Bollen, H. Mao, and X. Zeng, "Twitter mood predicts the stock market," *Journal of Computational Science*, vol. 2, no. 1, pp. 1–8, 2011.
+
+[5] J. Cheng, L. Adamic, P. A. Dow, J. M. Kleinberg, and J. Leskovec, "Can cascades be predicted?," in *Proc. 23rd International Conference on World Wide Web (WWW '14)*, pp. 925–936, 2014.
+
+[6] F. Wang and B. A. Huberman, "Quantifying long-term scientific impact," *Science*, vol. 342, no. 6154, pp. 127–132, 2013.
+
+[7] S. Kong, Q. Mei, L. Feng, F. Ye, and Z. Zhao, "Predicting bursts and popularity of hashtags in real-time," in *Proc. 37th International ACM SIGIR Conference on Research and Development in Information Retrieval*, pp. 927–930, 2014.
+
+[8] C. Yuan and W. Li, "Forecasting the development trend of early-stage information diffusion based on empirical data," *Physica A: Statistical Mechanics and its Applications*, vol. 524, pp. 157–167, 2019.
+
+[9] C. Long, B. Lucey, and L. Yarovaya, "I just like the stock: the role of Reddit sentiment in the GameStop share rally," *The Financial Review*, vol. 58, no. 1, pp. 19–37, 2023.
+
+[10] M. Costola, M. Iacopini, and C. Santagiustina, "Self-induced consensus of Reddit users to characterise the GameStop short squeeze," *Scientific Reports*, vol. 12, art. 13780, 2022.
+
+[11] A. Mancini, A. Desiderio, B. Marafino, and A. Navigli, "Detecting pump and dump stock market manipulation from online forums," *Digital Finance*, vol. 6, pp. 365–393, 2024.
+
+[12] C. J. Hutto and E. Gilbert, "VADER: A parsimonious rule-based model for sentiment analysis of social media text," in *Proc. 8th International AAAI Conference on Weblogs and Social Media (ICWSM '14)*, pp. 216–225, 2014.
+
+[13] D. Araci, "FinBERT: Financial sentiment analysis with pre-trained language models," *arXiv preprint arXiv:1908.10063*, 2019.
+
+[14] L. J. Tashman, "Out-of-sample tests of forecasting accuracy: An analysis and review," *International Journal of Forecasting*, vol. 16, no. 4, pp. 437–450, 2000.
+
+[15] C. Bergmeir and J. M. Benítez, "On the use of cross-validation for time series predictor evaluation," *Information Sciences*, vol. 191, pp. 192–213, 2012.
+
+[16] M. Fernández-Delgado, E. Cernadas, S. Barro, and D. Amorim, "Do we need hundreds of classifiers to solve real world classification problems?," *Journal of Machine Learning Research*, vol. 15, no. 1, pp. 3133–3181, 2014.
