@@ -132,18 +132,72 @@ This project aims to address all four gaps by defining a composite binary surge 
 <!-- Pipeline stages: loading → preprocessing → feature engineering → labelling → training → evaluation -->
 <!-- Data flow diagram: input sources → intermediate outputs → final artifacts -->
 
-### 3.2 Technology Choices
+### 3.2 Data Ingestion and Datasets
+
+#### 3.2.1 Dataset Selection Rationale
+
+<!-- Why Reddit as a data source (public, threaded, subreddit-specific, ticker-rich) -->
+<!-- Why not other platforms: Twitter/X ephemeral stream lacks persistent threading; StockTwits smaller user base and less organic discussion; Reddit combines persistent threaded posts with large active communities -->
+<!-- Why these two subreddits specifically: -->
+<!--   r/pennystocks — sparse niche community (80,212 records), low-cap focus, tests model under data scarcity -->
+<!--   r/wallstreetbets — high-volume mainstream forum (1,293,981 records), tests scalability and signal extraction from noise -->
+<!-- Dual-dataset design: opposite ends of data density spectrum to test generalisability -->
+<!-- Time range covered, record structure (columns/fields available) -->
+
+<!-- Dataset summary table:
+| Property              | r/pennystocks         | r/wallstreetbets       |
+|-----------------------|-----------------------|------------------------|
+| Records              | 80,212                | 1,293,981              |
+| Date range           | [start] – [end]       | [start] – [end]        |
+| Avg posts/day        | [value]               | [value]                |
+| Fields used          | timestamp, title, selftext, score, num_comments | same |
+| Surge-positive rate  | ~[X]%                 | ~[X]%                  |
+-->
+
+<!-- Class distribution note: surge-positive rate is approximately 15%, creating moderate class imbalance that informs model selection and threshold tuning decisions in Section 3.4 -->
+
+#### 3.2.2 Data Collection Method
+
+<!-- Source: pre-collected CSV exports from academic/archival Reddit datasets -->
+<!-- Specific source: [name exact source — e.g., Pushshift/Arctic Shift archive, specific Kaggle dataset, or direct Reddit API dump] -->
+<!-- No live API scraping — static snapshot ensures reproducibility -->
+<!-- Fields retained: timestamp, title, selftext, subreddit, score, num_comments, etc. -->
+<!-- Any filtering applied at collection time (date range, post type) -->
+
+<!-- Data quality notes: -->
+<!-- Known issues in raw data: deleted/removed posts (showing as [removed] or [deleted]), missing selftext fields, duplicate records -->
+<!-- These are addressed in preprocessing (Section 4.2); noted here for transparency about raw data state -->
+
+#### 3.2.3 Ethical Considerations
+
+<!-- Public data: Reddit posts are publicly accessible; no private or deleted content used -->
+<!-- Anonymity: no attempt to identify or profile individual users; no individual users singled out in results or examples (aggregated analysis only) -->
+<!-- No personally identifiable information (PII) retained or processed -->
+<!-- Purpose: academic research only; no trading decisions were made based on model outputs -->
+<!-- Ethics approval: formal ethics approval was not required for analysis of publicly available aggregated data under university guidelines — [confirm and state explicitly] -->
+<!-- Compliance with university ethics guidelines and Reddit's terms of service -->
+<!-- Data storage: local only, not redistributed beyond project submission -->
+
+#### 3.2.4 Dataset Limitations
+
+<!-- Survivorship bias: deleted or moderated posts are not captured in the archival dataset; the analysed data represents only posts that remained publicly visible at collection time -->
+<!-- Snapshot timing: engagement metrics (score, num_comments) are frozen at collection time and may not reflect final values — this is why the project uses timestamp-derived features rather than engagement scores -->
+<!-- Completeness: potential gaps due to Reddit API rate limits or archival service downtime during collection period -->
+<!-- Single-platform scope: findings may not generalise to other financial discussion platforms with different user bases and moderation norms -->
+<!-- Temporal coverage: results are bound to the specific time period captured; market regime changes or platform policy shifts outside this window may alter surge dynamics -->
+
+### 3.3 Technology Choices
 
 <!-- Python, scikit-learn, XGBoost, VADER, pandas — why each was chosen over alternatives -->
 
-### 3.3 Method Design
+### 3.4 Method Design
 
-#### 3.3.1 Feature Design
+#### 3.4.1 Feature Design
 
 <!-- Why backward-looking features (leakage prevention argument) -->
 <!-- 9 features with formal definitions -->
 
-#### 3.3.2 Surge Definition
+#### 3.4.2 Surge Definition
 
 <!-- Why a composite surge metric rather than raw volume threshold -->
 
@@ -158,18 +212,18 @@ A two-phase experimental approach validates the composite design: Phase 1 uses v
 <!-- Formula: S = w1 * z_volume + w2 * z_sentiment -->
 <!-- Threshold τ selection via sensitivity sweep -->
 
-#### 3.3.3 Model Selection Strategy
+#### 3.4.3 Model Selection Strategy
 
 <!-- Why three model families (linear, ensemble, boosting) for comparison -->
 <!-- Why AUC-ROC as primary selection criterion given class imbalance -->
 
-#### 3.3.4 Temporal Validation Design
+#### 3.4.4 Temporal Validation Design
 
 <!-- Why expanding-window temporal CV rather than k-fold or random splits -->
 <!-- k=4 folds, 3 splits structure -->
 <!-- Temporal train/test split (80/20) -->
 
-### 3.4 Reproducibility Design
+### 3.5 Reproducibility Design
 
 <!-- Fixed seeds, serialised models, config JSON — why these matter -->
 
