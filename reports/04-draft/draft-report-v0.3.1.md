@@ -43,7 +43,7 @@ This is primarily a research problem: can the onset of a social media surge be d
 
 Existing research predicts overall content popularity [1][3] or models sentiment-to-market correlations [4], but these address different problems. Popularity prediction forecasts *eventual* reach rather than detecting rapid *onset*; sentiment-market studies predict price movements rather than social media dynamics. The reviewed literature does not appear to address predicting the onset of a composite engagement-and-sentiment surge within a bounded short-term window for individual tickers — the gap this project aims to fill (see Section 2.5).
 
-The 2021 GameStop episode illustrated the stakes: rapidly escalating discussion translated into market impact within days [5], with no automated system flagging the surge early. This project explores whether such surges are predictable from the discussion patterns that precede them.
+The 2021 GameStop episode illustrated the stakes: rapidly escalating discussion translated into market impact within days [11][12], with no automated system flagging the surge early. This project explores whether such surges are predictable from the discussion patterns that precede them.
 
 ### 1.3 Prediction Scope and Surge Definition
 
@@ -61,28 +61,33 @@ The system achieves AUC-ROC of 0.889 on the high-density dataset and 0.754 on th
 
 ## 2. Literature Review
 
-### 2.1. Key Research Areas
-
-The project draws on four established research areas within social media prediction and computational finance:
-
-1. **Early popularity prediction** — Foundational work demonstrating that early engagement signals (views, votes, reposts) correlate strongly with future popularity, establishing the feasibility of forecasting online attention from initial behavioural data.
-2. **Machine learning and content-based prediction** — Studies extending prediction beyond temporal signals by incorporating content metadata, source features, and structured classification pipelines to predict online attention before substantial engagement occurs.
-3. **NLP and sentiment analysis for financial prediction** — Research applying natural language processing to extract emotional and semantic signals from social media text, particularly in financial contexts where public mood may carry predictive value.
-4. **Information diffusion and cascade prediction** — Work examining how information spreads through social networks, using early propagation patterns and structural properties to forecast whether content will continue growing.
-
-### 2.2. Early Popularity Prediction
+### 2.1. Early Popularity Prediction
 
 Szabo and Huberman [1] demonstrated strong log-linear correlations between early and later popularity on YouTube and Digg, showing that simple regression on early view counts can predict future attention with high accuracy. However, their model assumes a stationary growth process and relies on content that has already accumulated measurable engagement. This limits applicability to *pre-engagement* prediction — the model cannot make forecasts at or near the time of posting, which is precisely the regime of interest for early surge detection. Furthermore, their evaluation was limited to platforms with specific ranking algorithms (Digg's front-page mechanism), raising questions about generalisability to finance-focused forums where content discovery differs fundamentally.
 
 Lerman and Hogg [2] modelled the interplay between social network structure and content discovery, highlighting that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach provided mechanistic insight but required detailed knowledge of platform-specific network topology — data rarely available for financial discussion platforms. The model also assumed homogeneous user behaviour, which is unrealistic in stock forums where institutional participants, retail traders, and bots exhibit very different engagement patterns.
 
-### 2.3. Machine Learning and Content-Based Prediction
+### 2.2. Machine Learning and Content-Based Prediction
 
 Bandari et al. [3] advanced the field by demonstrating that content metadata (source, category, subjectivity, named entities) could predict popularity *before* engagement accumulates, achieving ~84% classification accuracy. This was a methodologically important shift toward pre-publication prediction. However, the study used coarse popularity bins rather than continuous or binary surge targets, and the feature set was designed for news articles rather than user-generated financial discussion. Their reliance on manually engineered features also limits transferability — features like "news source reputation" have no direct analogue in anonymous forum posts. The 84% accuracy figure, while frequently cited, should also be interpreted cautiously: it was measured on a four-class classification task with uneven class sizes, meaning that majority-class baselines already achieve substantial accuracy.
 
-### 2.4. NLP and Sentiment Analysis
+Chen and Guestrin [9] introduced XGBoost, a scalable gradient boosting framework that has become a dominant method for structured/tabular classification tasks. Its regularisation mechanisms (L1 and L2 on leaf weights), built-in handling of sparse data, and efficient parallelised tree construction make it well-suited to imbalanced classification problems with heterogeneous feature types — precisely the characteristics of surge prediction. XGBoost consistently outperforms Random Forest and Logistic Regression on tabular benchmarks [9], motivating its inclusion as the most complex model in this project's three-classifier comparison. The `scale_pos_weight` parameter provides native support for class imbalance without requiring external resampling, which is methodologically preferable when training data is temporally ordered and synthetic sample generation could violate temporal assumptions.
 
-Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify. For this project, TextBlob shares similar lexicon-based limitations, which is acknowledged in the risk register and motivates the choice of a configurable sentiment component.
+### 2.3. NLP and Sentiment Analysis for Finance
+
+Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify.
+
+Hutto and Gilbert [10] developed VADER (Valence Aware Dictionary and sEntiment Reasoner), a rule-based sentiment tool specifically designed for social media text. VADER handles informal language features common on Reddit — capitalisation for emphasis, emoticons, slang intensifiers, and negation — achieving F1=0.96 on social media benchmarks, substantially outperforming general-purpose lexicons. This project uses VADER rather than TextBlob or GPOMS because its social media orientation better matches the Reddit domain. However, VADER still lacks finance-specific terms (e.g., "diamond hands," "YOLO," "short squeeze"), which is acknowledged in the risk register and motivates the configurable sentiment component weight — allowing the system to down-weight sentiment when its signal-to-noise ratio is low.
+
+### 2.4. Reddit Financial Communities and Retail Investor Behaviour
+
+The January 2021 GameStop episode demonstrated how rapidly escalating Reddit discussion can translate into real market impact. Hasso et al. [11] analysed brokerage accounts during the GameStop frenzy and found that participants were predominantly existing high-risk retail traders rather than first-time investors, suggesting that social media surges amplify pre-existing speculative behaviour rather than creating entirely new market participants. Betzer and Harries [12] provided empirical evidence linking r/wallstreetbets posting volume to abnormal GameStop trading volume, establishing a direct quantitative relationship between Reddit activity metrics and market outcomes.
+
+Bradley et al. [13] studied r/wallstreetbets investment recommendations more broadly, finding that pre-GameStop posts exhibited genuine stock-picking skill (positive abnormal returns), but that the community's culture shifted post-January 2021, leading to deteriorating recommendation quality. This temporal behavioural shift is directly relevant to this project's use of temporal validation — models trained on one period may not generalise to another due to community evolution, motivating the expanding-window cross-validation design.
+
+These studies establish that Reddit financial communities generate measurable market-relevant signals, but all analyse the *consequences* of surges retrospectively rather than predicting their *onset*. This distinction is central to the present project's contribution: rather than asking "did Reddit activity move the stock price?", it asks "can we detect that Reddit activity is about to surge?"
+
+Reddit's financial communities span a broad density spectrum. r/wallstreetbets (13+ million subscribers) produces thousands of posts daily with heavy ticker concentration in large-cap equities, while r/pennystocks serves a niche community discussing low-capitalisation stocks with sparse, dispersed discussion across thousands of tickers. This density contrast has direct methodological implications: predictive models require sufficient per-ticker history to estimate temporal features reliably, and communities with extreme ticker dispersion may fall below viable data thresholds. No prior study has explicitly tested whether surge prediction methodology transfers across communities of different densities — a gap this project addresses through its dual-dataset evaluation design.
 
 ### 2.5. Information Diffusion and Cascade Prediction
 
@@ -90,19 +95,42 @@ Cheng et al. [5] achieved ~79.5% accuracy (AUC 0.877) predicting whether Faceboo
 
 Wang and Huberman [6] and Kong et al. [7] characterised popularity as following identifiable temporal lifecycles (emergence → growth → peak → decline). While these frameworks provide useful conceptual grounding, both studies are primarily descriptive rather than predictive — they identify patterns retrospectively but do not offer methods for real-time forecasting. Yuan and Li [8] extended this by suggesting that early-stage signals may predict later evolution, but their work focused on emergency information diffusion rather than financial contexts, and the temporal granularity (days to weeks) is coarser than the 24-hour window relevant to stock discussion surges.
 
-### 2.6. Synthesis and Identified Research Gap
+### 2.6. Temporal Validation and Class Imbalance
 
-The literature establishes three findings: (a) early behavioural signals contain predictive information about future online attention [1][5]; (b) multiple feature types (temporal, content, sentiment, structural) each contribute explanatory power [2][3][4]; and (c) popularity follows identifiable temporal dynamics that can theoretically be detected early [7][8].
+Bergmeir and Benítez [14] demonstrated empirically that standard k-fold cross-validation overestimates predictive accuracy on time-dependent data by allowing future observations to inform training. They recommended blocked or expanding-window cross-validation schemes that preserve temporal ordering, finding that random splits could produce substantially inflated performance estimates. This finding directly motivates this project's expanding-window temporal cross-validation design (k=4 folds), where each fold's training set is strictly earlier than its validation set — preventing the optimistic bias that standard cross-validation introduces for temporally structured social media data.
+
+Chawla et al. [15] introduced SMOTE (Synthetic Minority Over-sampling Technique) to address class imbalance in binary classification, demonstrating that synthetic oversampling of the minority class improves classifier sensitivity without requiring additional real data. However, SMOTE assumes that linear interpolation between minority samples produces valid synthetic instances — an assumption that breaks down for temporally ordered data where adjacent samples have causal relationships. For this reason, this project uses class-weighted loss functions (`class_weight='balanced'` for Logistic Regression and Random Forest; `scale_pos_weight` for XGBoost) rather than resampling, avoiding the generation of synthetic temporal records that could introduce spurious patterns.
+
+### 2.7. Synthesis and Identified Research Gap
+
+Table 1 summarises the reviewed literature against five dimensions relevant to this project.
+
+| Study | Platform | Prediction Target | Pre-engagement? | Finance-specific? | Temporal validation? |
+|-------|----------|-------------------|-----------------|--------------------|--------------------|
+| Szabo & Huberman [1] | YouTube, Digg | Future view count | No | No | No |
+| Lerman & Hogg [2] | Digg | Story popularity | No | No | No |
+| Bandari et al. [3] | News articles | Popularity bin | Yes | No | No |
+| Bollen et al. [4] | Twitter | Market direction | N/A | Yes | No |
+| Cheng et al. [5] | Facebook | Cascade doubling | Partial | No | No |
+| Chen & Guestrin [9] | (method paper) | — | — | — | — |
+| Hutto & Gilbert [10] | Social media | (tool paper) | — | — | — |
+| Hasso et al. [11] | Reddit/Brokerage | Participation | N/A | Yes | N/A |
+| Bradley et al. [13] | Reddit (WSB) | Return prediction | N/A | Yes | Partial |
+| Bergmeir & Benítez [14] | (method paper) | — | — | — | Yes |
+
+*Table 1: Literature comparison across dimensions relevant to surge prediction.*
+
+The literature establishes three findings: (a) early behavioural signals contain predictive information about future online attention [1][5]; (b) multiple feature types (temporal, content, sentiment, structural) each contribute explanatory power [2][3][4]; and (c) popularity follows identifiable temporal dynamics that can theoretically be detected early [7][8]. Recent Reddit-specific research [11][12][13] confirms that these communities generate quantifiable, market-relevant discussion patterns.
 
 Three critical gaps remain:
 
-1. **Prediction target mismatch** — Most studies predict *eventual outcomes* (final popularity, total cascade size, market direction) rather than detecting the *onset* of rapid growth within a bounded time window. An analyst needs to know a surge is developing *now*, within an actionable timeframe. No reviewed study defines or predicts a composite engagement-and-sentiment surge within a fixed short-term window.
+1. **Prediction target mismatch** — Most studies predict *eventual outcomes* (final popularity, total cascade size, market direction) rather than detecting the *onset* of rapid growth within a bounded time window. No reviewed study defines or predicts a composite volume-and-sentiment surge within a fixed short-term window.
 
 2. **Single-signal approaches** — Each research strand demonstrates one feature category's value (Szabo: temporal; Bandari: content; Bollen: sentiment; Cheng: structural), yet few combine signals into an integrated predictive framework. The literature suggests multiple signal types interact during trend formation [2][7], but empirical integration remains limited.
 
-3. **Domain transfer problem** — Reviewed studies draw on general social media (YouTube, Digg, Facebook, Twitter) rather than finance-specific discussion platforms. Financial discussions have distinctive characteristics — event-driven reactions, domain-specific language, speculative behaviour — that may invalidate assumptions from general popularity research. Bollen et al. [4] address financial context but predict market outcomes rather than social media dynamics themselves.
+3. **Domain and density transfer** — Reviewed studies draw on general social media (YouTube, Digg, Facebook, Twitter) rather than finance-specific platforms. Reddit financial research [11][12][13] analyses surge *consequences* but does not predict surge *onset*. Furthermore, no study tests whether prediction methodology transfers across communities of different data densities — a critical practical question given the heterogeneity of online financial forums.
 
-This project addresses all three gaps by defining a composite binary surge target within a fixed 24-hour window, combining temporal, activity-frequency, sentiment, and textual features, and applying the framework specifically to stock-related social media discussions.
+This project addresses all three gaps: Section 3.3.2 defines the composite binary surge target within a fixed 24-hour window (gap 1); Section 3.3.1 describes the multi-signal feature set combining temporal, activity-frequency, sentiment, and textual features (gap 2); and the dual-dataset evaluation on r/wallstreetbets and r/pennystocks with cross-dataset transfer testing directly addresses the density transfer problem (gap 3).
 
 ---
 
@@ -327,4 +355,32 @@ A two-phase experimental approach validates the composite design: Phase 1 uses v
 
 ## References
 
-<!-- ACM citation format -->
+[1] G. Szabo and B. A. Huberman. 2010. Predicting the popularity of online content. *Communications of the ACM* 53, 8 (August 2010), 80–88. DOI: 10.1145/1787234.1787254
+
+[2] K. Lerman and T. Hogg. 2010. Using a model of social dynamics to predict popularity of news. In *Proceedings of the 19th International Conference on World Wide Web (WWW '10)*. ACM, New York, NY, 621–630. DOI: 10.1145/1772690.1772754
+
+[3] R. Bandari, S. Asur, and B. A. Huberman. 2012. The pulse of news in social media: Forecasting popularity. In *Proceedings of the 6th International AAAI Conference on Weblogs and Social Media (ICWSM '12)*. AAAI Press, 26–33.
+
+[4] J. Bollen, H. Mao, and X. Zeng. 2011. Twitter mood predicts the stock market. *Journal of Computational Science* 2, 1 (March 2011), 1–8. DOI: 10.1016/j.jocs.2010.12.007
+
+[5] J. Cheng, L. Adamic, P. A. Dow, J. M. Kleinberg, and J. Leskovec. 2014. Can cascades be predicted? In *Proceedings of the 23rd International Conference on World Wide Web (WWW '14)*. ACM, New York, NY, 925–936. DOI: 10.1145/2566486.2567997
+
+[6] F. Wang and B. A. Huberman. 2012. Popularity evolution of online content. Unpublished manuscript. arXiv:1212.4043.
+
+[7] S. Kong, L. Mei, F. Feng, and Z. Ye. 2014. Predicting lifespans of popular tweets in microblog. In *Proceedings of the 37th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR '14)*. ACM, New York, NY, 1103–1106. DOI: 10.1145/2600428.2609550
+
+[8] C. Yuan and J. Li. 2019. Research on the prediction model of the diffusion of emergencies in social media. *Information Discovery and Delivery* 47, 4 (November 2019), 203–212. DOI: 10.1108/IDD-05-2019-0039
+
+[9] T. Chen and C. Guestrin. 2016. XGBoost: A scalable tree boosting system. In *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD '16)*. ACM, New York, NY, 785–794. DOI: 10.1145/2939672.2939785
+
+[10] C. J. Hutto and E. Gilbert. 2014. VADER: A parsimonious rule-based model for sentiment analysis of social media text. In *Proceedings of the 8th International AAAI Conference on Weblogs and Social Media (ICWSM '14)*. AAAI Press, Ann Arbor, MI.
+
+[11] T. Hasso, D. Müller, M. Pelster, and S. Warkulat. 2022. Who participated in the GameStop frenzy? Evidence from brokerage accounts. *Finance Research Letters* 45 (March 2022), 102140. DOI: 10.1016/j.frl.2021.102140
+
+[12] A. Betzer and J. P. Harries. 2022. How online discussion board activity affects stock trading: The case of GameStop. *Financial Markets and Portfolio Management* 36, 4 (December 2022), 443–472. DOI: 10.1007/s11408-022-00407-w
+
+[13] D. Bradley, J. Hanousek Jr., R. Jame, and Z. Xiao. 2024. Place your bets? The market consequences of investment research on Reddit's WallStreetBets. *Journal of Financial Economics* 152 (February 2024), 103756. DOI: 10.1016/j.jfineco.2023.103756
+
+[14] C. Bergmeir and J. M. Benítez. 2012. On the use of cross-validation for time series predictor evaluation. *Information Sciences* 191 (May 2012), 192–213. DOI: 10.1016/j.ins.2011.12.028
+
+[15] N. V. Chawla, K. W. Bowyer, L. O. Hall, and W. P. Kegelmeyer. 2002. SMOTE: Synthetic minority over-sampling technique. *Journal of Artificial Intelligence Research* 16 (June 2002), 321–357. DOI: 10.1613/jair.953
