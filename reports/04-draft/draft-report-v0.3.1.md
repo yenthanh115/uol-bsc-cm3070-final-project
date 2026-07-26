@@ -39,11 +39,11 @@ The project has three objectives:
 
 Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
 
-This is primarily a research problem: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities.
+This is primarily a research question: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities.
 
-Existing research predicts overall content popularity [1][3] or models sentiment-to-market correlations [4], but these address different problems. Popularity prediction forecasts *eventual* reach rather than detecting rapid *onset*; sentiment-market studies predict price movements rather than social media dynamics. The reviewed literature does not appear to address predicting the onset of a composite engagement-and-sentiment surge within a bounded short-term window for individual tickers — the gap this project aims to fill (see Section 2.5).
+Prior work in this area tends to focus on related but distinct problems: forecasting eventual content reach rather than detecting rapid onset, or predicting price movements rather than social media dynamics themselves. In the reviewed literature, predicting the onset of a volume-and-sentiment surge for individual tickers within a short-term window remains largely unaddressed (see Section 2.5).
 
-The 2021 GameStop episode illustrated the stakes: rapidly escalating discussion translated into market impact within days [5], with no automated system flagging the surge early. This project explores whether such surges are predictable from the discussion patterns that precede them.
+This project explores whether such surges are predictable from the discussion patterns that precede them.
 
 ### 1.3 Prediction Scope and Surge Definition
 
