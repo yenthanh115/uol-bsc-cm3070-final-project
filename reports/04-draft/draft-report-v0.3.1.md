@@ -27,7 +27,7 @@ SIDE NOTE (DELETE LATER)
 
 ### 1.1 Project Concept and Objectives
 
-This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge — using only backward-looking features available at observation time. Three classifiers — Logistic Regression, Random Forest, and XGBoost — are trained and compared on this binary task.
+This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this binary task.
 
 The project has three objectives:
 
