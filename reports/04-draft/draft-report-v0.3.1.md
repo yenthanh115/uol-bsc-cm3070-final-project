@@ -59,7 +59,14 @@ The system achieves AUC-ROC of 0.889 on the high-density dataset and 0.754 on th
 
 ---
 
-## 2. Literature Review
+## 2. Literature Review]
+
+<!--
+What has been done? — What relevant work exists in this space?
+What did they find? — What are the key findings and methods?
+What are their limitations? — Where do these studies fall short?
+What hasn't been done? — What gap remains that your project fills?
+-->
 
 ### 2.1. Early Popularity Prediction
 
@@ -75,11 +82,7 @@ Fernández-Delgado et al. [16] evaluated 179 classifier implementations across 1
 
 ### 2.3. NLP and Sentiment Analysis
 
-Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy. This was influential in establishing sentiment as a predictive signal for finance. However, the study has significant methodological limitations that subsequent literature has noted: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify.
-
-Hutto and Gilbert [12] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation. VADER outperformed individual human raters on tweet classification (F1=0.96) and generalises across contexts better than purely lexicon-based alternatives. Its design makes it suitable for Reddit posts, which share social media conventions (informal language, emoticons, emphasis through capitalisation). However, VADER's lexicon was constructed from general social media — it has no financial domain tuning, meaning that terms with specialised financial meaning (e.g., "short," "calls," "puts") may be scored incorrectly or as neutral.
-
-Araci [13] addressed this limitation with FinBERT, a BERT-based language model further pre-trained on financial corpora and fine-tuned for financial sentiment classification. FinBERT achieves state-of-the-art results on financial sentiment datasets by capturing contextual meaning that lexicon-based tools miss. However, transformer models carry significant computational cost — inference on hundreds of thousands of records is substantially slower than VADER's rule-based approach. For this project, VADER was chosen as the primary sentiment tool for its speed and social media design, with the acknowledged trade-off that financial domain specificity is limited. The configurable sentiment component architecture allows future upgrade to FinBERT without pipeline restructuring.
+Bollen et al. [4] demonstrated that aggregate Twitter mood (particularly the "Calm" dimension) predicted Dow Jones movements with ~87.6% directional accuracy, establishing sentiment as a viable predictive signal in financial contexts. However, the study has significant methodological limitations: the evaluation period was short (approximately one month of trading days), no out-of-sample validation was reported, and the causal mechanism is unclear — external events may simultaneously drive both social media mood and market outcomes without one causing the other. The lexicon-based mood measurement tools (OpinionFinder and GPOMS) also lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning that general-purpose sentiment tools misclassify. Despite these limitations, the core finding — that collective sentiment extracted from social media text carries measurable predictive information — provides the rationale for incorporating sentiment change as a component of this project's composite surge metric. The specific sentiment tool selection and its trade-offs are discussed in Section 3.3.
 
 ### 2.4. Penny Stocks, Reddit, and Retail Investor Communities
 
@@ -181,6 +184,14 @@ This project aims to address all four gaps by defining a composite binary surge 
 ### 3.3 Technology Choices
 
 <!-- Python, scikit-learn, XGBoost, VADER, pandas — why each was chosen over alternatives -->
+
+#### Sentiment Tool Selection
+
+Hutto and Gilbert [12] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation. VADER outperformed individual human raters on tweet classification (F1=0.96) and generalises across contexts better than purely lexicon-based alternatives. Its design makes it suitable for Reddit posts, which share social media conventions (informal language, emoticons, emphasis through capitalisation). However, VADER's lexicon was constructed from general social media — it has no financial domain tuning, meaning that terms with specialised financial meaning (e.g., "short," "calls," "puts") may be scored incorrectly or as neutral.
+
+Araci [13] addressed this limitation with FinBERT, a BERT-based language model further pre-trained on financial corpora and fine-tuned for financial sentiment classification. FinBERT achieves state-of-the-art results on financial sentiment datasets by capturing contextual meaning that lexicon-based tools miss. However, transformer models carry significant computational cost — inference on hundreds of thousands of records is substantially slower than VADER's rule-based approach.
+
+VADER was chosen as the primary sentiment tool for this project for its speed and social media design, with the acknowledged trade-off that financial domain specificity is limited. The configurable sentiment component architecture allows future upgrade to FinBERT without pipeline restructuring.
 
 ### 3.4 Method Design
 
