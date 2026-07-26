@@ -31,9 +31,9 @@ This project follows the **CM3005 Data Science** project template, *Predictive M
 
 The project has three objectives:
 
-- Develop a predictive model using early-stage discussion features (temporal patterns, activity frequency, sentiment) to forecast per-ticker surges before they occur
-- Compare multiple ML approaches to determine whether model complexity improves prediction over simpler baselines
-- Validate that predictions generalise to unseen future time periods through temporal evaluation protocols that prevent data leakage — a common methodological weakness in social media prediction studies
+- Build a predictive model from early-stage discussion features (temporal patterns, activity frequency, sentiment) that can forecast per-ticker surges before they happen
+- Compare multiple ML approaches to find out whether more complex models actually improve prediction over simpler baselines
+- Confirm that predictions hold up on unseen future time periods by using temporal evaluation protocols that prevent data leakage, a common methodological weakness in social media prediction studies
 
 ### 1.2 Problem Statement and Motivation
 
