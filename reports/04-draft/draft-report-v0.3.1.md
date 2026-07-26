@@ -59,14 +59,9 @@ The system achieves AUC-ROC of 0.889 on the high-density dataset and 0.754 on th
 
 ---
 
-## 2. Literature Review]
+## 2. Literature Review
 
-<!--
-What has been done? — What relevant work exists in this space?
-What did they find? — What are the key findings and methods?
-What are their limitations? — Where do these studies fall short?
-What hasn't been done? — What gap remains that your project fills?
--->
+Research on predicting online attention has established that early behavioural signals carry predictive power, that multiple feature types (temporal, content, sentiment, structural) each contribute, and that social media discussion patterns in financial communities correlate with subsequent market activity. However, no reviewed study combines these findings into a system that predicts the *onset* of a composite engagement surge within a bounded time window, applied to financial discussion, and evaluated with temporal protocols that prevent data leakage. The following sections trace how each finding was established, identify the methodological limitations of each strand, and converge on the four gaps this project aims to address.
 
 ### 2.1. Early Popularity Prediction
 
