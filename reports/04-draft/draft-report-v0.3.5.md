@@ -221,6 +221,67 @@ SIDE NOTE (DELETE LATER)
 - have we set goal for this project (musthave tier, target tier, and stretch tier)
 - discuss about data drift ? aware of it and provide solution 
 -->
+
+
+<!--
+## 1. Establish Methodological Rationalization
+Goal: Justify why your chosen approach is the most effective vehicle for your specific research.
+
+* Why did you choose this specific paradigm (quantitative, qualitative, or mixed-methods)?
+* How does this structural design directly answer your primary research questions?
+* What alternative designs did you reject, and why were they less suitable?
+* How does this design align with the theoretical framework built in your literature review?
+
+## 2. Define Boundaries and the Sampling Strategy
+Goal: Clearly outline who or what you are studying, and how you selected your subjects.
+
+* What is your exact target population or unit of analysis (e.g., individuals, texts, organizations)?
+* What specific sampling method did you use (e.g., random, purposive, snowball sampling)?
+* What were your explicit inclusion and exclusion criteria for participants or data?
+* What is your final sample size, and why is it statistically or conceptually sufficient?
+
+## 3. Detail the Operational Procedures
+Goal: Provide a step-by-step chronological recipe so another researcher can replicate your study exactly.
+
+* What exact materials, hardware, software, or standardized instruments did you utilize?
+* What were the chronological steps taken to set up and execute the study?
+* How did you control for extraneous variables or potential sources of bias?
+* If you conducted a pilot study, what adjustments did you make based on those trial runs?
+
+## 4. Outline Data Collection Metrics
+Goal: Explain exactly how information was gathered and measured during the execution phase.
+
+* What specific types of data were collected (e.g., test scores, interview transcripts, digital logs)?
+* How did you ensure the validity (accuracy) and reliability (consistency) of your measurement tools?
+* What specific roles did the researchers play during the data gathering process?
+* When, where, and over what exact timeframe was the data collected?
+
+## 5. Formulate the Data Analysis Plan
+Goal: Explain how you will transform raw data into meaningful answers before you actually present findings.
+
+* What specific statistical tests (quantitative) or coding frameworks (qualitative) will you apply?
+* Which software packages (e.g., SPSS, R, NVivo) will be used to process the data?
+* How will you handle missing, corrupted, or incomplete data points?
+* How do these specific analysis techniques map back to your original hypotheses?
+
+## 6. Address Ethical and Quality Controls
+Goal: Prove that your study protects participants and adheres to strict professional standards.
+
+* What institutional review boards (IRB) or ethical committees approved this project?
+* How did you secure informed consent and protect participant anonymity or data privacy?
+* What steps were taken to minimize physical, psychological, or social risks to subjects?
+* How did you address potential researcher bias or conflicts of interest?
+
+------------------------------
+## Quick Framework: The 4 D’s of Research Design
+When writing or reviewing your design section, ensure it satisfies these four criteria:
+
+* Define: Clearly state the parameters, variables, and populations involved.
+* Do: Detail the precise actions taken during the experiment or fieldwork.
+* Defend: Explain the logical reasons behind every technical choice you made.
+* Disclose: Report all limitations, ethical steps, and structural constraints openly.
+
+-->
 ### 3.1 System Architecture
 
 <!-- Pipeline stages: loading → preprocessing → feature engineering → labelling → training → evaluation -->
