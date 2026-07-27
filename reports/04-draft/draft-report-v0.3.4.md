@@ -98,6 +98,24 @@ Lerman and Hogg [2] extended this understanding by modelling the interaction bet
 
 The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth.
 
+```mermaid
+graph LR
+    A[Emergence<br/><i>Few posts, low signal</i>] --> B[Growth<br/><i>Accelerating activity</i>]
+    B --> C[Peak<br/><i>Maximum attention</i>]
+    C --> D[Decline<br/><i>Activity fading</i>]
+
+    A -.- E[/"🎯 This project's<br/>prediction point"/]
+    B -.- F[/"Traditional models<br/>require data here"/]
+
+    style A fill:#e1f5fe,stroke:#0288d1
+    style B fill:#fff9c4,stroke:#f9a825
+    style C fill:#ffcdd2,stroke:#c62828
+    style D fill:#f5f5f5,stroke:#9e9e9e
+    style E fill:#c8e6c9,stroke:#2e7d32
+    style F fill:#fff3e0,stroke:#e65100
+```
+*Figure 1: Online attention lifecycle model [6][7]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase — predicting a surge before substantial engagement has accumulated.*
+
 ### 2.2. The Shift Toward Pre-Engagement Prediction
 
 A second wave of research addressed the limitation that early popularity models require existing engagement data. Bandari et al. [3] demonstrated that content metadata (source, category, subjectivity, named entities) could predict popularity *before* any engagement accumulates, achieving ~84% classification accuracy on news articles. This was a methodologically significant shift: for the first time, prediction could occur at or before publication rather than requiring a waiting period.
@@ -106,6 +124,16 @@ Cheng et al. [5] achieved ~79.5% accuracy (AUC 0.877) predicting whether Faceboo
 
 This body of work established a second consensus: **prediction is possible before substantial engagement accumulates**, provided features capture content characteristics or early propagation dynamics. However, the prediction targets remained *eventual outcomes* (final popularity, total cascade size) rather than *rapid onset* within a bounded window. An analyst monitoring a financial forum needs to know whether discussion will surge in the *next 24 hours*, not whether it will eventually become popular — a distinction no reviewed study addresses.
 
+*Table 1: Evolution of online attention prediction — from post-engagement to pre-engagement approaches.*
+
+| Study | Year | Platform | Prediction Target | Requires Existing Engagement? | Accuracy |
+|-------|------|----------|-------------------|-------------------------------|----------|
+| Szabo & Huberman [1] | 2010 | YouTube, Digg | Future view count | Yes — needs early views | r² > 0.9 |
+| Lerman & Hogg [2] | 2010 | Digg | Story popularity | Yes — needs network data | N/A (model) |
+| Bandari et al. [3] | 2012 | News articles | Popularity bin | **No** — content metadata only | ~84% |
+| Cheng et al. [5] | 2014 | Facebook | Cascade doubling | Partial — early reshares | 79.5% (AUC 0.877) |
+| Yuan & Li [8] | 2019 | Weibo | Diffusion trajectory | Partial — early propagation | N/A (descriptive) |
+
 ### 2.3. Sentiment as a Predictive Signal in Finance
 
 Parallel to the popularity prediction literature, research in computational finance established that collective sentiment extracted from social media text carries measurable predictive information. Bollen et al. [4] demonstrated that aggregate Twitter mood — particularly the "Calm" dimension measured by GPOMS — predicted Dow Jones movements with ~87.6% directional accuracy. Despite significant methodological limitations (short evaluation period, no out-of-sample validation, unclear causal mechanism), this study was influential in establishing that **textual sentiment from social media has predictive value for financial outcomes**.
@@ -113,6 +141,14 @@ Parallel to the popularity prediction literature, research in computational fina
 The tools used for sentiment extraction have evolved alongside this finding. General-purpose lexicons like OpinionFinder lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning. Hutto and Gilbert [12] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation — achieving F1=0.96 on social media benchmarks. Araci [13] later introduced FinBERT, a transformer model fine-tuned on financial corpora, capturing contextual meaning that rule-based tools miss. This evolution from general lexicons → social-media-specific rules → domain-specific deep learning represents the field's recognition that sentiment tools must match their application domain.
 
 For this project, the key takeaway is that sentiment *change* — not just absolute sentiment — may serve as a leading indicator of surges: if a ticker's discussion becomes markedly more emotional before volume escalates, sentiment shift could provide early warning signal. This motivates including sentiment change magnitude in the composite surge metric.
+
+*Table 2: Evolution of sentiment analysis tools relevant to financial social media.*
+
+| Tool | Type | Domain | Strengths | Limitations for This Project |
+|------|------|--------|-----------|------------------------------|
+| OpinionFinder [4] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
+| VADER [12] | Rule-based | Social media | Handles capitalisation, emoticons, negation; F1=0.96 | No financial domain tuning ("short," "moon" misscored) |
+| FinBERT [13] | Transformer | Financial text | Context-aware, domain-specific | Computationally expensive for 1M+ records |
 
 ### 2.4. Financial Discussion on Reddit
 
@@ -135,6 +171,19 @@ Szabo and Huberman [1] evaluate on data drawn from the same time period as train
 This matters because Tashman [14] demonstrated that rolling-origin evaluation — where the forecasting origin advances forward through time — produces more reliable accuracy estimates for temporal prediction tasks than fixed or random splits. Bergmeir and Benítez [15] showed empirically that random cross-validation *overestimates* predictive accuracy for time-dependent data, recommending blocked or expanding-window schemes that preserve temporal ordering. Despite these methodological advances being well-established in the forecasting literature, they remain largely unadopted in social media prediction research.
 
 The consequence is that reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains unresolved whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment — including surge detection — this is a critical deficiency. Fernández-Delgado et al. [16], in their large-scale classifier comparison, similarly noted that evaluation methodology substantially affects reported performance rankings, reinforcing that *how* a model is evaluated matters as much as *which* model is selected.
+
+*Table 3: Temporal evaluation practices across reviewed studies.*
+
+| Study | Evaluation Method | Temporal Ordering Preserved? | Leakage Risk |
+|-------|-------------------|------------------------------|--------------|
+| Szabo & Huberman [1] | Same-period evaluation | No | High |
+| Bandari et al. [3] | Random train-test split | No | High |
+| Bollen et al. [4] | Fixed holdout (1 month) | Partial | Medium |
+| Cheng et al. [5] | Random cascade sampling | No | High |
+| Long et al. [9] | Full-dataset correlation | No | High |
+| Costola et al. [10] | Full-dataset analysis | No | High |
+| Mancini et al. [11] | Chronological split | Partial | Medium |
+| **This project** | **Expanding-window temporal CV** | **Yes** | **Minimal** |
 
 ### 2.6. Research Gap and Project Position
 
