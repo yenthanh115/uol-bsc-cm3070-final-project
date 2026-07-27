@@ -24,7 +24,7 @@ Stock-related discussions on Reddit can go from quiet to frenzied within hours. 
 
 This is primarily a research question: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities.
 
-Prior work in this area tends to focus on related but distinct problems: forecasting eventual content reach rather than detecting rapid onset, or predicting price movements rather than social media dynamics themselves. In the reviewed literature, predicting the onset of a volume-and-sentiment surge for individual tickers within a short-term window remains largely unaddressed (see Section 2.5).
+Prior work in this area tends to focus on related but distinct problems: forecasting eventual content reach rather than detecting rapid onset, or predicting price movements rather than social media dynamics themselves. In the reviewed literature, predicting the onset of a volume-and-sentiment surge for individual tickers within a short-term window remains largely unaddressed (see Section 2.6).
 
 This project explores whether such surges are predictable from the discussion patterns that precede them.
 
@@ -32,7 +32,7 @@ This project explores whether such surges are predictable from the discussion pa
 
 The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively within a fixed time window. This project narrows the scope to **surges**: statistically significant short-term increases in both posting volume and sentiment intensity for a specific ticker within a 24-hour window, measured by a composite metric combining normalised volume growth with sentiment change magnitude. Surges are discrete, quantifiable events that lend themselves to binary classification, making them a more tractable operationalisation of the broader "trend" concept. A surge represents the earliest observable stage of a trend, so predicting surges is equivalent to detecting trends at their point of emergence.
 
-The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.3.2.
+The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.4.2.
 
 ### 1.4 Scope
 
@@ -40,7 +40,7 @@ The target derives from posting volume (timestamp-based record counts) rather th
 
 **Out of scope:** Real-time ingestion, production deployment, trading signal generation, multi-class targets, cross-platform fusion.
 
-The system achieves AUC-ROC of 0.889 on the high-density dataset and 0.754 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
+The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.754 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
 
 ---
 
@@ -90,11 +90,11 @@ Goal: Explicitly link your reading to your own research hypotheses, questions, o
 
 ### 2.1. The Predictability of Online Attention
 
-The foundational question underlying this project — can future surges in social media activity be predicted? — was first addressed through research on *online popularity prediction*. This field established that online attention is not random: content that attracts early engagement tends to attract more, following patterns that are statistically detectable.
+The foundational question underlying this project can future surges in social media activity be predicted? — was first addressed through research on *online popularity prediction*. This field established that online attention is not random: content that attracts early engagement tends to attract more, following patterns that are statistically detectable.
 
 Szabo and Huberman [1] produced the seminal result, demonstrating strong log-linear correlations between early and later popularity on YouTube and Digg. Their regression model showed that a content item's view count at time *t* predicts its eventual popularity with high accuracy. This established the core principle: **early behavioural signals carry predictive information about future attention**. However, the model assumes a stationary growth process and requires content to have already accumulated measurable engagement before prediction becomes possible — it cannot forecast at or near the time of posting.
 
-Lerman and Hogg [2] extended this understanding by modelling the interaction between social network structure and content discovery, demonstrating that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach revealed that network position and user browsing patterns mediate how content gains visibility. Wang and Huberman [6] and Kong et al. [7] further characterised online attention as following identifiable temporal lifecycles — emergence, growth, peak, and decline — suggesting that content at different lifecycle stages exhibits different observable signatures.
+Lerman and Hogg [2] extended this understanding by modelling the interaction between social network structure and content discovery, demonstrating that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach revealed that network position and user browsing patterns mediate how content gains visibility. Wang and Huberman [6] and Kong et al. [7] further characterised online attention as following identifiable temporal lifecycles (emergence, growth, peak, and decline) suggesting that content at different lifecycle stages exhibits different observable signatures.
 
 The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth.
 
@@ -146,7 +146,7 @@ For this project, the key takeaway is that sentiment *change* — not just absol
 
 | Tool | Type | Domain | Strengths | Limitations for This Project |
 |------|------|--------|-----------|------------------------------|
-| OpinionFinder [4] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
+| OpinionFinder as used in [4] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
 | VADER [12] | Rule-based | Social media | Handles capitalisation, emoticons, negation; F1=0.96 | No financial domain tuning ("short," "moon" misscored) |
 | FinBERT [13] | Transformer | Financial text | Context-aware, domain-specific | Computationally expensive for 1M+ records |
 
@@ -156,7 +156,7 @@ The preceding research established general principles on platforms like YouTube,
 
 Penny stocks (low-capitalisation equities typically trading below $5 per share) occupy a distinctive position: their low liquidity and limited analyst coverage mean that social media discussion can constitute a disproportionate share of available information [9][10]. Reddit's subreddit structure creates focused communities with shared norms and persistent threads, unlike Twitter's ephemeral broadcast model.
 
-Long et al. [9] demonstrated that r/WallStreetBets posting volume correlated with abnormal trading volume and returns for discussed stocks, with effects concentrated in small-cap equities. Crucially, their analysis showed that increased Reddit attention *preceded* trading activity, suggesting that discussion patterns carry predictive signal rather than merely reflecting market events. Costola et al. [10] examined the GameStop episode specifically, finding that consensus formation within r/WallStreetBets followed measurable patterns in posting frequency and sentiment alignment *before* reaching critical mass — a small number of committed users drove broader engagement through detectable temporal signatures.
+Long et al. [9] demonstrated that r/WallStreetBets posting volume correlated with abnormal trading volume and returns for discussed stocks, with effects concentrated in small-cap equities. Their analysis showed that increased Reddit attention *preceded* trading activity in their sample, suggesting that discussion patterns carry predictive signal rather than merely reflecting market events. Costola et al. [10] examined the GameStop episode specifically, finding that consensus formation within r/WallStreetBets followed measurable patterns in posting frequency and sentiment alignment *before* reaching critical mass — a small number of committed users drove broader engagement through detectable temporal signatures.
 
 Mancini et al. [11] applied this principle to pump-and-dump detection, building predictive models from the language and timing of forum posts associated with manipulated stocks. Their work confirmed that text-based features from financial discussion forums achieve classification performance significantly above random baselines for predicting anomalous stock activity.
 
@@ -164,7 +164,7 @@ These studies collectively establish that **Reddit financial communities generat
 
 ### 2.5. Methodological Weaknesses in Prior Work
 
-Beyond the substantive gaps identified above, a critical methodological pattern cuts across the reviewed literature: the near-universal absence of rigorous temporal evaluation protocols.
+Beyond the substantive gaps identified above, a critical methodological pattern cuts across the reviewed literature: a recurring absence of rigorous temporal evaluation protocols across the studies reviewed here.
 
 Szabo and Huberman [1] evaluate on data drawn from the same time period as training. Bandari et al. [3] use random train-test splits rather than temporal partitions, meaning models may be tested on articles published *before* some training data — a form of information leakage. Cheng et al. [5] randomly sample cascades for evaluation without preserving temporal ordering. Long et al. [9] and Costola et al. [10] analyse correlations across their full datasets without testing whether patterns discovered in earlier periods generalise to later ones.
 
@@ -183,7 +183,6 @@ The consequence is that reported performance figures across the reviewed studies
 | Long et al. [9] | Full-dataset correlation | No | High |
 | Costola et al. [10] | Full-dataset analysis | No | High |
 | Mancini et al. [11] | Chronological split | Partial | Medium |
-| **This project** | **Expanding-window temporal CV** | **Yes** | **Minimal** |
 
 ### 2.6. Research Gap and Project Position
 
