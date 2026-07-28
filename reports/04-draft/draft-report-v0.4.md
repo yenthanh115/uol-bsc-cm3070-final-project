@@ -30,7 +30,7 @@ This project explores whether such surges are predictable from the discussion pa
 
 ### 1.3 Prediction Scope and Surge Definition
 
-The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively within a fixed time window. This project narrows the scope to **surges**: statistically significant short-term increases in both posting volume and sentiment intensity for a specific ticker within a 24-hour window, measured by a composite metric combining normalised volume growth with sentiment change magnitude. Surges are discrete, quantifiable events that lend themselves to binary classification, making them a more tractable operationalisation of the broader "trend" concept. A surge represents the earliest observable stage of a trend, so predicting surges is equivalent to detecting trends at their point of emergence.
+The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively within a fixed time window. This project narrows the scope to **surges**: statistically significant short-term increases in both **posting volume** and **sentiment intensity** for a specific ticker within **a 24-hour window**, measured by a composite metric combining normalised volume growth with sentiment change magnitude. Surges are discrete, quantifiable events that lend themselves to binary classification, making them a more tractable operationalisation of the broader "trend" concept. A surge represents the earliest observable stage of a trend, so predicting surges is equivalent to detecting trends at their point of emergence.
 
 The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.4.2.
 
@@ -41,6 +41,13 @@ The target derives from posting volume (timestamp-based record counts) rather th
 **Out of scope:** Real-time ingestion, production deployment, trading signal generation, multi-class targets, cross-platform fusion.
 
 The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.754 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
+
+### 1.5 Project Timeline
+
+<figure align="center">
+  <img src="figures/01-gantt-chart-v0.2.png" alt="Project Timeline" width="1000">
+  <figcaption>Figure 2: Project Timeline (Gantt Chart).</figcaption>
+</figure>
 
 ---
 
@@ -222,7 +229,6 @@ SIDE NOTE (DELETE LATER)
 - discuss about data drift ? aware of it and provide solution 
 -->
 
-
 <!--
 ## 1. Establish Methodological Rationalization
 Goal: Justify why your chosen approach is the most effective vehicle for your specific research.
@@ -287,7 +293,56 @@ When writing or reviewing your design section, ensure it satisfies these four cr
 <!-- Pipeline stages: loading → preprocessing → feature engineering → labelling → training → evaluation -->
 <!-- Data flow diagram: input sources → intermediate outputs → final artifacts -->
 
-### 3.2 Data Ingestion and Datasets
+System Architecture and Pipeline Stages
+
+The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_labeling.py`):
+
+1. **Data Loading** — CSV ingestion, regex-based ticker extraction from title/selftext, multi-ticker record explosion (one row per record-ticker pair)
+2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (O(n log n) per ticker)
+3. **Sentiment Computation** — TextBlob polarity per record with title-fallback for missing selftext; mean future sentiment from forward-window records
+4. **Target Labelling** — Temporal 80/20 split, z-score normalisation (training stats only), composite metric, binary thresholding
+5. **Feature Engineering** — Nine backward-only features (see below)
+6. **Model Training and Evaluation** — Temporal cross-validation, hyperparameter tuning, test-set evaluation
+
+<figure align="center">
+  <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
+  <figcaption>Figure 1: Data Pipeline Architecture.</figcaption>
+</figure>
+
+
+#### Feature Design
+
+All features use only information available at observation time *t*, preventing temporal leakage:
+
+| Feature | Type | Rationale |
+|---------|------|-----------|
+| `sentiment_score` | Continuous [-1, 1] | Emotional tone may precede surges [4] |
+| `hour_of_day` | Discrete [0–23] | Trading hours show different patterns |
+| `day_of_week` | Discrete [0–6] | Weekend vs weekday dynamics differ |
+| `time_since_previous` | Continuous ≥ 0 | Rapid posting signals emerging activity [1] |
+| `ticker_post_rate_24h` | Continuous ≥ 0 | Current per-ticker discussion intensity |
+| `ticker_post_acceleration` | Continuous | Whether frequency is already increasing |
+| `word_count` | Discrete ≥ 0 | Longer posts may carry more content [3] |
+| `title_length` | Discrete ≥ 0 | Short vs detailed titles signal type |
+| `num_tickers_mentioned` | Discrete ≥ 1 | Broad vs focused discussion |
+
+**Excluded:** `score` and `num_comments` (snapshot values contaminated by future engagement — temporal leakage).
+
+#### Composite Target Design
+
+The binary surge target is computed per-record using a forward-looking 24-hour window scoped to the same ticker:
+
+1. For record mentioning ticker $X at time *t*, count $X-mentioning posts in the forward window (t, t+24h] and backward window (t−24h, t]
+2. Compute posting volume growth: (forward_count / max(backward_count, 1)) − 1
+3. Compute sentiment change: |mean(future_sentiments) − current_sentiment|
+4. Z-score normalise both components using training-partition statistics only
+5. Compute composite: (w₁ × z_volume) + (w₂ × z_sentiment)
+6. Label surge (1) if composite > threshold τ, else no-surge (0)
+
+Records with fewer than 3 posts in their forward ticker window are excluded (insufficient data for stable metric computation). This addresses Risk #9 (ticker sparsity) but produces a high exclusion rate on sparse datasets.
+
+
+### 3.2 Data Selection and Characteristics
 
 #### 3.2.1 Dataset Selection Rationale
 
@@ -341,26 +396,15 @@ When writing or reviewing your design section, ensure it satisfies these four cr
 <!-- Single-platform scope: findings may not generalise to other financial discussion platforms with different user bases and moderation norms -->
 <!-- Temporal coverage: results are bound to the specific time period captured; market regime changes or platform policy shifts outside this window may alter surge dynamics -->
 
-### 3.3 Technology Choices
+### 3.3 Surge Definition (Target Variables)
+<!--
+- Why a composite metric rather than raw volume threshold
+- The formula: composite = w₁·z_volume + w₂·z_sentiment
+- Z-score computation using training-partition statistics only (leakage prevention)
+- Threshold τ and the two-phase experiment (volume-only vs composite)
+- Threshold sensitivity sweep rationale
+-->
 
-<!-- Python, scikit-learn, XGBoost, VADER, pandas — why each was chosen over alternatives -->
-
-#### Sentiment Tool Selection
-
-Hutto and Gilbert [12] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation. VADER outperformed individual human raters on tweet classification (F1=0.96) and generalises across contexts better than purely lexicon-based alternatives. Its design makes it suitable for Reddit posts, which share social media conventions (informal language, emoticons, emphasis through capitalisation). However, VADER's lexicon was constructed from general social media — it has no financial domain tuning, meaning that terms with specialised financial meaning (e.g., "short," "calls," "puts") may be scored incorrectly or as neutral.
-
-Araci [13] addressed this limitation with FinBERT, a BERT-based language model further pre-trained on financial corpora and fine-tuned for financial sentiment classification. FinBERT achieves state-of-the-art results on financial sentiment datasets by capturing contextual meaning that lexicon-based tools miss. However, transformer models carry significant computational cost — inference on hundreds of thousands of records is substantially slower than VADER's rule-based approach.
-
-VADER was chosen as the primary sentiment tool for this project for its speed and social media design, with the acknowledged trade-off that financial domain specificity is limited. The configurable sentiment component architecture allows future upgrade to FinBERT without pipeline restructuring.
-
-### 3.4 Method Design
-
-#### 3.4.1 Feature Design
-
-<!-- Why backward-looking features (leakage prevention argument) -->
-<!-- 11 features with formal definitions -->
-
-#### 3.4.2 Surge Definition
 
 <!-- Why a composite surge metric rather than raw volume threshold -->
 
@@ -375,20 +419,63 @@ A two-phase experimental approach validates the composite design: Phase 1 uses v
 <!-- Formula: S = w1 * z_volume + w2 * z_sentiment -->
 <!-- Threshold τ selection via sensitivity sweep -->
 
-#### 3.4.3 Model Selection Strategy
+### 3.4 Feature Engineering
 
-<!-- Why three model families (linear, ensemble, boosting) for comparison -->
+<!-- Why backward-looking features (leakage prevention argument) -->
+<!-- 11 features with formal definitions -->
+
+### 3.5 Model Selection
+
+<!-- 
+Why three model families (linear, ensemble, boosting) for comparison 
+- Why three families: linear (LR), ensemble (RF), gradient boosting (XGBoost)
+- Connection to Fernández-Delgado [16] finding
+- Why AUC-ROC as primary metric given class imbalance
+- Class imbalance handling: class_weight='balanced' and scale_pos_weight
+-->
 <!-- Why AUC-ROC as primary selection criterion given class imbalance -->
 
-#### 3.4.4 Temporal Validation Design
+### 3.6 Temporal Validation Design
+- Why expanding-window CV rather than k-fold or random splits (connection to gap 4)
+- Diagram showing the 4-fold expanding-window structure (Figure — free)
+- Why k=4 (minimum viable fold count given dataset temporal span)
+- 80/20 temporal train/test split
+- Threshold tuning on validation folds (not test set)
 
-<!-- Why expanding-window temporal CV rather than k-fold or random splits -->
-<!-- k=4 folds, 3 splits structure -->
-<!-- Temporal train/test split (80/20) -->
 
-### 3.5 Reproducibility Design
+### 3.7 Evaluation Framework
+- Success tiers: minimum (0.60), target (0.70), stretch (0.80)
+- Statistical robustness: bootstrap CIs, McNemar's test, Bonferroni correction
+- Baseline comparisons: random, majority-class, single-feature
+- Cross-dataset transfer protocol
 
-<!-- Fixed seeds, serialised models, config JSON — why these matter -->
+
+Models are evaluated on a temporally held-out test set (last 20% by timestamp) using the following metrics:
+
+| Metric | Purpose |
+|--------|---------|
+| **AUC-ROC** | Primary metric; threshold-independent discriminative ability |
+| **Precision** | Proportion of predicted surges that are actual surges |
+| **Recall** | Proportion of actual surges correctly detected |
+| **F1-Score** | Harmonic mean balancing precision and recall |
+
+Given the expected class imbalance (surges are rare events), AUC-ROC is prioritised over raw accuracy. Hyperparameter tuning uses expanding-window temporal cross-validation (k=4 folds, 3 splits) within the training partition, ensuring no future information leaks into model configuration. The best configuration is selected by mean validation AUC-ROC and retrained on the full training partition.
+
+Performance is compared against a random baseline (AUC 0.5), majority-class baseline, and single-feature baselines. Success criteria: minimum AUC-ROC > 0.60; target > 0.70; stretch > 0.80.
+
+A threshold sensitivity sweep (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) characterises how the surge definition affects class distribution and model viability. A weight sensitivity sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) assesses the relative contribution of sentiment versus volume to predictive performance, directly supporting the Phase 1 vs Phase 2 comparison.
+
+Statistical robustness measures include 95% bootstrap confidence intervals (1,000 iterations), multiple-seed evaluation (5 seeds), and McNemar's test for paired model comparisons (α = 0.05 with Bonferroni correction).
+
+### 3.8 Reproducibility and Configuration
+- Fixed seeds (42), deterministic operations
+- Serialised configs (JSON) and models (joblib)
+- CLI entry points for full pipeline re-execution
+
+---
+
+
+
 
 ---
 
