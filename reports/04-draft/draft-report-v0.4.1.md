@@ -290,56 +290,37 @@ When writing or reviewing your design section, ensure it satisfies these four cr
 -->
 ### 3.1 System Architecture
 
-<!-- Pipeline stages: loading → preprocessing → feature engineering → labelling → training → evaluation -->
-<!-- Data flow diagram: input sources → intermediate outputs → final artifacts -->
+The prediction system is implemented as a linear staged pipeline, where each stage consumes the output of the previous one and produces a well-defined intermediate artifact. This staged design was chosen over a monolithic approach for two reasons: it allows each stage to be tested and validated independently, and it enables re-running downstream stages (e.g., retraining with different hyperparameters) without recomputing expensive upstream operations (e.g., sentiment scoring of 1.3M records).
 
-System Architecture and Pipeline Stages
+The pipeline comprises six stages:
 
-The system follows a linear staged architecture implemented as a Python package (`surge_pipeline`) with a CLI entry point (`run_labeling.py`):
+1. **Data Loading and Preprocessing** — CSV ingestion, text cleaning, regex-based ticker extraction with stopword filtering, and record explosion (one row per record-ticker pair)
+2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (forward counts are used for target labelling only; features use backward counts exclusively)
+3. **Sentiment Computation** — VADER compound scoring per record, with title-fallback for missing selftext
+4. **Target Labelling** — Temporal 80/20 split, z-score normalisation using training-partition statistics only, composite metric computation, and binary thresholding
+5. **Feature Engineering** — Eleven backward-only features derived from timestamps and text (detailed in Section 3.4)
+6. **Model Training and Evaluation** — Expanding-window temporal cross-validation, hyperparameter tuning, test-set evaluation, and statistical comparison
 
-1. **Data Loading** — CSV ingestion, regex-based ticker extraction from title/selftext, multi-ticker record explosion (one row per record-ticker pair)
-2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (O(n log n) per ticker)
-3. **Sentiment Computation** — TextBlob polarity per record with title-fallback for missing selftext; mean future sentiment from forward-window records
-4. **Target Labelling** — Temporal 80/20 split, z-score normalisation (training stats only), composite metric, binary thresholding
-5. **Feature Engineering** — Nine backward-only features (see below)
-6. **Model Training and Evaluation** — Temporal cross-validation, hyperparameter tuning, test-set evaluation
+Each stage writes its output to disk (CSV or joblib-serialised objects), creating an audit trail from raw data to final predictions. The pipeline is invoked via CLI entry points with configuration parameters passed as arguments, enabling reproducible execution with different settings (e.g., threshold sweeps, dataset switching) without code modification.
 
-<figure align="center">
-  <img src="figures/02-data-pipeline-v0.1.png" alt="Data Pipeline" width="1000">
-  <figcaption>Figure 1: Data Pipeline Architecture.</figcaption>
-</figure>
+```mermaid
+graph TD
+    A[Raw CSV<br/><i>Reddit submissions</i>] --> B[Preprocessing<br/><i>Clean, extract tickers, explode</i>]
+    B --> C[Temporal Windowing<br/><i>Forward/backward 24h counts</i>]
+    C --> D[Sentiment<br/><i>VADER compound scores</i>]
+    D --> E[Target Labelling<br/><i>Z-score → composite → binary</i>]
+    E --> F[Feature Engineering<br/><i>11 backward-only features</i>]
+    F --> G[Model Training<br/><i>Expanding-window CV</i>]
+    G --> H[Evaluation<br/><i>Test set + statistical tests</i>]
 
+    style A fill:#f5f5f5,stroke:#9e9e9e
+    style E fill:#e1f5fe,stroke:#0288d1
+    style G fill:#c8e6c9,stroke:#2e7d32
+    style H fill:#fff9c4,stroke:#f9a825
+```
+*Figure 2: Pipeline architecture. Shading indicates the three critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).*
 
-#### Feature Design
-
-All features use only information available at observation time *t*, preventing temporal leakage:
-
-| Feature | Type | Rationale |
-|---------|------|-----------|
-| `sentiment_score` | Continuous [-1, 1] | Emotional tone may precede surges [4] |
-| `hour_of_day` | Discrete [0–23] | Trading hours show different patterns |
-| `day_of_week` | Discrete [0–6] | Weekend vs weekday dynamics differ |
-| `time_since_previous` | Continuous ≥ 0 | Rapid posting signals emerging activity [1] |
-| `ticker_post_rate_24h` | Continuous ≥ 0 | Current per-ticker discussion intensity |
-| `ticker_post_acceleration` | Continuous | Whether frequency is already increasing |
-| `word_count` | Discrete ≥ 0 | Longer posts may carry more content [3] |
-| `title_length` | Discrete ≥ 0 | Short vs detailed titles signal type |
-| `num_tickers_mentioned` | Discrete ≥ 1 | Broad vs focused discussion |
-
-**Excluded:** `score` and `num_comments` (snapshot values contaminated by future engagement — temporal leakage).
-
-#### Composite Target Design
-
-The binary surge target is computed per-record using a forward-looking 24-hour window scoped to the same ticker:
-
-1. For record mentioning ticker $X at time *t*, count $X-mentioning posts in the forward window (t, t+24h] and backward window (t−24h, t]
-2. Compute posting volume growth: (forward_count / max(backward_count, 1)) − 1
-3. Compute sentiment change: |mean(future_sentiments) − current_sentiment|
-4. Z-score normalise both components using training-partition statistics only
-5. Compute composite: (w₁ × z_volume) + (w₂ × z_sentiment)
-6. Label surge (1) if composite > threshold τ, else no-surge (0)
-
-Records with fewer than 3 posts in their forward ticker window are excluded (insufficient data for stable metric computation). This addresses Risk #9 (ticker sparsity) but produces a high exclusion rate on sparse datasets.
+A key architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. This constraint propagates through the pipeline: sentiment is scored from the record's own text (not future replies), features use only backward-looking windows, z-scores use training-partition statistics, and validation folds are strictly ordered in time. The design ensures that any prediction the system makes could, in principle, have been made at the moment the post was created — a necessary condition for any predictive system operating on temporal data.
 
 
 ### 3.2 Data Selection and Characteristics
