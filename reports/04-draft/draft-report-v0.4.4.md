@@ -433,8 +433,35 @@ Records with too few posts in their forward window are excluded because there is
 
 ### 3.4 Feature Engineering
 
-<!-- Why backward-looking features (leakage prevention argument) -->
-<!-- 11 features with formal definitions -->
+All features must satisfy one strict constraint: they may use only information available at or before the observation time *t*. Any feature that incorporates future information (post-creation engagement, future replies, eventual vote counts) would allow the model to "see the answer" and produce artificially inflated evaluation metrics. This backward-looking principle eliminates the most obvious predictors (Reddit score, comment count) precisely because they are contaminated by the very surge the model is trying to predict.
+
+The eleven features fall into four categories:
+
+*Table 6: Feature definitions. All features are computed at observation time t using only backward-looking or concurrent information.*
+
+| Feature | Category | Type | Definition |
+|---------|----------|------|------------|
+| `sentiment_score` | Content | Continuous [−1, 1] | VADER compound sentiment of the post text |
+| `word_count` | Content | Discrete ≥ 0 | Number of words in selftext (0 if absent) |
+| `title_length` | Content | Discrete ≥ 0 | Character count of the post title |
+| `num_tickers_mentioned` | Content | Discrete ≥ 1 | Number of distinct tickers extracted from the post |
+| `hour_of_day` | Temporal | Discrete [0–23] | Hour of post creation (UTC) |
+| `day_of_week` | Temporal | Discrete [0–6] | Day of post creation (Monday=0) |
+| `time_since_previous` | Activity | Continuous ≥ 0 | Seconds since the previous post mentioning the same ticker |
+| `ticker_post_rate_24h` | Activity | Continuous ≥ 0 | Number of same-ticker posts in the preceding 24 hours |
+| `ticker_post_acceleration` | Activity | Continuous | Change in posting rate: (rate_12h_recent − rate_12h_prior) |
+| `word_count_x_hour` | Interaction | Continuous | word_count × hour_of_day |
+| `accel_x_time_since_prev` | Interaction | Continuous | ticker_post_acceleration × time_since_previous |
+
+**Content features** capture what is being said. Sentiment score provides a proxy for emotional intensity [4]; word count and title length reflect post effort (longer posts tend to contain more substantive analysis); ticker count distinguishes focused single-stock posts from broad market commentary.
+
+**Temporal features** capture when the post occurs. Hour and day encode cyclical patterns tied to market hours and weekend effects, which may correlate with surge likelihood (surges may cluster around market open or after-hours earnings releases).
+
+**Activity features** capture the recent discussion dynamics around a specific ticker. These are the features most directly informed by the popularity prediction literature [1][5]: if a ticker's posting rate is already accelerating, a surge may be underway. The `time_since_previous` feature operationalises Cheng et al.'s "early propagation speed" concept for the discussion-forum context.
+
+**Interaction features** capture non-linear relationships between base features. These were added following experiment B2 (documented in the research journal), which showed that XGBoost's built-in interaction modelling did not fully exploit cross-feature signal. The `word_count_x_hour` interaction captures the observation that long posts during specific hours (e.g., pre-market DD posts) may be particularly predictive.
+
+**Explicitly excluded:** `score` (upvotes minus downvotes) and `num_comments` are available in the raw data but deliberately excluded. These are snapshot values that accumulate *after* posting and are contaminated by the very engagement dynamics the model attempts to predict. Including them would introduce temporal leakage and invalidate the evaluation.
 
 ### 3.5 Model Selection
 
