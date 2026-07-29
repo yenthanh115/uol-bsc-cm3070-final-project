@@ -390,28 +390,46 @@ Each record contains: a Unix timestamp (`created`), post title, optional selftex
 
 **Known limitations.** The archival dataset exhibits survivorship bias: posts deleted or removed by moderators before the archive snapshot are not captured. Engagement metrics (`score`, `num_comments`) are frozen at collection time and may not reflect final values — this is precisely why the project uses timestamp-derived posting volume rather than engagement scores as the prediction target. Potential gaps exist from Reddit API rate limits during the original archival collection. Results are bound to the 2021 time period; market regime shifts or platform policy changes outside this window may alter surge dynamics.
 
-### 3.3 Surge Definition (Target Variables)
-<!--
-- Why a composite metric rather than raw volume threshold
-- The formula: composite = w₁·z_volume + w₂·z_sentiment
-- Z-score computation using training-partition statistics only (leakage prevention)
-- Threshold τ and the two-phase experiment (volume-only vs composite)
-- Threshold sensitivity sweep rationale
--->
+### 3.3 Surge Definition (Target Variable)
 
+Defining "surge" as a binary label is the central design challenge. A naive approach, such as flagging any ticker that crosses a fixed posting-count threshold, fails because tickers have wildly different baselines. A ticker that normally attracts 2 posts per day behaves very differently from one that attracts 200; a fixed count would permanently label high-volume tickers as "surging" while missing genuine spikes in quieter discussions. What matters is not how many posts appear, but whether the current activity is *statistically unusual* for that ticker's recent history.
 
-<!-- Why a composite surge metric rather than raw volume threshold -->
-
-A surge is defined using a composite metric combining z-score normalised posting volume growth and sentiment change:
+The solution is a composite metric that normalises volume growth relative to the training distribution and combines it with sentiment change:
 
 > *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
-where z-scores are computed using training-partition statistics only (preventing leakage), and a record is labelled surge (1) if composite exceeds threshold *τ*. The target uses posting volume (timestamp-derived record counts) rather than engagement scores (which are future-contaminated snapshot values). Default configuration: w₁ = w₂ = 0.5, τ = 1.5 standard deviations.
+For each record mentioning ticker *X* at time *t*, the pipeline:
 
-A two-phase experimental approach validates the composite design: Phase 1 uses volume-only (w₂ = 0) as baseline; Phase 2 uses equal composite (w₂ = 0.5) to test whether sentiment adds predictive value.
+1. Counts *X*-mentioning posts in a forward window (*t*, *t*+24h] and a backward window (*t*−24h, *t*]
+2. Computes volume growth: (forward_count / max(backward_count, 1)) − 1
+3. Computes sentiment shift: |mean(forward_sentiments) − current_sentiment|
+4. Z-score normalises both components using training-partition statistics only (μ and σ frozen from the 80% temporal split)
+5. Combines the weighted z-scores into the composite
+6. Labels surge=1 if composite > threshold *τ*, else surge=0
 
-<!-- Formula: S = w1 * z_volume + w2 * z_sentiment -->
-<!-- Threshold τ selection via sensitivity sweep -->
+Records with too few posts in their forward window are excluded because there is simply not enough data to judge whether a "surge" has occurred.
+
+**Why include sentiment at all?** The literature suggests surges involve heightened emotional tone alongside increased activity [4][10]. Volume alone would miss cases where a small community becomes markedly more agitated without posting more frequently. The composite captures both dimensions while remaining configurable: setting w₂=0 reduces to volume-only, enabling direct comparison of whether sentiment adds predictive value (the Phase 1 vs Phase 2 experiment described below).
+
+**Why z-scores rather than raw percentages?** A ticker going from 1 to 5 posts and one going from 100 to 500 posts both show 400% growth, but the first case might be random noise while the second represents a genuine community-wide event. Z-scoring against the training distribution identifies growth that is *statistically unusual*, applying the same standard regardless of a ticker's typical activity level.
+
+**Preventing leakage in the labels themselves.** The z-score parameters are computed exclusively from the training partition and frozen before the test partition is labelled. Without this step, the mean and standard deviation would incorporate test-period information, subtly contaminating the target variable. This is a form of data leakage that would inflate evaluation metrics.
+
+**Choosing the threshold τ.** The threshold controls how "extreme" an event must be to count as a surge. Higher values produce rarer, more dramatic surges but worsen class imbalance:
+
+*Table 5: Threshold sensitivity on r/wallstreetbets (457,072 usable records).*
+
+| τ | Surge Count | Surge Rate | Imbalance Ratio |
+|---|-------------|------------|-----------------|
+| 0.5 | 80,455 | 17.6% | 4.7:1 |
+| **1.0** | **22,384** | **4.9%** | **19.4:1** |
+| 1.5 | 6,602 | 1.4% | 68.2:1 |
+| 2.0 | 2,873 | 0.6% | 158:1 |
+| 2.5 | 1,348 | 0.3% | 338:1 |
+
+τ=1.0 was selected for the primary evaluation. It produces a ~5% surge rate, which is rare enough to be meaningful but common enough (22,384 events across the dataset, 2,582 in the test set) for statistically reliable model evaluation. A secondary run at τ=1.5 on r/pennystocks tests behaviour under more extreme imbalance.
+
+**Two-phase validation of the composite design.** To determine whether the sentiment component genuinely improves prediction or merely adds noise, the experiment is run twice: Phase 1 with w₂=0 (volume-only labels) and Phase 2 with w₁=w₂=0.5 (equal composite). If Phase 2 outperforms Phase 1, sentiment contributes meaningful signal; if not, the simpler volume-only definition suffices.
 
 ### 3.4 Feature Engineering
 
@@ -487,7 +505,7 @@ Several Reddit financial communities were evaluated as candidate datasets during
 
 ### 4.3 Feature Engineering
 
-<!-- 9 features with temporal windowing -->
+<!-- 11 features with temporal windowing -->
 <!-- Implementation specifics and edge cases -->
 
 ### 4.4 Surge Labelling
