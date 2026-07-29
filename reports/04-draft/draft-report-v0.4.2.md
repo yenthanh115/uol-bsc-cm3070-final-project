@@ -325,7 +325,6 @@ A key architectural constraint is that **no stage may access information from th
 
 ### 3.2 Data Selection and Characteristics
 
-#### 3.2.1 Dataset Selection Rationale
 
 <!-- Why Reddit as a data source (public, threaded, subreddit-specific, ticker-rich) -->
 <!-- Why not other platforms: Twitter/X ephemeral stream lacks persistent threading; StockTwits smaller user base and less organic discussion; Reddit combines persistent threaded posts with large active communities -->
@@ -335,22 +334,14 @@ A key architectural constraint is that **no stage may access information from th
 <!-- Dual-dataset design: opposite ends of data density spectrum to test generalisability -->
 <!-- Time range covered, record structure (columns/fields available) -->
 
-<!-- Dataset summary table:
-| Property              | r/pennystocks         | r/wallstreetbets       |
-|-----------------------|-----------------------|------------------------|
-| Records              | 80,212                | 1,293,981              |
-| Date range           | [start] – [end]       | [start] – [end]        |
-| Avg posts/day        | [value]               | [value]                |
-| Fields used          | timestamp, title, selftext, score, num_comments | same |
-| Surge-positive rate  | ~[X]%                 | ~[X]%                  |
--->
-
-<!-- Class distribution note: surge-positive rate is approximately 15%, creating moderate class imbalance that informs model selection and threshold tuning decisions in Section 3.4 -->
-
-#### 3.2.2 Data Collection Method
+<!-- Survivorship bias: deleted or moderated posts are not captured in the archival dataset; the analysed data represents only posts that remained publicly visible at collection time -->
+<!-- Snapshot timing: engagement metrics (score, num_comments) are frozen at collection time and may not reflect final values — this is why the project uses timestamp-derived features rather than engagement scores -->
+<!-- Completeness: potential gaps due to Reddit API rate limits or archival service downtime during collection period -->
+<!-- Single-platform scope: findings may not generalise to other financial discussion platforms with different user bases and moderation norms -->
+<!-- Temporal coverage: results are bound to the specific time period captured; market regime changes or platform policy shifts outside this window may alter surge dynamics -->
 
 <!-- Source: pre-collected CSV exports from academic/archival Reddit datasets -->
-<!-- Specific source: [name exact source — e.g., Pushshift/Arctic Shift archive, specific Kaggle dataset, or direct Reddit API dump] -->
+<!-- Specific source: [https://www.kaggle.com/datasets/leukipp/reddit-finance-data, specific Kaggle dataset, search through Reddit API] -->
 <!-- No live API scraping — static snapshot ensures reproducibility -->
 <!-- Fields retained: timestamp, title, selftext, subreddit, score, num_comments, etc. -->
 <!-- Any filtering applied at collection time (date range, post type) -->
@@ -359,7 +350,6 @@ A key architectural constraint is that **no stage may access information from th
 <!-- Known issues in raw data: deleted/removed posts (showing as [removed] or [deleted]), missing selftext fields, duplicate records -->
 <!-- These are addressed in preprocessing (Section 4.2); noted here for transparency about raw data state -->
 
-#### 3.2.3 Ethical Considerations
 
 <!-- Public data: Reddit posts are publicly accessible; no private or deleted content used -->
 <!-- Anonymity: no attempt to identify or profile individual users; no individual users singled out in results or examples (aggregated analysis only) -->
@@ -369,13 +359,36 @@ A key architectural constraint is that **no stage may access information from th
 <!-- Compliance with university ethics guidelines and Reddit's terms of service -->
 <!-- Data storage: local only, not redistributed beyond project submission -->
 
-#### 3.2.4 Dataset Limitations
+Reddit was selected as the data source for **three reasons**: its subreddit structure creates topically focused communities where stock discussion is concentrated and retrievable; posts are publicly accessible and archived, enabling reproducible research without API rate constraints; and its threaded format produces timestamped submissions with text content suitable for both temporal and sentiment feature extraction. Alternative platforms were considered and rejected — Twitter/X's ephemeral stream lacks persistent threading, StockTwits has a smaller user base with less organic discussion diversity, and proprietary trading forums are not publicly accessible.
 
-<!-- Survivorship bias: deleted or moderated posts are not captured in the archival dataset; the analysed data represents only posts that remained publicly visible at collection time -->
-<!-- Snapshot timing: engagement metrics (score, num_comments) are frozen at collection time and may not reflect final values — this is why the project uses timestamp-derived features rather than engagement scores -->
-<!-- Completeness: potential gaps due to Reddit API rate limits or archival service downtime during collection period -->
-<!-- Single-platform scope: findings may not generalise to other financial discussion platforms with different user bases and moderation norms -->
-<!-- Temporal coverage: results are bound to the specific time period captured; market regime changes or platform policy shifts outside this window may alter surge dynamics -->
+Two subreddits were selected to represent opposite ends of the data density spectrum:
+
+- **r/pennystocks** — A niche community focused on low-capitalisation equities. Its sparse ticker distribution (thousands of tickers, most with very few posts) tests whether the methodology degrades gracefully under data scarcity.
+- **r/wallstreetbets** — A high-volume mainstream forum with concentrated ticker discussion. Its density (hundreds of posts per day on popular tickers) tests whether the pipeline scales and whether signal can be extracted from a noisier, higher-volume environment.
+
+This dual-dataset design directly addresses literature gap 3 (domain specificity) by applying the same pipeline to two communities with fundamentally different characteristics, and enables cross-dataset transfer evaluation — testing whether models trained on one community generalise to the other.
+
+*Table 4: Dataset characteristics.*
+
+| Property | r/pennystocks | r/wallstreetbets |
+|----------|---------------|------------------|
+| Raw records | 304,524 | 1,293,981 |
+| Date range | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-12-31 |
+| After ticker extraction (exploded) | 80,212 | 577,872 |
+| Usable records (post-exclusion) | 24,827 | 457,072 |
+| Exclusion rate | 69.0% | 20.9% |
+| Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
+| Test surges | 31 | 2,582 |
+| Test surge rate | 0.95% | 3.75% |
+| Test imbalance ratio | 105:1 | 26:1 |
+
+Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], which was compiled by querying the Reddit API for submissions matching finance-related criteria across multiple subreddits. The files used cover the full calendar year 2021. This period was chosen because it spans the January GameStop episode through the subsequent normalisation, capturing both peak surge activity and quieter periods. It provides temporal variety for the expanding-window cross-validation design. No live API scraping was performed; the static snapshot ensures that any researcher with the same input files can reproduce identical results.
+
+Each record contains: a Unix timestamp (`created`), post title, optional selftext body, and engagement fields (`score`, `num_comments`) that are *not* used as features but are retained for transparency. The pipeline extracts ticker symbols from title and selftext using regex with stopword filtering, then explodes multi-ticker records into one row per record-ticker pair — the unit of analysis for feature engineering and prediction.
+
+**Ethical considerations.** All data consists of publicly posted Reddit submissions; no private, deleted, or moderated content is included in the archived dataset. No attempt is made to identify or profile individual users — analysis is aggregated at the ticker level. No personally identifiable information is retained or processed. The project is academic research only; no trading decisions were made from model outputs. Formal ethics approval was not required under university guidelines for analysis of publicly available aggregated data.
+
+**Known limitations.** The archival dataset exhibits survivorship bias: posts deleted or removed by moderators before the archive snapshot are not captured. Engagement metrics (`score`, `num_comments`) are frozen at collection time and may not reflect final values — this is precisely why the project uses timestamp-derived posting volume rather than engagement scores as the prediction target. Potential gaps exist from Reddit API rate limits during the original archival collection. Results are bound to the 2021 time period; market regime shifts or platform policy changes outside this window may alter surge dynamics.
 
 ### 3.3 Surge Definition (Target Variables)
 <!--
@@ -470,6 +483,7 @@ Statistical robustness measures include 95% bootstrap confidence intervals (1,00
 
 <!-- Text cleaning, ticker extraction (regex + stopword filtering + known-ticker validation) -->
 <!-- Sentiment analysis: VADER compound scoring, deduplication optimisation -->
+Several Reddit financial communities were evaluated as candidate datasets during exploratory analysis. The selection criteria were: (a) sufficient per-ticker density to avoid excessive exclusion, (b) temporal coverage spanning both surge-active and quiet periods, and (c) a meaningful contrast in data density to test generalisability. r/pennystocks was initially selected for development and prototyping; r/wallstreetbets was added after the EDA phase revealed that the pennystocks exclusion rate (69–89% depending on configuration) left too few test surges for statistically reliable evaluation.
 
 ### 4.3 Feature Engineering
 
@@ -662,3 +676,5 @@ Statistical robustness measures include 95% bootstrap confidence intervals (1,00
 [15] Christoph Bergmeir and José M. Benítez. 2012. On the use of cross-validation for time series predictor evaluation. *Inf. Sci.* 191 (May 2012), 192–213. https://doi.org/10.1016/j.ins.2011.12.028
 
 [16] Manuel Fernández-Delgado, Eva Cernadas, Senén Barro, and Dinani Amorim. 2014. Do we need hundreds of classifiers to solve real world classification problems? *J. Mach. Learn. Res.* 15, 1 (January 2014), 3133–3181.
+
+[17] Leukipp. 2021. Reddit Finance Data. Kaggle. Retrieved from https://www.kaggle.com/datasets/leukipp/reddit-finance-data
