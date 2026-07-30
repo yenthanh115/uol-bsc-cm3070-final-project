@@ -32,7 +32,7 @@ This project explores whether such surges are predictable from the discussion pa
 
 The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively within a fixed time window. This project narrows the scope to **surges**: statistically significant short-term increases in both **posting volume** and **sentiment intensity** for a specific ticker within **a 24-hour window**, measured by a composite metric combining normalised volume growth with sentiment change magnitude. Surges are discrete, quantifiable events that lend themselves to binary classification, making them a more tractable operationalisation of the broader "trend" concept. A surge represents the earliest observable stage of a trend, so predicting surges is equivalent to detecting trends at their point of emergence.
 
-The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.4.2.
+The target derives from posting volume (timestamp-based record counts) rather than engagement scores like upvotes, which are future-contaminated snapshot values that would introduce look-ahead bias. Z-scores use training-partition statistics only, preventing leakage. The formal definition, weighting, and threshold selection are detailed in Section 3.3.
 
 ### 1.4 Scope
 
@@ -210,7 +210,7 @@ Four gaps remain unaddressed:
 
 4. **Temporal validity:** The use of random or unspecified evaluation splits across the literature [1][3][5][9] means reported results may not reflect real-world predictive performance. Rigorous temporal evaluation methods exist [14][15] but remain unadopted in this domain.
 
-This project addresses these gaps directly. The composite surge metric (Section 3.4.2) defines a binary onset target within a 24-hour window (gap 1). The feature set (Section 3.4.1) combines temporal, activity-frequency, sentiment, and textual signals (gap 2). The pipeline is applied to Reddit financial communities using two subreddits at opposite ends of the data density spectrum (gap 3). Expanding-window temporal cross-validation ensures that no future information leaks into training (gap 4). Whether this integration yields meaningful predictive performance is the empirical question examined in Section 5.
+This project addresses these gaps directly. The composite surge metric (Section 3.3) defines a binary onset target within a 24-hour window (gap 1). The feature set (Section 3.4) combines temporal, activity-frequency, sentiment, and textual signals (gap 2). The pipeline is applied to Reddit financial communities using two subreddits at opposite ends of the data density spectrum (gap 3). Expanding-window temporal cross-validation ensures that no future information leaks into training (gap 4). Whether this integration yields meaningful predictive performance is the empirical question examined in Section 5.
 
 ---
 
@@ -433,9 +433,9 @@ Records with too few posts in their forward window are excluded because there is
 
 ### 3.4 Feature Engineering
 
-All features must satisfy one strict constraint: they may use only information available at or before the observation time *t*. Any feature that incorporates future information (post-creation engagement, future replies, eventual vote counts) would allow the model to "see the answer" and produce artificially inflated evaluation metrics. This backward-looking principle eliminates the most obvious predictors (Reddit score, comment count) precisely because they are contaminated by the very surge the model is trying to predict.
+All features satisfy the backward-looking constraint from Section 3.1: only information available at or before observation time *t* is used. The most tempting predictors, Reddit score and comment count, are excluded for exactly this reason. They look predictive because they *are* the surge; including them would be circular.
 
-The eleven features fall into four categories:
+With that constraint in mind, the eleven features are organised into four groups:
 
 *Table 6: Feature definitions. All features are computed at observation time t using only backward-looking or concurrent information.*
 
@@ -449,30 +449,35 @@ The eleven features fall into four categories:
 | `day_of_week` | Temporal | Discrete [0–6] | Day of post creation (Monday=0) |
 | `time_since_previous` | Activity | Continuous ≥ 0 | Seconds since the previous post mentioning the same ticker |
 | `ticker_post_rate_24h` | Activity | Continuous ≥ 0 | Number of same-ticker posts in the preceding 24 hours |
-| `ticker_post_acceleration` | Activity | Continuous | Change in posting rate: (rate_12h_recent − rate_12h_prior) |
+| `ticker_post_acceleration` | Activity | Continuous | Change in posting rate: count in preceding 12h minus count in the 12h before that |
 | `word_count_x_hour` | Interaction | Continuous | word_count × hour_of_day |
 | `accel_x_time_since_prev` | Interaction | Continuous | ticker_post_acceleration × time_since_previous |
 
-**Content features** capture what is being said. Sentiment score provides a proxy for emotional intensity [4]; word count and title length reflect post effort (longer posts tend to contain more substantive analysis); ticker count distinguishes focused single-stock posts from broad market commentary.
+**Content features** describe what is being said. Sentiment provides a proxy for emotional intensity [4]. Word count and title length reflect how much effort a poster invested (longer posts tend to be substantive analysis rather than one-line reactions). Ticker count distinguishes focused single-stock discussion from broad market commentary.
 
-**Temporal features** capture when the post occurs. Hour and day encode cyclical patterns tied to market hours and weekend effects, which may correlate with surge likelihood (surges may cluster around market open or after-hours earnings releases).
+**Temporal features** describe when the post appears. Hour and day of week encode cyclical patterns tied to market hours and weekend effects. Surges may cluster around market open or after-hours earnings releases, making timing a useful contextual signal.
 
-**Activity features** capture the recent discussion dynamics around a specific ticker. These are the features most directly informed by the popularity prediction literature [1][5]: if a ticker's posting rate is already accelerating, a surge may be underway. The `time_since_previous` feature operationalises Cheng et al.'s "early propagation speed" concept for the discussion-forum context.
+**Activity features** describe how the ticker's discussion has been behaving recently. These draw most directly on the popularity prediction literature [1][5]: if posts about a ticker are arriving faster than usual, a surge may already be forming. The `time_since_previous` feature adapts Cheng et al.'s "early propagation speed" concept to the discussion-forum setting, while `ticker_post_acceleration` measures whether the rate itself is increasing or decreasing.
 
-**Interaction features** capture non-linear relationships between base features. These were added following experiment B2 (documented in the research journal), which showed that XGBoost's built-in interaction modelling did not fully exploit cross-feature signal. The `word_count_x_hour` interaction captures the observation that long posts during specific hours (e.g., pre-market DD posts) may be particularly predictive.
+**Interaction features** were added after experiment B2 showed that manually constructed feature combinations improved Random Forest AUC by +1.4 percentage points on the pennystocks dataset. Even tree-based models, which can in principle discover interactions through splits, benefited from having cross-feature products available directly. The `word_count_x_hour` interaction captures a specific pattern observed during EDA: long posts written during pre-market hours (the typical "DD" analysis posts) appear disproportionately before surges.
 
-**Explicitly excluded:** `score` (upvotes minus downvotes) and `num_comments` are available in the raw data but deliberately excluded. These are snapshot values that accumulate *after* posting and are contaminated by the very engagement dynamics the model attempts to predict. Including them would introduce temporal leakage and invalidate the evaluation.
+**What was left out.** Reddit's `score` (upvotes minus downvotes) and `num_comments` are available in the raw data but deliberately excluded. These fields accumulate *after* a post is created and reflect the very engagement dynamics the model is trying to predict. Using them would be equivalent to telling the model the answer, and any performance gains would not generalise to real-time prediction where these values are not yet available.
 
 ### 3.5 Model Selection
 
-<!-- 
-Why three model families (linear, ensemble, boosting) for comparison 
-- Why three families: linear (LR), ensemble (RF), gradient boosting (XGBoost)
-- Connection to Fernández-Delgado [16] finding
-- Why AUC-ROC as primary metric given class imbalance
-- Class imbalance handling: class_weight='balanced' and scale_pos_weight
--->
-<!-- Why AUC-ROC as primary selection criterion given class imbalance -->
+The project compares three classifier families rather than optimising a single model. The goal is not just to achieve the highest possible AUC, but to understand *whether model complexity matters* for this task. If a simple linear model performs comparably to a gradient boosting ensemble, that tells us the decision boundary is approximately linear and the problem is well-characterised by the features alone. If complex models substantially outperform, the data contains non-linear interactions that simpler models cannot exploit.
+
+The three families selected are:
+
+- **Logistic Regression (LR)** serves as the interpretable baseline. It models a linear decision boundary with L1/L2 regularisation (elastic net), making it the simplest possible approach. If LR performs well, the surge signal is linearly separable in feature space.
+- **Random Forest (RF)** represents bagged ensemble methods. It handles non-linear relationships and feature interactions implicitly through tree splits, is robust to noisy features, and provides built-in feature importance estimates. Fernández-Delgado et al. [16] identified random forests as the top-performing family across 121 benchmark datasets.
+- **XGBoost** represents sequential boosting. It builds trees iteratively, each correcting the errors of the previous ensemble, and includes L1/L2 regularisation on leaf weights to control overfitting. On structured tabular data (as opposed to images or text embeddings), gradient boosting consistently achieves state-of-the-art results [16].
+
+This selection covers the three dominant paradigms for tabular classification: linear, bagged ensemble, and boosted ensemble. Together they answer whether the surge prediction task benefits from increasing model capacity.
+
+**Why AUC-ROC as the primary metric.** With surge rates between 1% and 5% depending on dataset and threshold, accuracy is uninformative (a model predicting "no surge" every time achieves 95–99% accuracy). AUC-ROC evaluates discriminative ability across all possible classification thresholds, making it appropriate for imbalanced tasks where the optimal operating point is unknown in advance. Precision, recall, and F1 are reported at the default and tuned thresholds as secondary metrics.
+
+**Handling class imbalance.** Rather than resampling (which can create synthetic temporal records that violate the time-ordering constraint), the pipeline uses cost-sensitive learning: `class_weight='balanced'` for Logistic Regression and Random Forest (which scales the loss function inversely proportional to class frequency), and `scale_pos_weight` for XGBoost (set to the ratio of negative to positive samples). This approach penalises misclassification of the minority class more heavily during training without generating artificial data points.
 
 ### 3.6 Temporal Validation Design
 - Why expanding-window CV rather than k-fold or random splits (connection to gap 4)
