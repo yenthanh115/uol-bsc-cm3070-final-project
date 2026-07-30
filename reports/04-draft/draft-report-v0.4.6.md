@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Social media discussions in online financial communities, such as Reddit, can shift from quiet to frenzied within hours, yet detecting these **posting-volume surges** before they fully develop has received little research attention, partly because most prior approaches inadvertently use future information, a problem known as **data leakage**. This project asked a straightforward question: can surges be predicted using only features that are genuinely available at observation time? To answer this, a composite surge metric was built from normalised volume growth and sentiment change, and eleven features were drawn from timestamps and text content, deliberately excluding engagement scores that only settle after a post has already gained traction. Three classifiers (Logistic Regression, Random Forest, and XGBoost) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche r/pennystocks (80,212 records) and the high-traffic r/wallstreetbets (1,293,981 records). On the larger dataset, XGBoost achieved AUC-ROC of 0.861 and Random Forest reached 0.852, both clearing the stretch performance tier; on the sparser community, Random Forest attained 0.754 at the target tier. All pairwise differences proved statistically significant (McNemar's test, p < 0.017 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.694, useful but clearly requiring community-specific recalibration. Taken together, these findings show that **machine learning** can anticipate surges from backward-looking signals alone, that data density is the main bottleneck for **binary classification** accuracy, and that the leakage-free methodology developed here transfers readily to other timestamped  platforms.
+Social media discussions in online financial communities, such as Reddit, can shift from quiet to frenzied within hours, yet detecting these **posting-volume surges** before they fully develop has received little research attention, partly because most prior approaches inadvertently use future information, a problem known as **data leakage**. This project mainly asked a question: can surges be predicted using only features that are genuinely available at observation time? <!-- why not just use only volume growth or sentiment change, why use combined, this project not only provide solution directly but also an experiment of how to find the appropriate solution for this question --> To answer this, a composite surge metric was built from normalised volume growth and sentiment change, and **eleven features** were drawn from timestamps and text content, deliberately excluding <!--too specific but do not explain why exlcuding it --> engagement scores that only settle after a post has already gained traction. Three classifiers (Logistic Regression, Random Forest, and XGBoost) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche r/pennystocks (80,212 records) and the high-traffic r/wallstreetbets (1,293,981 records). On the larger dataset, XGBoost achieved AUC-ROC of 0.861 and Random Forest reached 0.852, both clearing the stretch performance tier; on the sparser community, Random Forest attained 0.754 at the target tier. All pairwise differences proved statistically significant (McNemar's test, p < 0.017 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.694, useful but clearly requiring community-specific recalibration. Taken together, these findings show that **machine learning** can anticipate surges from backward-looking signals alone, that data density is the main bottleneck for **binary classification** accuracy, and that the leakage-free methodology developed here transfers readily to other timestamped  platforms.
 
 ---
 
@@ -465,26 +465,59 @@ With that constraint in mind, the eleven features are organised into four groups
 
 ### 3.5 Model Selection
 
-The project compares three classifier families rather than optimising a single model. The goal is not just to achieve the highest possible AUC, but to understand *whether model complexity matters* for this task. If a simple linear model performs comparably to a gradient boosting ensemble, that tells us the decision boundary is approximately linear and the problem is well-characterised by the features alone. If complex models substantially outperform, the data contains non-linear interactions that simpler models cannot exploit.
+Rather than picking a single model and optimising it, this project compares three classifier families to answer a specific question: does model complexity actually help for surge prediction? If a simple linear model performs nearly as well as a gradient boosting ensemble, the surge signal is straightforward and the features do most of the work. If complex models pull clearly ahead, the data contains non-linear patterns that simpler approaches miss.
 
-The three families selected are:
+The three families were chosen to span the complexity spectrum:
 
-- **Logistic Regression (LR)** serves as the interpretable baseline. It models a linear decision boundary with L1/L2 regularisation (elastic net), making it the simplest possible approach. If LR performs well, the surge signal is linearly separable in feature space.
-- **Random Forest (RF)** represents bagged ensemble methods. It handles non-linear relationships and feature interactions implicitly through tree splits, is robust to noisy features, and provides built-in feature importance estimates. Fernández-Delgado et al. [16] identified random forests as the top-performing family across 121 benchmark datasets.
-- **XGBoost** represents sequential boosting. It builds trees iteratively, each correcting the errors of the previous ensemble, and includes L1/L2 regularisation on leaf weights to control overfitting. On structured tabular data (as opposed to images or text embeddings), gradient boosting consistently achieves state-of-the-art results [16].
+- **Logistic Regression (LR)** is the interpretable baseline. It fits a linear decision boundary with elastic net regularisation (combined L1/L2), making it the simplest model in this comparison. If LR performs well, the surge signal is approximately linearly separable in the feature space.
+- **Random Forest (RF)** represents bagged ensembles. It captures non-linear relationships through tree splits, handles noisy features gracefully, and provides built-in importance estimates. Fernández-Delgado et al. [16] found that random forests achieved the highest overall accuracy across 121 benchmark datasets.
+- **XGBoost** represents sequential boosting. Each tree corrects the mistakes of the previous ensemble, with L1/L2 regularisation on leaf weights to prevent overfitting. Gradient boosting methods, the family XGBoost belongs to, consistently rank among the top performers on structured tabular data [16].
 
-This selection covers the three dominant paradigms for tabular classification: linear, bagged ensemble, and boosted ensemble. Together they answer whether the surge prediction task benefits from increasing model capacity.
+Together, these three cover linear, bagged ensemble, and boosted ensemble approaches. The comparison reveals whether surge prediction benefits from increasing model capacity or whether the features themselves carry the signal.
 
-**Why AUC-ROC as the primary metric.** With surge rates between 1% and 5% depending on dataset and threshold, accuracy is uninformative (a model predicting "no surge" every time achieves 95–99% accuracy). AUC-ROC evaluates discriminative ability across all possible classification thresholds, making it appropriate for imbalanced tasks where the optimal operating point is unknown in advance. Precision, recall, and F1 are reported at the default and tuned thresholds as secondary metrics.
+**Why AUC-ROC as the primary metric.** With surge rates between 1% and 5%, accuracy tells us almost nothing. A model that predicts "no surge" for every record achieves 95–99% accuracy while being completely useless. AUC-ROC measures how well the model *ranks* surge-likely records above non-surge records, regardless of where the classification threshold is set. This makes it the right metric when the optimal operating point is not known in advance. Precision, recall, and F1 are reported as secondary metrics at both the default (0.5) and validation-tuned thresholds.
 
-**Handling class imbalance.** Rather than resampling (which can create synthetic temporal records that violate the time-ordering constraint), the pipeline uses cost-sensitive learning: `class_weight='balanced'` for Logistic Regression and Random Forest (which scales the loss function inversely proportional to class frequency), and `scale_pos_weight` for XGBoost (set to the ratio of negative to positive samples). This approach penalises misclassification of the minority class more heavily during training without generating artificial data points.
+**Handling class imbalance.** Resampling techniques like SMOTE generate synthetic minority-class samples by interpolating between existing ones. For temporally ordered data this is problematic: a synthetic record created between two time points has no meaningful timestamp and could introduce spurious temporal patterns. Instead, the pipeline uses cost-sensitive learning. Logistic Regression and Random Forest use `class_weight='balanced'`, which scales the loss inversely proportional to class frequency. XGBoost uses `scale_pos_weight` set to the negative-to-positive ratio. Both approaches penalise minority-class errors more heavily during training without manufacturing artificial data points.
 
 ### 3.6 Temporal Validation Design
-- Why expanding-window CV rather than k-fold or random splits (connection to gap 4)
-- Diagram showing the 4-fold expanding-window structure (Figure — free)
-- Why k=4 (minimum viable fold count given dataset temporal span)
-- 80/20 temporal train/test split
-- Threshold tuning on validation folds (not test set)
+
+Standard k-fold cross-validation randomly assigns records to folds, which means a model might train on posts from October and validate on posts from March. For temporal prediction tasks, this is a form of cheating: the model has seen future patterns before being asked to predict them. Bergmeir and Benítez [15] showed that this inflates accuracy estimates, sometimes substantially. Since this project's central claim is that surges can be predicted from *past* information alone, the validation protocol must respect time ordering throughout.
+
+The pipeline uses a two-level temporal strategy:
+
+**Level 1: Train/test split (80/20 by timestamp).** All records are sorted chronologically. The first 80% form the training partition; the final 20% form the held-out test set. The test set is never seen during model selection, hyperparameter tuning, or threshold calibration. It is used exactly once to produce the final reported metrics.
+
+**Level 2: Expanding-window cross-validation within training (k=4 folds).** Within the training partition, hyperparameters are selected using an expanding-window scheme with four folds:
+
+```mermaid
+gantt
+    title Expanding-Window Temporal CV (k=4)
+    dateFormat X
+    axisFormat %s
+
+    section Fold 1
+    Train     :done, 0, 25
+    Val       :active, 25, 50
+
+    section Fold 2
+    Train     :done, 0, 50
+    Val       :active, 50, 75
+
+    section Fold 3
+    Train     :done, 0, 75
+    Val       :active, 75, 100
+```
+*Figure 3: Expanding-window cross-validation structure. Each fold trains on all data up to a cutoff point and validates on the next temporal block. The training window grows with each fold, mimicking how a deployed model would accumulate more history over time.*
+
+In each fold, the training window includes all records from the start up to a split point, and the validation window is the next chronological block. This means:
+
+- No validation record is ever earlier than any training record (temporal ordering preserved)
+- The training set grows with each fold (mimicking deployment, where more history accumulates over time)
+- Each fold tests generalisation to a genuinely unseen future period
+
+**Why k=4 rather than k=5 or k=10?** The choice is constrained by the data. Each validation fold must contain enough surge events to produce a stable AUC estimate. With a 5% surge rate and the training partition spanning roughly 9.5 months, four folds produce validation blocks of approximately 2.5 months each, yielding hundreds of positive cases per fold on the WSB dataset. More folds would produce shorter validation windows with fewer surges, increasing variance in the fold-level AUC estimates.
+
+**Threshold tuning on validation folds.** The classification threshold (the probability cutoff above which the model predicts "surge") is not set to the default 0.5. Instead, after hyperparameter selection, the threshold that maximises F1 on the validation folds is identified and applied to the test set. This avoids optimising the threshold on test data, which would leak test-set information into the decision rule.
 
 
 ### 3.7 Evaluation Framework
