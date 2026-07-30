@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Social media discussions in online financial communities, such as Reddit, can shift from quiet to frenzied within hours, yet detecting these **posting-volume surges** before they fully develop has received little research attention, partly because most prior approaches inadvertently use future information, a problem known as **data leakage**. This project mainly asked a question: can surges be predicted using only features that are genuinely available at observation time? <!-- why not just use only volume growth or sentiment change, why use combined, this project not only provide solution directly but also an experiment of how to find the appropriate solution for this question --> To answer this, a composite surge metric was built from normalised volume growth and sentiment change, and **eleven features** were drawn from timestamps and text content, deliberately excluding <!--too specific but do not explain why exlcuding it --> engagement scores that only settle after a post has already gained traction. Three classifiers (Logistic Regression, Random Forest, and XGBoost) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche r/pennystocks (80,212 records) and the high-traffic r/wallstreetbets (1,293,981 records). On the larger dataset, XGBoost achieved AUC-ROC of 0.861 and Random Forest reached 0.852, both clearing the stretch performance tier; on the sparser community, Random Forest attained 0.754 at the target tier. All pairwise differences proved statistically significant (McNemar's test, p < 0.017 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.694, useful but clearly requiring community-specific recalibration. Taken together, these findings show that **machine learning** can anticipate surges from backward-looking signals alone, that data density is the main bottleneck for **binary classification** accuracy, and that the leakage-free methodology developed here transfers readily to other timestamped  platforms.
+Social media discussions in online financial communities, such as Reddit, can shift from quiet to frenzied within hours, yet detecting these **posting-volume surges** before they fully develop has received little research attention, partly because most prior approaches inadvertently use future information, a problem known as **data leakage**. This project mainly asked a question: can surges be predicted using only features that are genuinely available at observation time? <!-- why not just use only volume growth or sentiment change, why use combined, this project not only provide solution directly but also an experiment of how to find the appropriate solution for this question --> To answer this, a composite surge metric was built from normalised volume growth and sentiment change, and **eleven features** were drawn from timestamps and text content, deliberately excluding <!--too specific but do not explain why exlcuding it --> engagement scores that only settle after a post has already gained traction. Three classifiers (Logistic Regression, Random Forest, and XGBoost) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche r/pennystocks (80,212 records) and the high-traffic r/wallstreetbets (1,293,981 records). On the larger dataset, XGBoost achieved AUC-ROC of 0.861 and Random Forest reached 0.854, both clearing the stretch performance tier; on the sparser community, Random Forest attained 0.746 at the target tier. All pairwise differences proved statistically significant (McNemar's test, p < 0.017 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.694, useful but clearly requiring community-specific recalibration. Taken together, these findings show that **machine learning** can anticipate surges from backward-looking signals alone, that data density is the main bottleneck for **binary classification** accuracy, and that the leakage-free methodology developed here transfers readily to other timestamped  platforms.
 
 ---
 
@@ -40,7 +40,7 @@ The target derives from posting volume (timestamp-based record counts) rather th
 
 **Out of scope:** Real-time ingestion, production deployment, trading signal generation, multi-class targets, cross-platform fusion.
 
-The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.754 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
+The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.746 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
 
 ### 1.5 Project Timeline
 
@@ -521,28 +521,65 @@ In each fold, the training window includes all records from the start up to a sp
 
 
 ### 3.7 Evaluation Framework
-- Success tiers: minimum (0.60), target (0.70), stretch (0.80)
-- Statistical robustness: bootstrap CIs, McNemar's test, Bonferroni correction
-- Baseline comparisons: random, majority-class, single-feature
-- Cross-dataset transfer protocol
 
+The evaluation must answer four questions: (1) Do the models predict surges better than trivial strategies? (2) Do the models differ meaningfully from each other? (3) How confident can we be in the reported metrics? (4) Does the methodology transfer across communities?
 
-Models are evaluated on a temporally held-out test set (last 20% by timestamp) using the following metrics:
+#### Success Tiers
 
-| Metric | Purpose |
-|--------|---------|
-| **AUC-ROC** | Primary metric; threshold-independent discriminative ability |
-| **Precision** | Proportion of predicted surges that are actual surges |
-| **Recall** | Proportion of actual surges correctly detected |
-| **F1-Score** | Harmonic mean balancing precision and recall |
+A model that cannot discriminate surges from non-surges has AUC-ROC of 0.5. But how much better than 0.5 counts as "useful"? Without a directly comparable prior study (the literature review identifies this as a gap), the project defines three performance tiers based on conventional interpretations of AUC in the machine learning literature:
 
-Given the expected class imbalance (surges are rare events), AUC-ROC is prioritised over raw accuracy. Hyperparameter tuning uses expanding-window temporal cross-validation (k=4 folds, 3 splits) within the training partition, ensuring no future information leaks into model configuration. The best configuration is selected by mean validation AUC-ROC and retrained on the full training partition.
+| Tier | AUC-ROC | Interpretation |
+|------|---------|----------------|
+| Minimum | > 0.60 | Weak but above-chance discrimination; the features contain *some* predictive signal |
+| Target | > 0.70 | Moderate discrimination; practically useful for ranking records by surge likelihood |
+| Stretch | > 0.80 | Strong discrimination; the model reliably separates surges from non-surges |
 
-Performance is compared against a random baseline (AUC 0.5), majority-class baseline, and single-feature baselines. Success criteria: minimum AUC-ROC > 0.60; target > 0.70; stretch > 0.80.
+These thresholds are conservative. The cascade prediction literature reports higher values (Cheng et al. [5] achieved AUC 0.877), but those studies used engagement-based features and non-temporal evaluation protocols that likely inflate results. The tiers here reflect what is achievable under the strict backward-looking constraint this project imposes.
 
-A threshold sensitivity sweep (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) characterises how the surge definition affects class distribution and model viability. A weight sensitivity sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) assesses the relative contribution of sentiment versus volume to predictive performance, directly supporting the Phase 1 vs Phase 2 comparison.
+#### Baseline Comparisons
 
-Statistical robustness measures include 95% bootstrap confidence intervals (1,000 iterations), multiple-seed evaluation (5 seeds), and McNemar's test for paired model comparisons (α = 0.05 with Bonferroni correction).
+Each baseline isolates a specific question about the source of predictive performance:
+
+- **Random baseline (AUC = 0.5)** — Does the model beat chance? If not, the features carry no signal. Note that for AUC-ROC specifically, a majority-class predictor (always predicting "no surge") also scores 0.5, since it produces no ranking among records. The two baselines are therefore equivalent when measured by AUC; they only diverge for threshold-dependent metrics like accuracy, where majority-class achieves ~95–99% by exploiting imbalance.
+- **Single-feature baselines** — For each of the eleven features, a single-feature Logistic Regression is trained and its AUC recorded. This determines whether the multi-feature combination adds value over the best individual predictor. If the full model barely exceeds the best single feature, the additional complexity is unjustified.
+
+#### Statistical Robustness
+
+Reporting a single AUC number without uncertainty is misleading — it could be unstable due to the particular test-set composition. Three mechanisms quantify reliability:
+
+**Bootstrap confidence intervals (1,000 iterations).** The test set is resampled with replacement 1,000 times, and AUC-ROC is computed on each resample. The 2.5th and 97.5th percentiles form the 95% confidence interval. Bootstrap was chosen over parametric alternatives because AUC has no simple closed-form variance estimator under class imbalance, and the bootstrap makes no distributional assumptions.
+
+**McNemar's test for pairwise model comparison.** When two models are trained on the same data and evaluated on the same test set, their predictions are *paired* — each record receives a prediction from both. McNemar's test examines the 2×2 table of concordant and discordant predictions (records where one model is correct and the other is not). This is more appropriate than a paired t-test (which requires continuous outputs) or an independent test (which ignores the paired structure). With three model pairs (LR vs RF, LR vs XGB, RF vs XGB), the family-wise error rate is controlled with Bonferroni correction (α = 0.05 / 3 = 0.017). Bonferroni was chosen over less conservative corrections (e.g., Holm) because with only three comparisons the power loss is negligible and the interpretation is simpler.
+
+**Training stability.** Model training involves randomness (bootstrap aggregation in RF, random initialisation in XGBoost). Ideally, the pipeline would be repeated with multiple random seeds to verify that results are not an artifact of a particular initialisation. In practice, this project uses a single fixed seed (42) for all runs, prioritising exact reproducibility over stability analysis. The bootstrap confidence intervals on the test set partially mitigate this concern by quantifying uncertainty in the *evaluation*, though they do not capture variance from training randomness. This is acknowledged as a limitation; if reported AUC values are near a tier boundary, seed sensitivity would need investigation before strong claims could be made.
+
+#### Metrics and Thresholds
+
+Models are evaluated using four metrics on the held-out test set:
+
+*Table 7: Evaluation metrics and their roles.*
+
+| Metric | Role | Why It Matters Here |
+|--------|------|---------------------|
+| AUC-ROC | Primary; threshold-independent ranking quality | With 1–5% surge rates, a threshold-free metric avoids the arbitrary choice problem |
+| Precision | Proportion of predicted surges that are real | High precision means fewer false alarms |
+| Recall | Proportion of actual surges detected | High recall means fewer missed surges |
+| F1-Score | Harmonic mean of precision and recall | Balances the two concerns into a single operational metric |
+
+Precision, recall, and F1 depend on the classification threshold. These are reported at two operating points: the default threshold of 0.5, and the validation-tuned threshold identified during cross-validation (Section 3.6). Comparing the two reveals how much threshold tuning matters — if default-threshold F1 is near zero but tuned-threshold F1 is reasonable, the model has discriminative ability that only becomes apparent at the right operating point.
+
+#### Cross-Dataset Transfer Protocol
+
+To test whether the pipeline captures general surge dynamics or merely overfits to community-specific patterns, models trained on r/wallstreetbets are evaluated directly on r/pennystocks (and vice versa) without retraining. This is a stringent test: the two communities differ in posting density, ticker distribution, user demographics, and discussion norms.
+
+The transfer evaluation computes full metrics (AUC-ROC, precision, recall, F1) at both the default and source-community-tuned thresholds, but **AUC-ROC is the primary comparison metric** since the optimal operating point almost certainly differs between communities — a threshold tuned on WSB's 3.75% surge rate is unlikely to be appropriate for pennystocks' 0.95% rate. If transfer AUC exceeds the minimum tier (0.60), the underlying surge patterns share structure across communities. If it falls below, community-specific calibration is necessary — a meaningful finding either way, as it reveals whether "surge" is a universal phenomenon or a community-specific one.
+
+#### Sensitivity Analysis
+
+Two parameter sweeps characterise how robust the results are to design choices:
+
+- **Threshold sensitivity (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5})** — How does the surge definition affect model performance? If results collapse at slightly different τ values, the methodology is fragile. If performance degrades gracefully, the approach is robust to the specific threshold chosen.
+- **Weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0})** — Does sentiment actually help? Setting w₂=0 produces volume-only labels (Phase 1); increasing w₂ adds sentiment influence. This directly tests whether the composite design outperforms the simpler alternative, providing the evidence needed to justify (or reject) including sentiment in the surge definition.
 
 ### 3.8 Reproducibility and Configuration
 - Fixed seeds (42), deterministic operations
