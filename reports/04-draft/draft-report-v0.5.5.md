@@ -836,10 +836,46 @@ The weights live in `PipelineConfig` — `weight_volume` and `weight_sentiment`,
 
 ### 4.5 Model Training
 
-<!-- Multi-model training with hyperparameter search -->
-<!-- LR: 10 configs, RF: 36 configs, XGB: ≤50 configs -->
-<!-- Expanding-window split logic, fold construction -->
-<!-- GridSearchCV with custom scorer, final retraining procedure -->
+Section 3.5 picks the three model families and Section 3.6 lays out the temporal validation design. This section is about how all of that actually runs — the grids that get searched, the mechanics of the expanding-window splits, and the train → select → retrain flow from start to finish.
+
+**Data preparation.** The training script loads the labelled CSV from Section 4.4, keeps only records where `partition == "train"` and `excluded == False`, pulls the eleven feature columns into a NumPy matrix, and grabs the binary `surge_label` as the target vector. It also computes the class imbalance ratio (negatives / positives) — XGBoost's `scale_pos_weight` grid needs this number.
+
+**Expanding-window fold construction.** The training partition gets sliced into four chronological blocks of roughly equal size. From those four blocks, the module builds three expanding-window splits:
+
+- Split 1: train on block 1, validate on block 2
+- Split 2: train on blocks 1–2, validate on block 3
+- Split 3: train on blocks 1–3, validate on block 4
+
+Once built, a verification step checks that `max(train_timestamp) < min(val_timestamp)` for every split. If that invariant fails, the pipeline raises an error rather than quietly training on future data.
+
+**Hyperparameter grids.** Each model searches a grid sized to be thorough without being wasteful:
+
+*Table 10: Hyperparameter search spaces.*
+
+| Model | Parameters Searched | Grid Size |
+|-------|--------------------|-----------| 
+| Logistic Regression | C ∈ {0.01, 0.1, 1, 10, 100}, l1_ratio ∈ {0, 1} | 10 configs |
+| Random Forest | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 10, None}, min_samples_leaf ∈ {1, 2, 5} | 36 configs |
+| XGBoost | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 7}, learning_rate ∈ {0.01, 0.1, 0.3}, scale_pos_weight ∈ {1, ratio/2, ratio} | ≤50 configs |
+
+For Logistic Regression, `penalty='elasticnet'` with `l1_ratio=0` gives pure L2 (Ridge) and `l1_ratio=1` gives pure L1 (Lasso) — the two regularisation extremes rather than intermediate blends, keeping the grid compact. All LR models use `class_weight='balanced'` and the `saga` solver (the only one that supports the elastic net penalty). Random Forest likewise uses `class_weight='balanced'`. XGBoost takes a different approach to imbalance: it searches three `scale_pos_weight` values — no reweighting (1.0), moderate (imbalance_ratio / 2), and full (imbalance_ratio) — and fixes `eval_metric='logloss'` for convergence monitoring. The XGBoost grid is capped at 50 configurations so training stays manageable.
+
+**The training loop.** For each model type, the pipeline walks through every hyperparameter configuration and runs all three expanding-window splits on each:
+
+1. Fit a `StandardScaler` on that split's training portion and transform both train and validation features.
+2. Build the model with the current hyperparameters and the fixed seed.
+3. Fit and score: AUC-ROC on the validation fold's predicted probabilities.
+4. If a validation fold has only one class (possible in early folds of sparse datasets), fall back to AUC = 0.5 rather than crashing.
+
+The configuration with the highest mean AUC across the three folds wins. The scaler is re-fit fresh for each split — the validation fold's feature distribution never leaks into training-fold scaling. Same logic as the z-score normalisation in Section 4.4, just applied at the feature level.
+
+**Final retraining.** With the best hyperparameters locked in, the winning model gets retrained on the *entire* training partition — all four blocks, not just the first three — with a single StandardScaler fit. This squeezes every available training record into the final model before it ever touches the held-out test set. The scaler is saved alongside the model; any future prediction has to go through this exact scaler.
+
+**Threshold tuning.** After retraining, the final model predicts probabilities on the last validation fold (block 4) using the final scaler. There's a methodological trade-off here worth being upfront about: the final model was trained on all four blocks *including* block 4, so these threshold-tuning predictions are technically in-sample. The alternative — holding out a separate slice just for threshold selection — would shrink the training data. The in-sample threshold is accepted because (a) a threshold is a simple operating-point choice, not a learned parameter that could overfit in the usual sense, (b) the test set stays completely untouched, and (c) evaluation reports metrics at both the tuned and default (0.5) thresholds so readers can judge the difference themselves. The tuned threshold gets stored with the serialised model.
+
+**Model serialisation.** Each trained model is saved as a joblib file bundling the fitted estimator, the StandardScaler, the winning hyperparameters, the optimal threshold, and metadata (timestamp, phase, seed). Filename pattern: `{model_name}_{phase}_{seed}_{timestamp}.joblib`. A `latest_models.json` manifest tracks which files belong to the most recent run, so the evaluation script can find them without path guessing.
+
+**Timing.** Most of the wall-clock time goes to Random Forest — 36 configs, each growing parallel trees via `n_jobs=-1`. XGBoost is faster per configuration but searches up to 50 combinations. Logistic Regression breezes through its 10 configs. On the wallstreetbets training set (388,149 records), a full three-model run typically wraps up within 15–25 minutes on a multi-core machine.
 
 ### 4.6 Evaluation Pipeline
 
