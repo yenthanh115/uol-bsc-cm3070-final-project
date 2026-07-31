@@ -879,18 +879,56 @@ The configuration with the highest mean AUC across the three folds wins. The sca
 
 ### 4.6 Evaluation Pipeline
 
-<!-- Statistical tests implementation -->
-<!-- Bootstrap CI, McNemar's test, baseline comparisons -->
+Section 3.7 lays out what gets measured and why. This section is about the machinery that actually produces those numbers — scoring the test set, running the statistical tests, and assembling the final output. The whole evaluation runs as part of the `surge-train` script: once training finishes, the same invocation carries straight through to evaluation without needing a second command.
+
+**Test-set prediction.** Each trained model is applied to the held-out test partition (`partition == "test"`, `excluded == False`). The model's saved StandardScaler handles feature transformation — the test set never sees its own statistics. What comes out is a vector of predicted probabilities per model; binary predictions are derived later by thresholding at either the default 0.5 or the tuned operating point, depending on what's needed downstream.
+
+**Per-model metrics.** From probabilities and default-threshold predictions, the module computes precision, recall, F1, and AUC-ROC using scikit-learn's standard functions. Confusion matrices get explicit `labels=[0, 1]` to keep cell ordering stable even when a model predicts only one class — something that actually happened during early experiments with extreme imbalance. If the test set has only one class present, AUC defaults to 0.5 with a logged warning rather than blowing up.
+
+**Bootstrap confidence intervals.** The test set is resampled with replacement 1,000 times and all four metrics are recomputed on each draw. The 2.5th and 97.5th percentiles give the 95% CI. If a bootstrap sample ends up with just one class (rare, but possible when positive counts are small), that iteration contributes AUC = 0.5 rather than being thrown out. The whole thing is seeded so it reproduces identically.
+
+**McNemar's pairwise test.** For each model pair, the module counts discordant predictions — records where one model got it right and the other didn't — and builds a 2×2 contingency table. The predictions come from sklearn's default 0.5 threshold (via `model.predict()`), keeping the comparison fair rather than letting per-model threshold tuning tilt the results. Small discordant counts (<25) get an exact binomial test; larger ones use the chi-squared approximation. With three pairs to compare, the significance threshold is Bonferroni-corrected to α = 0.017.
+
+**Baseline comparisons.** A single-feature Logistic Regression (with `class_weight='balanced'`) is trained and evaluated for each of the eleven features individually. This gives eleven single-feature AUC values; the best one becomes the bar the full models need to clear. The random baseline is 0.5 by definition — beating that just means the features carry *some* signal.
+
+**Success tier classification.** Each model's AUC gets checked against the three tier boundaries (minimum > 0.60, target > 0.70, stretch > 0.80). The best model's tier determines the overall project verdict.
+
+**Final summary.** Everything above — metrics, McNemar results, baselines, tier assignments, recommended config — gets packed into a `FinalSummary` dataclass and written out as a timestamped JSON file. This single artefact is what Section 5 draws on when presenting results.
 
 ### 4.7 Challenges and Decisions
 
-<!-- Deviations from original design (reference decision log) -->
-<!-- Performance bottlenecks and optimisations applied -->
-<!-- Edge cases discovered during development -->
+Development didn't follow the design document in a straight line. Several problems surfaced during implementation that forced course corrections — some small, some fundamental.
 
-### 4.8 Implementation Progress
+**Timestamp unit mismatch (July 8–9).** The most disruptive bug was a unit conversion error in the temporal split logic. An early run produced a `split_timestamp` roughly 1000× too small, which cascaded into 89% record exclusion (most forward windows looked empty) and left just 7 surges in the test set — nowhere near enough for meaningful evaluation. The fix itself was simple (consistent epoch-second handling throughout), but the episode ate a full debugging session and motivated adding the temporal-ordering verification check described in Section 4.5.
 
-<!-- All pipeline stages functional, end-to-end run producing artefacts -->
+**Data sparsity on r/pennystocks.** The original development dataset (r/pennystocks, 80,212 exploded records) produced exclusion rates between 69% and 89% depending on the `min_window_count` setting — the parameter that controls how many forward-window posts a record needs before its label counts as trustworthy. Higher values give cleaner labels but throw away more data. At `min_window_count=3`, test sets shrank to as few as 7 positive examples. AUC estimates from 7 surges are dominated by noise — one misranked record swings the metric by ±0.07. This was the main reason for bringing in r/wallstreetbets as a second dataset. With 457,072 usable records and 2,582 test surges, evaluation numbers finally became stable.
+
+**Sentiment as a computational bottleneck.** VADER is fast per-record (~0.1ms), but applied across 1.3M raw wallstreetbets records it ate ~870 of the pipeline's ~900 second runtime. (Sentiment runs as stage 3, between windowing and labelling; it doesn't have its own implementation subsection because the logic is straightforward — the challenge was purely one of scale.) Two optimisations brought things under control: skipping records the windowing stage had already flagged as excluded (they don't need scores for training anyway) and caching the VADER analyzer at module level instead of creating a new one per call.
+
+**Precision/recall collapse at default threshold.** On the wallstreetbets dataset at τ=1.5 (1.44% surge rate, 102:1 imbalance), XGBoost hit AUC 0.888 but predicted zero surges at the 0.5 threshold — precision and recall both exactly 0.0. The model was ranking surges correctly, but its probability outputs clustered far below 0.5 because of the extreme class prior. This wasn't a model failure; it was a calibration problem. Lowering τ to 1.0 (pushing the surge rate to ~5%) and adding `scale_pos_weight` to the XGBoost grid fixed it, and motivated the validation-fold threshold tuning described in Section 4.5.
+
+**Feature dropping hurt more than noise removal helped (Experiment B1).** Removing the two weakest single-feature AUC predictors (`sentiment_score` at 0.47, `ticker_post_rate_24h` at 0.56) was supposed to reduce noise. Instead it dropped Random Forest AUC from 0.740 to 0.655 — an 8.5 percentage point loss. The takeaway: features with poor individual discrimination can still contribute when working alongside others. Both were restored and remain in the final eleven.
+
+**Interaction features (Experiment B2).** Adding two hand-crafted interaction terms (`word_count_x_hour`, `accel_x_time_since_prev`) lifted Random Forest AUC by +1.4 percentage points on the pennystocks dataset. Modest but consistent, and since the features cost almost nothing to compute, they stayed.
+
+**TextBlob → VADER switch.** The initial sentiment backend (TextBlob) was swapped for VADER after observing that TextBlob scored Reddit-style emphatic text (capitalisation, exclamation marks, slang intensifiers) as near-neutral. VADER's social-media-aware rules gave more dispersed polarity distributions and slightly better downstream AUC. The switchable backend architecture meant this was a config change, not a rewrite.
+
+### 4.8 Implementation Status
+
+All six pipeline stages are fully implemented and produce complete artefacts end-to-end:
+
+| Stage | Status | Key Output |
+|-------|--------|------------|
+| 1. Data Loading | Complete | Exploded DataFrame (80K / 577K rows) |
+| 2. Temporal Windowing | Complete | Forward/backward counts per ticker |
+| 3. Sentiment | Complete | VADER polarity + forward-window means |
+| 4. Target Labelling | Complete | Binary surge labels + threshold sweep |
+| 5. Feature Engineering | Complete | 11-feature matrix |
+| 6. Training & Evaluation | Complete | 3 trained models + full evaluation JSON |
+
+Both datasets (r/pennystocks and r/wallstreetbets) run through the complete pipeline with reproducible results. Cross-dataset transfer evaluation, bootstrap confidence intervals, and McNemar's significance tests all work correctly. The experiment log holds 20+ runs documenting the progression from initial prototype to final reported numbers. All code in the core `surge_pipeline/` package passes the 10-module pytest suite, mypy type checking, and ruff linting without errors; the auxiliary `eda/` module carries one unused-variable warning that doesn't affect pipeline operation.
+
+With the implementation complete, the next section presents and analyses the results it produces.
 
 ---
 
