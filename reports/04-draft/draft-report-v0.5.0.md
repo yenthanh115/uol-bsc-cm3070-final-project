@@ -582,9 +582,87 @@ Two parameter sweeps characterise how robust the results are to design choices:
 - **Weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0})** — Does sentiment actually help? Setting w₂=0 produces volume-only labels (Phase 1); increasing w₂ adds sentiment influence. This directly tests whether the composite design outperforms the simpler alternative, providing the evidence needed to justify (or reject) including sentiment in the surge definition.
 
 ### 3.8 Reproducibility and Configuration
-- Fixed seeds (42), deterministic operations
-- Serialised configs (JSON) and models (joblib)
-- CLI entry points for full pipeline re-execution
+
+Reproducibility is a first-class design constraint rather than an afterthought. Every pipeline run must produce identical outputs given identical inputs and configuration, and every output artefact must be traceable back to the exact parameters that generated it. This requirement is motivated by two concerns: scientific validity (any reported result must be independently verifiable) and practical iteration (when sweeping thresholds or weights across dozens of runs, an analyst must know which configuration produced which outcome).
+
+#### Deterministic Execution via Fixed Seeds
+
+All stochastic operations in the pipeline are governed by a single random seed (default: 42) applied at the start of each run. The pipeline seeds Python's built-in `random` module and NumPy's `np.random` at the start of execution, before any computation begins. This seed propagates through all downstream operations: scikit-learn's `RandomForestClassifier` and `LogisticRegression` receive `random_state=random_seed` as a constructor argument, and XGBoost receives it via the hyperparameter grid. Because the pipeline processes records in deterministic order (sorted by timestamp for temporal operations, stable-sorted for ties), the combination of fixed seeds and deterministic ordering guarantees bit-for-bit identical outputs across runs on the same machine.
+
+#### Configuration as Data
+
+All pipeline parameters are held in a single `PipelineConfig` dataclass that supports round-trip JSON serialisation (serialise via `to_json()` / `save_json()`, deserialise via `from_json()` / `load_json()`):
+
+```json
+{
+  "file_path": "input/raw/r_wallstreetbets_submissions_reddit.csv",
+  "output_dir": "output/processed",
+  "temporal_split_ratio": 0.8,
+  "surge_method": "forward_growth",
+  "min_window_count": 1,
+  "threshold_tau": 1.5,
+  "sentiment_model": "vader",
+  "weight_volume": 0.75,
+  "weight_sentiment": 0.25,
+  "thresholds": [0.5, 1.0, 1.5, 2.0, 2.5],
+  "random_seed": 42
+}
+```
+
+Every pipeline run writes this configuration to the output directory alongside its results (`YYYY-MM-DD_HH-MM_pipeline_config.json`), creating a permanent link between any output artefact and the exact parameters that produced it. Configuration can flow in two directions: parameters are specified individually via CLI arguments for exploratory runs, or a saved JSON file is loaded wholesale via `--config path/to/config.json` to reproduce a previous run exactly.
+
+This design means that reproducing any historical result requires only two things: the original input CSV and the saved configuration JSON. The command `surge-label --config output/processed/2026-07-18_19-09_pipeline_config.json` will recreate the exact labelling output from that run.
+
+#### CLI Design
+
+The pipeline exposes five named console scripts (defined in `pyproject.toml`), separating concerns so that expensive upstream stages need not be repeated when only downstream parameters change. The labelling script (`surge-label`) accepts all configuration parameters individually or via `--config`; the training script (`surge-train`) consumes the labelled CSV output and runs feature engineering through evaluation. Each script also accepts `--verbose` for debug-level logging, `--log-file auto` for persisted log output, and `--notes` for free-text annotation of the experiment. The full list of entry points and their parameters is detailed in Section 4.1 (Table 8).
+
+#### Experiment Log
+
+An append-only JSONL file (`output/experiment_log.jsonl`) records metadata for every pipeline run. Each line is a self-contained JSON object:
+
+```json
+{
+  "run_id": "2026-07-18_19-09",
+  "pipeline": "labelling",
+  "timestamp": "2026-07-18T19:09:42",
+  "git_sha": "a3f7c2d",
+  "config": { "...all parameters..." },
+  "outputs": ["2026-07-18_19-09_labelled.csv", "2026-07-18_19-09_pipeline_config.json"],
+  "summary": { "total_records": 457072, "surge_rate": 0.049, "duration_s": 312.4 },
+  "notes": "WSB full run, composite weights 0.75/0.25"
+}
+```
+
+The JSONL format was chosen for three properties: it is append-safe (a crash mid-write cannot corrupt existing entries), Git-friendly (each run adds exactly one line, producing clean diffs), and queryable via `pandas.read_json("experiment_log.jsonl", lines=True)` for longitudinal analysis across experiments. The Git SHA links each run to the exact code version that produced it, enabling reconstruction of the full dependency environment from the repository state at that commit.
+
+#### Model Serialisation
+
+Trained models are persisted via joblib, chosen over Python's built-in pickle for its efficient handling of NumPy arrays within scikit-learn estimators and over ONNX for its simplicity in a research (non-deployment) context. Each model file is timestamped and stored alongside its evaluation metrics. The StandardScaler fitted on training data is serialised jointly with the model to ensure that any future inference applies identical feature normalisation.
+
+#### Artefact Traceability
+
+The combination of these mechanisms creates a complete audit trail from raw data to final predictions:
+
+```
+Input CSV → [surge-label + config.json] → Labelled CSV
+         → [surge-train + labelled CSV]  → Trained models (joblib)
+                                          → Evaluation metrics (JSON)
+                                          → Figures (PNG)
+                                          → experiment_log.jsonl (append)
+```
+
+Every artefact in the `output/` directory carries a timestamp prefix that links it to the corresponding experiment log entry and configuration JSON, making it possible to reconstruct the full provenance chain for any reported result.
+
+#### Scope of the Reproducibility Guarantee
+
+The reproducibility mechanisms described above guarantee identical results *on the same machine with the same library versions*. Three factors limit stronger guarantees:
+
+- **NumPy version sensitivity.** The legacy `np.random.seed` API uses global state whose implementation may change across major NumPy releases. The project requires `numpy>=1.24` as a minimum bound but does not hard-pin the version; the Git SHA in the experiment log allows the exact dependency state to be recovered from `pyproject.toml` at that commit.
+- **Platform-dependent floating point.** Different CPU architectures (x86 vs ARM) and compiler optimisations may produce subtly different floating-point results, particularly in aggregation operations over large arrays. Bit-for-bit cross-platform reproducibility is not guaranteed.
+- **No containerised environment.** The project does not provide a Docker image or pinned lockfile freezing the full transitive dependency tree. For a student research project this is an acceptable trade-off; a production system would require stricter environment isolation.
+
+These limitations do not affect the validity of the reported results (which were all produced on a single machine with a fixed environment), but they are noted for transparency about the scope of the reproducibility claim.
 
 ---
 
@@ -597,7 +675,76 @@ Two parameter sweeps characterise how robust the results are to design choices:
 
 ### 4.1 Code Organisation
 
-<!-- Module structure: src/surge_pipeline/ layout -->
+The system is implemented as a Python package (`surge-pipeline`) using a standard setuptools layout with the following key dependencies: pandas ≥2.0, scikit-learn ≥1.3, XGBoost ≥1.7, vaderSentiment ≥3.3, and NumPy ≥1.24 (full list in `pyproject.toml`). Source code resides in `src/`, with a core library package (`surge_pipeline/`) containing the pipeline logic and a set of CLI runner scripts at the package root that serve as entry points.
+
+```
+src/
+├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
+│   ├── __init__.py              # Public API exports (PipelineConfig, NormalisationParams, etc.)
+│   ├── config.py                # PipelineConfig dataclass + JSON serialisation
+│   ├── loader.py                # CSV ingestion, ticker extraction, record explosion
+│   ├── windowing.py             # Per-ticker forward/backward 24h counts (searchsorted)
+│   ├── sentiment.py             # VADER compound scoring with title-fallback
+│   ├── labelling.py             # Temporal split, z-scores, composite metric, thresholding
+│   ├── normalisation.py         # Z-score parameter persistence (train-only stats)
+│   ├── features.py              # 11 backward-only ML features
+│   ├── training.py              # Multi-model training with expanding-window CV
+│   ├── training_models.py       # Data classes (TrainedModel, CVResult, etc.)
+│   ├── evaluation.py            # Metrics, bootstrap CI, McNemar's, tier validation
+│   ├── evaluation_models.py     # Evaluation result data classes
+│   ├── evaluation_figures.py    # Confusion matrices, ROC curves, importance plots
+│   ├── experiment_log.py        # Append-only JSONL experiment tracker
+│   ├── timestamps.py            # Timestamp conversion utilities
+│   ├── cli_logging.py           # Tee-style console + file logging
+│   └── pipeline.py              # Orchestrator: chains stages, manages outputs
+├── eda/
+│   └── eda_pipeline.py          # Exploratory data analysis with figure generation
+├── tests/                       # 10 test modules (pytest)
+│   ├── test_loader.py
+│   ├── test_windowing.py
+│   ├── test_sentiment.py
+│   ├── test_labelling.py
+│   ├── test_features.py
+│   ├── test_training.py
+│   ├── test_evaluation_significance.py
+│   ├── test_evaluation_figures.py
+│   ├── test_config.py
+│   └── test_pipeline_integration.py
+├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4 + threshold sweep)
+├── run_training.py              # CLI: model training + evaluation (stages 5–6)
+├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
+├── generate_figures.py          # CLI: standalone figure generation from saved artefacts
+└── generate_prediction_examples.py  # CLI: sample predictions for report examples
+```
+
+The package is installed in editable mode (`pip install -e .`) and exposes five named console scripts defined in `pyproject.toml`:
+
+*Table 8: CLI entry points.*
+
+| Command | Script | Purpose |
+|---------|--------|---------|
+| `surge-label` | `run_labeling:main` | Execute the labelling pipeline (load → window → sentiment → label → threshold sweep) |
+| `surge-train` | `run_training:main` | Train all models and run full evaluation |
+| `surge-cross-val` | `run_cross_validation:main` | Cross-dataset transfer evaluation |
+| `surge-figures` | `generate_figures:main` | Regenerate figures from saved evaluation artefacts |
+| `surge-examples` | `generate_prediction_examples:main` | Generate prediction examples for inspection |
+
+**Module-to-stage mapping.** Each pipeline stage from Section 3.1 maps to one or two library modules:
+
+| Pipeline Stage | Module(s) | Key Function |
+|----------------|-----------|--------------|
+| 1. Data Loading & Preprocessing | `loader.py` | `load_data()`, `extract_tickers()` |
+| 2. Temporal Windowing | `windowing.py` | `compute_windowed_counts()` |
+| 3. Sentiment Computation | `sentiment.py` | `compute_sentiment()` |
+| 4. Target Labelling | `labelling.py`, `normalisation.py` | `apply_labelling()`, `sweep_thresholds()` |
+| 5. Feature Engineering | `features.py` | `compute_features()`, `get_feature_matrix()` |
+| 6. Training & Evaluation | `training.py`, `evaluation.py` | `train_models()`, `evaluate_model()` |
+
+The `pipeline.py` orchestrator chains stages 1–4 in sequence, followed by a threshold sweep for sensitivity analysis, seeding randomness at the start and logging record counts after each stage. Stages 5–6 are invoked by the separate `run_training.py` entry point, which loads the labelled CSV output from stage 4 and proceeds through feature computation, model fitting, and evaluation. This two-script design allows relabelling (e.g., different τ or weight settings) without retraining, and retraining without re-running the expensive sentiment stage on 1.3M records.
+
+**Configuration and reproducibility.** The reproducibility infrastructure (seeded randomness, JSON-serialised configuration, experiment logging, artefact traceability) is described in Section 3.8. From an implementation perspective, the key consequence is that the `PipelineConfig` dataclass acts as the single source of truth for all parameters: a fixed random seed (default 42) is applied to Python's `random` and NumPy at pipeline start, while scikit-learn estimators receive it as `random_state` per constructor. All output files carry a timestamp prefix (`YYYY-MM-DD_HH-MM`) that links them to the corresponding experiment log entry.
+
+**Testing.** Ten pytest modules provide unit and integration coverage for every pipeline stage. Tests validate edge cases (empty DataFrames, single-record tickers, missing selftext), numerical correctness (windowing counts against brute-force reference implementations), and end-to-end integration (full pipeline on synthetic data). The test suite executes without requiring the full-size datasets.
 
 ### 4.2 Data Loading and Preprocessing
 
