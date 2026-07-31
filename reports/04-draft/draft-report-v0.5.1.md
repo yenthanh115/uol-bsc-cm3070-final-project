@@ -675,7 +675,7 @@ These limitations do not affect the validity of the reported results (which were
 
 ### 4.1 Code Organisation
 
-The system is implemented as a Python package (`surge-pipeline`) using a standard setuptools layout with the following key dependencies: pandas ≥2.0, scikit-learn ≥1.3, XGBoost ≥1.7, vaderSentiment ≥3.3, and NumPy ≥1.24 (full list in `pyproject.toml`). Source code resides in `src/`, with a core library package (`surge_pipeline/`) containing the pipeline logic and a set of CLI runner scripts at the package root that serve as entry points.
+The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) that depends on pandas, scikit-learn, XGBoost, vaderSentiment, and NumPy (version bounds specified in `pyproject.toml`). All source code sits under `src/`, split into a core library package and a handful of CLI scripts that drive it:
 
 ```
 src/
@@ -717,19 +717,19 @@ src/
 └── generate_prediction_examples.py  # CLI: sample predictions for report examples
 ```
 
-The package is installed in editable mode (`pip install -e .`) and exposes five named console scripts defined in `pyproject.toml`:
+Installing the package in editable mode (`pip install -e .`) registers five console commands, so any experiment can be kicked off from the terminal without navigating into the source tree:
 
 *Table 8: CLI entry points.*
 
 | Command | Script | Purpose |
 |---------|--------|---------|
-| `surge-label` | `run_labeling:main` | Execute the labelling pipeline (load → window → sentiment → label → threshold sweep) |
-| `surge-train` | `run_training:main` | Train all models and run full evaluation |
-| `surge-cross-val` | `run_cross_validation:main` | Cross-dataset transfer evaluation |
-| `surge-figures` | `generate_figures:main` | Regenerate figures from saved evaluation artefacts |
-| `surge-examples` | `generate_prediction_examples:main` | Generate prediction examples for inspection |
+| `surge-label` | `run_labeling:main` | Run the labelling pipeline (load → window → sentiment → label → threshold sweep) |
+| `surge-train` | `run_training:main` | Train all three models and produce the full evaluation report |
+| `surge-cross-val` | `run_cross_validation:main` | Test whether a model trained on one subreddit transfers to the other |
+| `surge-figures` | `generate_figures:main` | Regenerate publication figures from saved evaluation artefacts |
+| `surge-examples` | `generate_prediction_examples:main` | Produce worked prediction examples for manual inspection |
 
-**Module-to-stage mapping.** Each pipeline stage from Section 3.1 maps to one or two library modules:
+**How the modules map to the pipeline stages.** Each stage described in Section 3.1 corresponds to one or two library modules. The mapping is deliberate: isolating each stage in its own module means a change to, say, the sentiment backend does not touch the windowing logic, and any stage can be unit-tested in isolation.
 
 | Pipeline Stage | Module(s) | Key Function |
 |----------------|-----------|--------------|
@@ -740,11 +740,11 @@ The package is installed in editable mode (`pip install -e .`) and exposes five 
 | 5. Feature Engineering | `features.py` | `compute_features()`, `get_feature_matrix()` |
 | 6. Training & Evaluation | `training.py`, `evaluation.py` | `train_models()`, `evaluate_model()` |
 
-The `pipeline.py` orchestrator chains stages 1–4 in sequence, followed by a threshold sweep for sensitivity analysis, seeding randomness at the start and logging record counts after each stage. Stages 5–6 are invoked by the separate `run_training.py` entry point, which loads the labelled CSV output from stage 4 and proceeds through feature computation, model fitting, and evaluation. This two-script design allows relabelling (e.g., different τ or weight settings) without retraining, and retraining without re-running the expensive sentiment stage on 1.3M records.
+The `pipeline.py` orchestrator wires stages 1–4 together, seeds the random number generators, logs how many records survive each stage, and finishes with a threshold sweep for sensitivity analysis. Stages 5–6 live in a separate script (`run_training.py`) that picks up the labelled CSV produced by stage 4. Splitting the work this way has a practical benefit: relabelling the data with a different threshold or sentiment weight does not force a full retraining run, and retraining with new hyperparameters does not require re-scoring sentiment across 1.3 million records.
 
-**Configuration and reproducibility.** The reproducibility infrastructure (seeded randomness, JSON-serialised configuration, experiment logging, artefact traceability) is described in Section 3.8. From an implementation perspective, the key consequence is that the `PipelineConfig` dataclass acts as the single source of truth for all parameters: a fixed random seed (default 42) is applied to Python's `random` and NumPy at pipeline start, while scikit-learn estimators receive it as `random_state` per constructor. All output files carry a timestamp prefix (`YYYY-MM-DD_HH-MM`) that links them to the corresponding experiment log entry.
+**Configuration and reproducibility.** Section 3.8 describes the reproducibility infrastructure in detail. The implementation consequence is straightforward: a single `PipelineConfig` dataclass holds every tuneable parameter, and a fixed seed (default 42) is applied to Python's `random` and NumPy at pipeline start. Scikit-learn estimators receive the same seed via their `random_state` constructor argument. Every output file carries a timestamp prefix (`YYYY-MM-DD_HH-MM`) that ties it back to the matching experiment log entry, so any result can be traced to the exact configuration that produced it.
 
-**Testing.** Ten pytest modules provide unit and integration coverage for every pipeline stage. Tests validate edge cases (empty DataFrames, single-record tickers, missing selftext), numerical correctness (windowing counts against brute-force reference implementations), and end-to-end integration (full pipeline on synthetic data). The test suite executes without requiring the full-size datasets.
+**Testing.** Ten pytest modules cover every pipeline stage with unit and integration tests. They exercise edge cases (empty DataFrames, tickers with a single post, missing selftext), verify numerical correctness (windowing counts checked against brute-force reference implementations), and confirm end-to-end behaviour on synthetic data. The full suite runs without the large production datasets.
 
 ### 4.2 Data Loading and Preprocessing
 
