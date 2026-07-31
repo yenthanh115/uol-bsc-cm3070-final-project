@@ -807,7 +807,32 @@ The counting relies on NumPy's `searchsorted` over sorted per-ticker timestamp a
 
 ### 4.4 Surge Labelling
 
-<!-- Composite metric implementation, configurable threshold -->
+Section 3.3 covers the *why* behind the composite surge metric. This section is about the *how* — where the leakage-prevention boundary lives in code, what sequence the steps follow, and what happens when things go wrong.
+
+**The temporal split.** The labelling module's first job is to stamp every record as `train` or `test`. It converts timestamps to epoch seconds, finds the 80th percentile, and draws the line there — everything at or before that point goes to training, the rest to test. Since records are already in chronological order, this puts roughly 80% of them in training and 20% in test. The split is deliberately plain: one cut on sorted time, no stratification, no shuffling. Any randomness here would undermine the temporal ordering the whole pipeline relies on.
+
+**Computing z-score parameters.** With the split done, the module calculates mean (μ) and population standard deviation (σ, `ddof=0`) for both the volume growth ratio from windowing and the absolute sentiment shift from stage 3 — using *only* included training records. Population std is a deliberate choice: the training partition is the reference distribution everything else gets measured against, not a sample of some larger unknown population. "Included" matters too: records the windowing stage flagged as excluded (too few posts in their forward window) get skipped here, since their volume growth values come from insufficient data and would skew the statistics. The four parameters that come out (μ_vol, σ_vol, μ_sent, σ_sent) are frozen and written to JSON as part of the pipeline summary, so any later inference run can normalise fresh data the exact same way without needing the training set.
+
+**Normalisation.** Every non-excluded record — training *and* test — gets z-scored using those frozen training statistics. This is the leakage-prevention boundary in action: the test partition's raw values are measured against a distribution it never contributed to. If σ happens to be zero (possible on very sparse tickers where every training record has identical volume growth), z-scores are set to 0.0 rather than blowing up to infinity. Excluded records get NaN across all derived columns, so they propagate cleanly as missing data and can't be mistaken for legitimate zeros downstream.
+
+**The composite metric.** With z-scores in hand, computing the composite is straightforward:
+
+> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
+
+The weights live in `PipelineConfig` — `weight_volume` and `weight_sentiment`, both defaulting to 0.5. Setting `weight_sentiment = 0` gives the Phase 1 (volume-only) variant for the ablation comparison described in Section 3.3. The module logs which mode it's running in, so experiment records are self-documenting.
+
+**Thresholding.** The binary label comes from a single comparison: `surge_label = 1 if composite > τ, else 0`. Excluded records get NaN instead. Class distribution stats (surge count, no-surge count, rate, imbalance ratio) are computed and logged per partition, so you can immediately see whether the chosen τ gives enough positive examples to train on.
+
+**Threshold sweep.** Rather than re-running the pipeline five times to test different τ values, `sweep_thresholds()` does it in one pass. It loops over the configured list (default: [0.5, 1.0, 1.5, 2.0, 2.5]), creates a fresh DataFrame copy and a tweaked config for each, and produces a complete set of class distribution metrics per τ. This is what powers the sensitivity analysis in Section 3.7 — one invocation, all five variants, written out together.
+
+**Edge cases handled in code:**
+
+- *Empty DataFrame* — returns immediately with empty columns and zeroed statistics (shows up in unit tests).
+- *All records excluded* — logs a warning and sets every label to NaN (can happen on extremely sparse tickers at high `min_window_count` settings).
+- *σ = 0* — z-scores default to 0.0 with a logged warning rather than crashing.
+- *Weights summing to ≠ 1* — perfectly fine by design. The composite is a weighted sum, not a weighted average, and since τ is always picked empirically through the threshold sweep, the absolute scale doesn't matter. A different weight sum just shifts where τ needs to land to produce a given surge rate.
+
+**Output.** The module appends five columns to the DataFrame: `partition`, `z_volume`, `z_sentiment`, `composite`, and `surge_label`. The result is saved as `{timestamp}_labelled_dataset.csv` in the output directory (following the timestamp-prefix convention from Section 4.1), with the `NormalisationStats` written to the accompanying pipeline summary JSON. The training script picks up the CSV by path; downstream inference loads the normalisation params from JSON to apply identical scaling to new data.
 
 ### 4.5 Model Training
 
