@@ -540,7 +540,7 @@ These thresholds are conservative. The cascade prediction literature reports hig
 
 Each baseline isolates a specific question about the source of predictive performance:
 
-- **Random baseline (AUC = 0.5)** — Does the model beat chance? If not, the features carry no signal. Note that for AUC-ROC specifically, a majority-class predictor (always predicting "no surge") also scores 0.5, since it produces no ranking among records. The two baselines are therefore equivalent when measured by AUC; they only diverge for threshold-dependent metrics like accuracy, where majority-class achieves ~95–99% by exploiting imbalance.
+- **Random baseline (AUC = 0.5)** — Does the model beat chance? If not, the features carry no signal.
 - **Single-feature baselines** — For each of the eleven features, a single-feature Logistic Regression is trained and its AUC recorded. This determines whether the multi-feature combination adds value over the best individual predictor. If the full model barely exceeds the best single feature, the additional complexity is unjustified.
 
 #### Statistical Robustness
@@ -551,20 +551,20 @@ Reporting a single AUC number without uncertainty is misleading — it could be 
 
 **McNemar's test for pairwise model comparison.** When two models are trained on the same data and evaluated on the same test set, their predictions are *paired* — each record receives a prediction from both. McNemar's test examines the 2×2 table of concordant and discordant predictions (records where one model is correct and the other is not). This is more appropriate than a paired t-test (which requires continuous outputs) or an independent test (which ignores the paired structure). With three model pairs (LR vs RF, LR vs XGB, RF vs XGB), the family-wise error rate is controlled with Bonferroni correction (α = 0.05 / 3 = 0.017). Bonferroni was chosen over less conservative corrections (e.g., Holm) because with only three comparisons the power loss is negligible and the interpretation is simpler.
 
-**Training stability.** Model training involves randomness (bootstrap aggregation in RF, random initialisation in XGBoost). Ideally, the pipeline would be repeated with multiple random seeds to verify that results are not an artifact of a particular initialisation. In practice, this project uses a single fixed seed (42) for all runs, prioritising exact reproducibility over stability analysis. The bootstrap confidence intervals on the test set partially mitigate this concern by quantifying uncertainty in the *evaluation*, though they do not capture variance from training randomness. This is acknowledged as a limitation; if reported AUC values are near a tier boundary, seed sensitivity would need investigation before strong claims could be made.
+**Training stability.** All runs use a single fixed seed (42) to ensure exact reproducibility. Bootstrap confidence intervals on the test set quantify evaluation uncertainty, though they do not capture variance from training randomness (a limitation discussed in Section 5.4).
 
 #### Metrics and Thresholds
 
 Models are evaluated using four metrics on the held-out test set:
 
-*Table 7: Evaluation metrics and their roles.*
+*Table 7: Evaluation metrics.*
 
-| Metric | Role | Why It Matters Here |
-|--------|------|---------------------|
-| AUC-ROC | Primary; threshold-independent ranking quality | With 1–5% surge rates, a threshold-free metric avoids the arbitrary choice problem |
-| Precision | Proportion of predicted surges that are real | High precision means fewer false alarms |
-| Recall | Proportion of actual surges detected | High recall means fewer missed surges |
-| F1-Score | Harmonic mean of precision and recall | Balances the two concerns into a single operational metric |
+| Metric | Role |
+|--------|------|
+| AUC-ROC | Primary; threshold-independent ranking quality |
+| Precision | Proportion of predicted surges that are real |
+| Recall | Proportion of actual surges detected |
+| F1-Score | Harmonic mean of precision and recall |
 
 Precision, recall, and F1 depend on the classification threshold. These are reported at two operating points: the default threshold of 0.5, and the validation-tuned threshold identified during cross-validation (Section 3.6). Comparing the two reveals how much threshold tuning matters — if default-threshold F1 is near zero but tuned-threshold F1 is reasonable, the model has discriminative ability that only becomes apparent at the right operating point.
 
