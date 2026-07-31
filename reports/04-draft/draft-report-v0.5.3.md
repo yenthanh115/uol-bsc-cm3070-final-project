@@ -449,7 +449,7 @@ With that constraint in mind, the eleven features are organised into four groups
 | `day_of_week` | Temporal | Discrete [0–6] | Day of post creation (Monday=0) |
 | `time_since_previous` | Activity | Continuous ≥ 0 | Seconds since the previous post mentioning the same ticker |
 | `ticker_post_rate_24h` | Activity | Continuous ≥ 0 | Number of same-ticker posts in the preceding 24 hours |
-| `ticker_post_acceleration` | Activity | Continuous | Change in posting rate: count in preceding 12h minus count in the 12h before that |
+| `ticker_post_acceleration` | Activity | Continuous | Posting rate ratio: count in preceding 12h divided by count in the 12h before that |
 | `word_count_x_hour` | Interaction | Continuous | word_count × hour_of_day |
 | `accel_x_time_since_prev` | Interaction | Continuous | ticker_post_acceleration × time_since_previous |
 
@@ -779,8 +779,31 @@ The high no-ticker rate on r/pennystocks reflects how the community actually tal
 
 ### 4.3 Feature Engineering
 
-<!-- 11 features with temporal windowing -->
-<!-- Implementation specifics and edge cases -->
+Section 3.4 covers *what* the eleven features are and *why* each earned its place. This section is about the *how* — algorithmic choices, edge cases handled, and the one constraint that governs every line of code: nothing may peek into the future.
+
+**Reused columns.** Two features come for free because earlier stages already did the work: `sentiment_score` is just the `sentiment_polarity` column renamed, and `ticker_post_rate_24h` is a direct copy of `backward_count` from windowing. Reusing these avoids recomputation, but the real benefit is avoiding the risk of a subtly different definition creeping in. Two more — `hour_of_day` and `day_of_week` — are trivial extractions from `created_utc` with no per-ticker logic involved.
+
+**Time since previous post.** This measures how many hours have passed since the last post about the same ticker. The implementation groups records by ticker (they're already in chronological order from the loader) and takes the timestamp difference between consecutive entries in each group. The first post ever about a given ticker has no predecessor, so it gets a sentinel value of −1 rather than zero — the model needs to tell apart "nothing was said before" from "someone posted one second ago." Tree-based models handle this sentinel naturally (they just split on it); Logistic Regression's StandardScaler normalises it alongside the real values, which works because the −1 cluster sits well away from the positive-valued population.
+
+**Ticker post acceleration.** The most involved feature to compute. It answers a simple question: is discussion about this ticker picking up speed or dying down? The approach splits the backward 24-hour window into two halves and counts posts in each:
+
+- *Recent half*: posts in (t−12h, t], not counting the current record
+- *Older half*: posts in (t−24h, t−12h]
+
+Acceleration is `count_recent / max(count_older, 1)`. Above 1.0 means activity is ramping up; below 1.0 means it's fading. The `max(..., 1)` prevents division by zero when nothing appeared in the older half — silence becomes a baseline of 1, so acceleration just equals the recent count.
+
+The counting relies on NumPy's `searchsorted` over sorted per-ticker timestamp arrays, the same O(n log n) binary-search trick used in the windowing stage. Even on the 577,872-row wallstreetbets dataset this stays fast.
+
+**Word count and title length.** Both are straightforward whitespace-split token counts. `word_count` combines title and selftext; `title_length` uses title alone. Posts without body text (link posts, one-line reactions) get their word count from the title only. These features are deliberately coarse — character-level counts or TF-IDF vectors would balloon dimensionality without a clear hypothesis about what the extra detail would buy.
+
+**Number of tickers mentioned.** Since the dataset is exploded (one row per ticker per post), a post mentioning three stocks shows up as three separate rows. This feature recovers the original post's breadth: group by record `id`, count distinct tickers. A single-stock post scores 1; a comparison covering $AMC, $GME, and $BB scores 3 on all three of its rows.
+
+**Interaction features.** Two hand-crafted products round out the set:
+
+- `word_count_x_hour` = word_count × hour_of_day — gives the model an explicit signal for the interplay between content length and posting time, so it doesn't have to discover the combination through multi-level splits alone.
+- `accel_x_time_since_prev` = ticker_post_acceleration × time_since_previous — captures sudden acceleration after a stretch of silence. For first-occurrence records (where `time_since_previous` = −1), the product is zeroed out rather than letting the sentinel produce a meaningless negative value.
+
+**What comes out.** Once all eleven columns are in place, the module logs the feature matrix shape and per-feature summary statistics (mean, std, min, max) on non-excluded records. A helper function (`get_feature_matrix()`) then slices out just those eleven columns as a clean DataFrame ready for model training, dropping all the intermediate and metadata columns. On the wallstreetbets dataset the whole computation finishes in under 10 seconds — the searchsorted calls dominate, but per-ticker grouping keeps each individual array small enough to stay fast.
 
 ### 4.4 Surge Labelling
 
