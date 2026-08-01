@@ -1131,55 +1131,46 @@ One finding that cuts against this concern: the cross-dataset transfer works (AU
 
 ### 5.4 Limitations and Proposed Improvements
 
-#### 5.4.1 Data Limitations
+#### 5.4.1 Limitations
 
-**Small positive class on r/pennystocks.** With only 31 surges in the test set, evaluation metrics are inherently noisy. Bootstrap CIs span ±0.08–0.09 in AUC, meaning the true model performance could plausibly range from "barely above chance" (lower CI bound of 0.588 for LR) to "strong" (upper CI bound of 0.824 for RF). The confidence intervals overlap substantially between models, limiting the strength of conclusions drawn from pennystocks alone. This is a fundamental property of the data: at τ=1.5, only 2.8% of records are surges, and with 3,278 test records, 31 positives are the mathematical consequence. Lowering τ to 1.0 increases surges to 8.2% (144 test surges), improving estimate stability at the cost of defining surges more loosely.
+The results should be read with several constraints in mind.
 
-**Single time period (2021).** All results are bound to a single calendar year that included an extraordinary market event (the GameStop squeeze in January 2021). Surge dynamics during this period may not be representative of normal market conditions. The model may have learned patterns specific to the speculative mania of early 2021 rather than stable, recurring surge precursors. Evaluating on a different year would reveal how much performance depends on market regime.
+The most immediate is **sample size on pennystocks**: 31 test surges is not much to evaluate against. Bootstrap CIs span ±0.08–0.09 in AUC and overlap between models, so conclusions from pennystocks alone are tentative. Lowering the threshold to τ=1.0 would increase test surges to 144, but at the cost of a looser definition of what counts as a surge.
 
-**Survivorship bias in the archival data.** Posts deleted by moderators or users before the archive snapshot are absent from the dataset. If moderators disproportionately remove manipulation-related posts (which might be the most predictive of surges), the model is trained on a censored view of the community. The magnitude of this bias is unknown.
+All results come from a **single calendar year** (2021) that included the GameStop episode — a period of unusual speculative intensity. The model may have learned patterns tied to that environment rather than stable, general precursors. Running the pipeline on 2020 or 2022 data would reveal how regime-dependent the findings are.
 
-**Training randomness not fully characterised.** Seed stability testing across 5 seeds (range: 0.019 in best-model AUC) provides some evidence of robustness, but does not constitute a full sensitivity analysis of training variance. The fixed-seed approach means the reported metrics represent one draw from the distribution of possible outcomes. Bootstrap CIs capture *evaluation* variance but not *training* variance — the uncertainty from different random forest tree selections, XGBoost initialisation, and logistic regression solver convergence.
+There is also a **structural correlation between the target and the top feature**. `sentiment_score` dominates permutation importance (+0.146 to +0.203), but sentiment change is also part of the composite target definition. The feature captures *current* post sentiment; the target uses *forward-window* sentiment shift — so this is not leakage, but it is a form of circularity that likely inflates sentiment's apparent importance relative to a volume-only target. The Phase 1 results provide a partial control: sentiment still contributes to prediction even when the target is volume-only, but its dominance is probably exaggerated by the composite design.
 
-#### 5.4.2 Methodological Limitations
+A few smaller concerns: **survivorship bias** (deleted posts are absent from the archive — if these are disproportionately manipulation-related, the training data is censored); the **fixed temporal split point** (~June 2021) means the test set's difficulty depends on where that particular cutoff lands relative to market regime shifts; and **training variance** is only partially characterised — the 0.019 AUC range across 5 seeds suggests stability, but bootstrap CIs capture evaluation noise, not the uncertainty from different random forest tree selections or solver convergence paths.
 
-**VADER's domain mismatch.** VADER was designed for general social media and handles capitalisation, emoticons, and degree modifiers well. However, it lacks financial domain knowledge: "short" (bearish signal) is scored neutrally, "moon" (extreme bullish signal) receives no special treatment, and sarcasm — pervasive on Reddit — is entirely invisible to rule-based scoring. FinBERT [13] would address the domain gap at significant computational cost (~50× slower per record). Given that `sentiment_score` is the single most important feature for tree-based models (+0.146 to +0.203 permutation importance), even modest improvements in sentiment scoring could propagate into substantially better predictions.
+#### 5.4.2 Proposed Improvements
 
-**Ticker extraction heuristics.** The stopword-based extraction approach (Section 4.2) trades precision for recall: it captures tickers not on any predefined list but admits false positives. Common false positives include abbreviations (CEO, IPO, DD) that survive the 297-term stopword set, and short words in all caps used for emphasis ("HOLD," "SELL"). Each false positive dilutes the per-ticker activity counts with irrelevant noise. A hybrid approach combining the current regex with validation against a live ticker list (from SEC EDGAR or financial APIs) would reduce noise while preserving coverage of newly listed stocks.
+Each improvement below is motivated by a specific finding from the evaluation:
 
-**Fixed 24-hour window.** The pipeline uses a single temporal scale (24 hours forward, 24 hours backward) for windowing, surge definition, and activity features. This may miss multi-scale dynamics: some surges build over 6 hours while others develop across 72 hours. A multi-scale window approach (6h, 12h, 24h, 72h) would allow the model to detect surges at different temporal resolutions, though it would multiply feature count and introduce additional design choices.
-
-**Cost-sensitive learning vs. resampling.** The pipeline uses `class_weight='balanced'` and `scale_pos_weight` rather than synthetic oversampling (SMOTE). While this avoids the temporal-consistency problems of SMOTE (Section 3.5), it may not fully compensate for extreme imbalance ratios like 105:1. Threshold-based approaches to imbalance handling (treating it as a post-hoc calibration problem rather than a training-time problem) might be more effective, as the threshold tuning results suggest.
-
-#### 5.4.3 Proposed Improvements
-
-| Improvement | Expected Impact | Effort | Priority |
-|-------------|----------------|--------|----------|
-| FinBERT for sentiment | Higher discrimination from sentiment feature | Medium (GPU required, ~50× slower) | High |
-| Multi-scale windows (6h, 12h, 24h, 72h) | Capture surges at different speeds | Medium (feature engineering) | High |
-| Known-ticker validation list | Reduce noise from false positive tickers | Low (SEC EDGAR API integration) | Medium |
-| Additional time periods (2020, 2022) | Test temporal stability beyond 2021 | Low (data acquisition) | Medium |
-| Probability calibration (Platt/isotonic) | Fix precision collapse without threshold hacks | Low (post-hoc calibration layer) | Medium |
-| Additional subreddits (r/stocks, r/investing) | Test density gradient more granularly | Medium (pipeline re-run) | Low |
-| Graph-based features (cross-ticker mentions) | Capture community network effects | High (new feature paradigm) | Low |
+| Improvement | Motivation (from results) | Effort | Priority |
+|-------------|---------------------------|--------|----------|
+| FinBERT for sentiment | Top feature (+0.203 importance) but VADER misses financial semantics (Section 5.3.2) | Medium (GPU, ~50× slower based on batch benchmarks during development) | High |
+| Multi-scale windows (6h, 12h, 24h, 72h) | The fixed 24h window (Section 3.3) may miss faster or slower surges | Medium | High |
+| Probability calibration (Platt/isotonic) | Precision collapse at default threshold (Table 12) is a calibration problem, not a ranking problem | Low | High |
+| Known-ticker validation list | Ticker extraction heuristics (Section 4.2) admit false positives that dilute activity counts | Low | Medium |
+| Additional time periods (2020, 2022) | Single-year limitation above; requires re-running the full pipeline on new archives | Medium | Medium |
+| Additional subreddits (r/stocks, r/investing) | Tests the density gradient more granularly between pennystocks and WSB | Medium | Low |
 
 ### 5.5 Originality and Contribution
 
-This project makes four specific contributions to the intersection of social media prediction and computational finance:
+Three things come out of this project that were not available before.
 
-**1. A leakage-free surge prediction framework.** The reviewed literature (Section 2.5) reveals pervasive temporal leakage in social media prediction studies — random train-test splits, same-period evaluation, and features derived from future engagement. This project demonstrates a complete methodology that prevents leakage at every stage: target labels use training-partition z-scores only, features are strictly backward-looking, and evaluation uses a held-out future period. The resulting performance figures (AUC 0.753–0.892) are conservative but trustworthy — they represent what a deployed system could actually achieve, not inflated estimates from leaked information. This contribution is methodological rather than algorithmic: the same framework applies to any temporal prediction task.
+First, a **leakage-free methodology applied where it has been neglected**. The literature review (Section 2.5, Table 3) shows that temporal leakage is the norm in social media prediction studies, not the exception. This project applies established temporal evaluation principles [14][15] end-to-end — training-partition z-scores, backward-only features, held-out future test set — and shows that the resulting performance (AUC 0.753 on pennystocks, 0.892 on WSB) is both achievable and trustworthy. The framework itself is reusable for any timestamped prediction problem.
 
-**2. Composite surge metric combining volume and sentiment.** No reviewed study defines a composite binary target that integrates normalised posting-volume growth with sentiment change magnitude within a fixed time window. The closest prior work (Costola et al. [10]) examines consensus formation qualitatively rather than defining a quantifiable, reproducible metric. The Phase 1 vs Phase 2 comparison (Table 21) provides direct evidence that this composite design captures a richer phenomenon than volume alone (+18.2% AUC on WSB), validating the additional complexity. The metric is fully parameterised (threshold τ, weights w₁/w₂), making it adaptable to different communities and operational requirements.
+Second, a **composite surge metric** that no reviewed study has defined: a binary target integrating normalised volume growth with sentiment change, fully parameterised by threshold and weights. The Phase 1 vs Phase 2 experiment (Table 18) confirms this is not just added complexity — it captures a richer phenomenon than volume alone (+0.182 AUC on WSB).
 
-**3. Empirical evidence that data density is the binding constraint.** The dual-dataset design produces a controlled comparison: same pipeline, same features, same models, different data density. The performance gap (0.753 on pennystocks vs 0.892 on WSB) and the asymmetric transfer results (sparse→dense works well; dense→sparse does not) establish that data density — not model choice, feature engineering, or methodology — is the primary determinant of prediction quality. This finding has practical implications: practitioners should invest in data collection (more subreddits, longer time periods, finer granularity) before investing in model complexity.
+Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and the asymmetric transfer (sparse→dense at 0.871; dense→sparse at 0.684) make the case clearly. Model complexity is a secondary concern. Data availability comes first.
 
-**4. Statistical rigour in model comparison.** Reporting a single AUC number without uncertainty quantification is standard practice in much of the applied ML literature. This project provides bootstrap confidence intervals, pairwise McNemar's tests with Bonferroni correction, single-feature baselines, cross-dataset transfer, seed stability analysis, and a systematic weight sensitivity sweep. The result is that every claim about model performance is supported by quantified evidence, and every model difference is tested for statistical significance. This level of evaluation rigour is not novel in statistics but remains uncommon in applied social media prediction research.
-
-These contributions are incremental rather than revolutionary — they extend existing methods (temporal evaluation from forecasting literature [14][15], composite metrics from multi-criteria decision-making, permutation importance from interpretable ML) into an underexplored application domain. Their value lies in the careful integration of established techniques into a coherent framework that produces reliable, interpretable results for a prediction problem that previous research has not directly addressed.
+These are incremental contributions — established techniques integrated carefully into a coherent framework for a problem that prior work has not directly addressed. The evaluation rigour (bootstrap CIs, McNemar's tests, sensitivity sweeps) ensures each claim rests on quantified evidence rather than isolated numbers.
 
 ---
 
-## 6. Conclusion
+## 6. Conclusion (max 1000 words)
 
 ### 6.1 Current Achievements
 
