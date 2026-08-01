@@ -936,11 +936,13 @@ With the implementation complete, the next section presents and analyses the res
 
 ### 5.1 Evaluation Against Project Objectives
 
+The three objectives stated in Section 1.1 are evaluated below. A fourth item (reproducibility) is assessed as an additional design achievement rather than a formally stated objective.
+
 #### 5.1.1 Objective 1: Predict Posting-Volume Surges
 
 **Goal:** Build models that forecast per-ticker surges from backward-looking features available at observation time.
 
-**Outcome:** On the high-density dataset (r/wallstreetbets, 68,923 test records), XGBoost achieved AUC-ROC 0.892 [95% CI: 0.881–0.902] and Random Forest reached 0.880 [0.869–0.890], both clearing the stretch performance tier (>0.80). On the sparse dataset (r/pennystocks, 3,278 test records), Random Forest attained 0.753 [0.673–0.824], achieving the target tier (>0.70). All models beat both the random baseline (0.50) and the best single-feature baseline on the WSB dataset. On pennystocks, the best single feature (hour_of_day, AUC 0.591) was exceeded by every multi-feature model.
+**Outcome:** On the high-density dataset (r/wallstreetbets, 68,923 test records), XGBoost achieved AUC-ROC 0.892 [95% CI: 0.881–0.902] and Random Forest reached 0.880 [0.869–0.890], both clearing the stretch performance tier (>0.80). On the sparse dataset (r/pennystocks, 3,278 test records), Random Forest attained 0.753 [0.673–0.824], achieving the target tier (>0.70). Both tree-based models beat the random baseline (0.50) and the best single-feature baseline on WSB (`word_count`, AUC 0.805); Logistic Regression (0.707) did not exceed this single-feature baseline, though it still cleared the target tier. On pennystocks, the best single feature (`hour_of_day`, AUC 0.591) was exceeded by all three multi-feature models.
 
 **Verdict: Met.** Surges are predictable from backward-looking features alone, with performance scaling with data density.
 
@@ -948,7 +950,7 @@ With the implementation complete, the next section presents and analyses the res
 
 **Goal:** Determine whether model complexity improves surge prediction by comparing linear, bagged ensemble, and boosted ensemble classifiers.
 
-**Outcome:** On both datasets, all six pairwise comparisons (three model pairs × two datasets) were statistically significant (McNemar's test, all p < 0.001 after Bonferroni correction at α = 0.017). The complexity gradient produced a clear ordering on WSB: XGBoost (0.892) > Random Forest (0.880) > Logistic Regression (0.707). On the sparser pennystocks data, the ordering partially inverted: Random Forest (0.753) > XGBoost (0.734) > LR (0.680), suggesting that gradient boosting's advantage depends on having sufficient training examples.
+**Outcome:** On each dataset, all three pairwise comparisons were statistically significant (McNemar's test, all p < 0.001 after Bonferroni correction at α = 0.017). The complexity gradient produced a clear ordering on WSB: XGBoost (0.892) > Random Forest (0.880) > Logistic Regression (0.707). On the sparser pennystocks data, the ordering partially inverted: Random Forest (0.753) > XGBoost (0.734) > LR (0.680). The implications of this inversion — that gradient boosting's advantage depends on sufficient training examples — are analysed in Section 5.3.1.
 
 **Verdict: Met.** The multi-model comparison revealed meaningful, statistically significant differences that vary by data density.
 
@@ -956,17 +958,19 @@ With the implementation complete, the next section presents and analyses the res
 
 **Goal:** Confirm predictions hold on unseen future time periods through temporal evaluation protocols that prevent data leakage.
 
-**Outcome:** The expanding-window cross-validation with k=4 folds preserved strict temporal ordering throughout training. The final test set comprised the last 20% of records chronologically, never seen during model selection or threshold tuning. Z-score parameters were frozen from training-partition statistics only. Cross-dataset transfer evaluation (Section 5.2.5) provided an additional, independent test of temporal generalisation — models trained on one community's full timeline generalised to the other community's held-out future period. The validation-fold AUC estimates (e.g., RF val_F1 = 0.911 on WSB) were substantially more optimistic than test-set performance (test F1 = 0.145), confirming that the temporal holdout guards against overfitting in a way that within-training validation alone does not.
+**Outcome:** The expanding-window cross-validation with k=4 folds preserved strict temporal ordering throughout training. The final test set comprised the last 20% of records chronologically, never seen during model selection or threshold tuning. Z-score parameters were frozen from training-partition statistics only. The key evidence that the model generalises to genuinely unseen future periods is the test-set performance itself: achieving AUC 0.892 (stretch tier) on WSB and 0.753 (target tier) on pennystocks against data the model never trained on confirms meaningful forward-looking predictive power. Cross-dataset transfer evaluation (Section 5.2.5) provided an additional test of generalisation, though it conflates temporal and community dimensions.
 
-**Verdict: Met.** No future information leaked into training at any pipeline stage, and models generalise to genuinely unseen future periods.
+The gap between validation-fold metrics (e.g., RF val_F1 = 0.911 on WSB) and test-set metrics (test F1 = 0.145) further confirms that the temporal holdout is working as intended — it reveals performance degradation that within-training validation alone would miss.
 
-#### 5.1.4 Objective 4: Build a Reproducible Pipeline
+**Verdict: Met.** No future information leaked into training at any pipeline stage, and test-set results demonstrate genuine predictive power on unseen future data.
 
-**Goal:** Create a fully reproducible system where any result can be recreated from configuration and fixed seeds.
+#### 5.1.4 Additional Achievement: Reproducible Pipeline
 
-**Outcome:** The experiment log records 30+ runs with full configuration JSONs, Git SHAs, and output file paths. Seed stability testing (seeds 42, 123, 456, 789, 2024) on r/pennystocks produced best-model AUC values ranging from 0.734 to 0.753 (range: 0.019), confirming that results are stable across random initialisations. Every output artefact carries a timestamp prefix linking it to the corresponding experiment log entry. The pipeline ran identically across multiple sessions spanning July 12–19, 2026.
+This was not listed as a formal objective in Section 1.1 but represents a significant design achievement that underpins the validity of all reported results.
 
-**Verdict: Met.** Full provenance chain from raw data to reported metrics is maintained and verified.
+**Outcome:** The pipeline guarantees exact reproducibility when given the same input CSV, configuration JSON, and random seed. This was verified by comparing outputs from runs at different dates with identical configurations — runs A1 (seed=42) on July 13 and July 19 produced the same best-model AUC of 0.753 (experiment log entries `2026-07-13_06-14` and `2026-07-19_13-14`). Additionally, seed robustness testing (seeds 42, 123, 456, 789, 2024) on r/pennystocks produced best-model AUC values ranging from 0.734 to 0.753 (range: 0.019), confirming that results are robust to random initialisation — the specific seed choice does not materially affect conclusions. The experiment log records 30+ runs with full configuration JSONs, Git SHAs, and timestamped output paths, maintaining a complete provenance chain from raw data to reported metrics.
+
+**Assessment:** Full reproducibility and robustness demonstrated.
 
 ### 5.2 Results
 
