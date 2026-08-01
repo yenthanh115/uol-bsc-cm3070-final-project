@@ -980,163 +980,124 @@ The experiment log captures 30+ runs with full configuration JSONs, Git commit S
 
 ### 5.2 Results
 
-This section presents the raw experimental outcomes before interpretive analysis in Section 5.3. All metrics are computed on the held-out test partition (final 20% chronologically), which was never seen during training, hyperparameter selection, or threshold tuning.
+What follows are the raw experimental outcomes — numbers first, interpretation in Section 5.3. All metrics come from the held-out test partition (final 20% chronologically), which was never seen during training or threshold selection.
 
-#### 5.2.1 Model Performance on r/wallstreetbets (Primary Dataset)
+#### 5.2.1 Model Performance
 
-*Table 11: Test-set performance on r/wallstreetbets (68,923 records, 668 surges, 3.75% surge rate at τ=1.5). Metrics at default threshold (0.5). 95% bootstrap CIs from 1,000 resamples.*
+*Table 11: Test-set performance at default threshold (0.5). 95% bootstrap CIs from 1,000 resamples.*
 
-| Model | AUC-ROC [95% CI] | Precision | Recall | F1 | Tier |
-|-------|-------------------|-----------|--------|-----|------|
-| Logistic Regression | 0.707 [0.684–0.729] | 0.013 | 0.801 | 0.026 | Target |
-| Random Forest | 0.880 [0.869–0.890] | 0.095 | 0.311 | 0.145 | Stretch |
-| **XGBoost** | **0.892 [0.881–0.902]** | 0.043 | 0.819 | 0.081 | **Stretch** |
+| Dataset | Model | AUC-ROC [95% CI] | Precision | Recall | F1 | Tier |
+|---------|-------|-------------------|-----------|--------|-----|------|
+| WSB (68,923 records, 668 surges, 0.97% rate) | LR | 0.707 [0.684–0.729] | 0.013 | 0.801 | 0.026 | Target |
+| | RF | 0.880 [0.869–0.890] | 0.095 | 0.311 | 0.145 | Stretch |
+| | XGB | 0.892 [0.881–0.902] | 0.043 | 0.819 | 0.081 | Stretch |
+| Pennystocks (3,278 records, 31 surges, 0.95% rate) | LR | 0.680 [0.588–0.778] | 0.013 | 0.645 | 0.025 | Minimum |
+| | RF | 0.753 [0.673–0.824] | 0.068 | 0.194 | 0.101 | Target |
+| | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target |
 
-At the default 0.5 threshold, precision is uniformly poor because the models' probability outputs are miscalibrated for the ~4% base rate. Threshold tuning substantially improves the precision–recall balance:
+The AUC numbers tell one story; the precision and recall columns tell another. With sub-1% surge rates in both test sets, the default 0.5 probability threshold produces near-zero precision across the board. The models rank surges correctly (that is what AUC measures) but their raw probability outputs sit far below 0.5 because the learned prior is overwhelmingly "not a surge." XGBoost on pennystocks takes this to the extreme: it predicts zero surges at the default threshold despite ranking them correctly enough to achieve AUC 0.734.
 
-*Table 12: Metrics at validation-tuned thresholds (r/wallstreetbets).*
+Threshold tuning brings the precision–recall trade-off to a more practical operating point:
 
-| Model | Tuned Threshold | Precision | Recall | F1 | F1 Δ vs Default |
-|-------|-----------------|-----------|--------|-----|-----------------|
-| Logistic Regression | 0.81 | 0.058 | 0.280 | 0.097 | +0.071 |
-| Random Forest | 0.88 | 0.180 | 0.051 | 0.079 | −0.066 |
-| **XGBoost** | **0.85** | **0.217** | **0.235** | **0.226** | **+0.145** |
+*Table 12: Metrics at validation-tuned thresholds.*
 
-XGBoost benefits most from threshold tuning (+0.145 F1), reaching a practical operating point of 21.7% precision at 23.5% recall — meaning roughly one in five flagged records is a genuine surge, and nearly a quarter of all surges are caught. Random Forest's tuned threshold actually worsens F1 because it pushes too far toward precision at the cost of recall.
+| Dataset | Model | Tuned Threshold | Precision | Recall | F1 | F1 Δ |
+|---------|-------|-----------------|-----------|--------|-----|------|
+| WSB | LR | 0.81 | 0.058 | 0.280 | 0.097 | +0.071 |
+| | RF | 0.88 | 0.180 | 0.051 | 0.079 | −0.066 |
+| | XGB | 0.85 | 0.217 | 0.235 | 0.226 | +0.145 |
+| Pennystocks | LR | 0.67 | 0.085 | 0.194 | 0.118 | +0.093 |
+| | RF | 0.79 | 0.200 | 0.097 | 0.130 | +0.030 |
+| | XGB | 0.16 | 0.114 | 0.129 | 0.121 | +0.121 |
 
-#### 5.2.2 Model Performance on r/pennystocks (Sparse Dataset)
+After tuning, XGBoost on WSB reaches F1 = 0.226 — roughly one in five flags is a real surge, and about a quarter of surges get caught. XGBoost on pennystocks needs a threshold of 0.16 to start predicting any surges at all. Random Forest on WSB is the one case where tuning hurts: the selected threshold overcorrects toward precision and catches too few actual surges.
 
-*Table 13: Test-set performance on r/pennystocks (3,278 records, 31 surges, 0.95% surge rate at τ=1.5). Metrics at default threshold (0.5). 95% bootstrap CIs from 1,000 resamples.*
+To give a concrete sense of the error budget, here are the confusion matrices for the best model on each dataset at its tuned threshold:
 
-| Model | AUC-ROC [95% CI] | Precision | Recall | F1 | Tier |
-|-------|-------------------|-----------|--------|-----|------|
-| Logistic Regression | 0.680 [0.588–0.778] | 0.013 | 0.645 | 0.025 | Minimum |
-| **Random Forest** | **0.753 [0.673–0.824]** | 0.068 | 0.194 | 0.101 | **Target** |
-| XGBoost | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target |
+*Table 13: Confusion matrix for the best model at tuned threshold.*
 
-The wide confidence intervals (±0.08–0.09) reflect the small test set (only 31 positive cases). XGBoost predicts zero surges at the default threshold — the same calibration failure seen on WSB but more severe due to the 105:1 imbalance ratio. Threshold tuning partially recovers this:
+| Dataset | Model | Threshold | TP | FP | FN | TN |
+|---------|-------|-----------|-----|------|------|-------|
+| WSB | XGBoost | 0.85 | 157 | 565 | 511 | 67,690 |
+| Pennystocks | Random Forest | 0.79 | 3 | 12 | 28 | 3,235 |
 
-*Table 14: Metrics at validation-tuned thresholds (r/pennystocks).*
+On WSB, XGBoost correctly identifies 157 of 668 surges while generating 565 false alarms out of 68,255 non-surge records — a false positive rate under 1%, despite the low precision. On pennystocks, the numbers are too small for confident conclusions (3 true positives out of 31 actual surges).
 
-| Model | Tuned Threshold | Precision | Recall | F1 | F1 Δ vs Default |
-|-------|-----------------|-----------|--------|-----|-----------------|
-| Logistic Regression | 0.67 | 0.085 | 0.194 | 0.118 | +0.093 |
-| Random Forest | 0.79 | 0.200 | 0.097 | 0.130 | +0.030 |
-| XGBoost | 0.16 | 0.114 | 0.129 | 0.121 | +0.121 |
+#### 5.2.2 Statistical Validation
 
-XGBoost's optimal threshold (0.16) is far below the default, revealing that the model does discriminate surges — it simply assigns them probabilities in the 0.10–0.25 range rather than above 0.50.
+*Table 14: McNemar's pairwise significance tests (default 0.5 threshold, Bonferroni-adjusted α = 0.017).*
 
-#### 5.2.3 Statistical Comparison (McNemar's Test)
+| Dataset | Model Pair | χ² | p-value | Significant? |
+|---------|------------|-----|---------|--------------|
+| WSB | LR vs RF | 36,664 | < 0.001 | Yes |
+| WSB | LR vs XGB | 24,246 | < 0.001 | Yes |
+| WSB | RF vs XGB | 9,208 | < 0.001 | Yes |
+| Pennystocks | LR vs RF | 1,406 | < 0.001 | Yes |
+| Pennystocks | LR vs XGB | 1,486 | < 0.001 | Yes |
+| Pennystocks | RF vs XGB | 66 | < 0.001 | Yes |
 
-All pairwise model differences are statistically significant on both datasets after Bonferroni correction:
+Every pairwise comparison is significant. A note on interpreting the magnitudes: the WSB χ² values are enormous (tens of thousands) partly because the sample size is large — 68,923 paired predictions generate many opportunities for disagreement. The models also disagree in a structurally consistent way: at the default threshold, LR and XGBoost flag thousands of records (high recall, low precision) while Random Forest flags very few (low recall, higher precision). These opposing strategies produce large discordant cell counts and correspondingly large test statistics.
 
-*Table 15: McNemar's pairwise significance tests (predictions at default 0.5 threshold, Bonferroni-adjusted α = 0.017).*
+*Table 15: Multi-feature models vs. baselines (AUC-ROC).*
 
-| Dataset | Model Pair | χ² Statistic | p-value | Significant? |
-|---------|------------|-------------|---------|--------------|
-| WSB | LR vs RF | 36,664.0 | < 0.001 | Yes |
-| WSB | LR vs XGB | 24,246.4 | < 0.001 | Yes |
-| WSB | RF vs XGB | 9,207.9 | < 0.001 | Yes |
-| Pennystocks | LR vs RF | 1,406.3 | < 0.001 | Yes |
-| Pennystocks | LR vs XGB | 1,486.0 | < 0.001 | Yes |
-| Pennystocks | RF vs XGB | 65.6 | < 0.001 | Yes |
+| Dataset | Random Baseline | Best Single Feature | Best Model | Δ over Single Feature |
+|---------|-----------------|---------------------|------------|----------------------|
+| WSB | 0.500 | 0.805 (word_count) | 0.892 (XGB) | +0.087 |
+| Pennystocks | 0.500 | 0.591 (hour_of_day) | 0.753 (RF) | +0.162 |
 
-The large test statistics reflect the high discordant cell counts that arise from fundamental strategy differences between models (LR predicts many surges with low confidence; RF predicts few surges with high confidence; XGBoost sits between these extremes). All differences are genuine rather than sampling artefacts.
+The surprise here is how well `word_count` performs alone on WSB (AUC 0.805). This is analysed in Section 5.3. On pennystocks, no individual feature gets above 0.591, so the multi-feature combination clearly earns its complexity.
 
-#### 5.2.4 Baseline Comparisons
+#### 5.2.3 Cross-Dataset Transfer
 
-*Table 16: Multi-feature models vs. baselines.*
+*Table 16: Cross-dataset transfer AUC-ROC (no retraining).*
 
-| Dataset | Baseline | AUC | Best Model AUC | Improvement |
-|---------|----------|-----|----------------|-------------|
-| WSB | Random (chance) | 0.500 | 0.892 (XGB) | +0.392 |
-| WSB | Best single feature (word_count) | 0.805 | 0.892 (XGB) | +0.087 |
-| Pennystocks | Random (chance) | 0.500 | 0.753 (RF) | +0.253 |
-| Pennystocks | Best single feature (hour_of_day) | 0.591 | 0.753 (RF) | +0.162 |
+| Direction | LR | RF | XGBoost |
+|-----------|------|------|---------|
+| WSB-trained → Pennystocks test | 0.652 | 0.676 | 0.684 |
+| Pennystocks-trained → WSB test | 0.753 | 0.842 | 0.871 |
 
-On WSB, `word_count` alone achieves AUC 0.805 — a surprisingly strong single predictor. This means the multi-feature combination adds a meaningful but modest +0.087 for XGBoost. On pennystocks, no single feature exceeds 0.591, making the multi-feature integration essential (the best model adds +0.162 over the best single feature).
+The asymmetry is striking. A model trained on the small pennystocks dataset transfers to WSB at AUC 0.871 — just 2.1 points below natively-trained performance. Going the other direction, WSB models manage only 0.684 on pennystocks, clearing the minimum tier but falling short of target. Section 5.3 discusses why this asymmetry occurs.
 
-*Table 17: Single-feature AUC values (both datasets, Logistic Regression with class_weight='balanced').*
+#### 5.2.4 Feature Importance
 
-| Feature | WSB AUC | Pennystocks AUC |
-|---------|---------|-----------------|
-| word_count | **0.805** | 0.573 |
-| word_count_x_hour | 0.752 | 0.480 |
-| num_tickers_mentioned | 0.731 | 0.521 |
-| ticker_post_rate_24h | 0.683 | 0.465 |
-| time_since_previous | 0.650 | 0.549 |
-| ticker_post_acceleration | 0.603 | 0.503 |
-| title_length | 0.600 | 0.545 |
-| sentiment_score | 0.587 | 0.559 |
-| day_of_week | 0.492 | 0.558 |
-| hour_of_day | 0.476 | **0.591** |
-| accel_x_time_since_prev | 0.454 | 0.480 |
+*Table 17: Top-5 permutation importances (10 repeats, scoring=roc_auc) for tree-based models.*
 
-The feature rankings differ substantially between datasets. On WSB, content-volume features dominate (word_count, word_count_x_hour); on pennystocks, temporal features (hour_of_day) and sentiment carry more weight. This divergence explains why no single feature universally dominates — the signal structure varies by community.
+| Rank | WSB — Random Forest | WSB — XGBoost | Pennystocks — RF | Pennystocks — XGB |
+|------|--------------------:|-------------:|----------------:|------------------:|
+| 1 | sentiment (+0.146) | sentiment (+0.203) | sentiment (+0.112) | sentiment (+0.166) |
+| 2 | post_rate_24h (+0.045) | post_rate_24h (+0.067) | time_since_prev (+0.076) | time_since_prev (+0.054) |
+| 3 | word_count (+0.010) | word_count (+0.027) | word_count (+0.031) | post_rate_24h (+0.017) |
+| 4 | time_since_prev (+0.005) | time_since_prev (+0.003) | title_length (+0.015) | word_count (+0.009) |
+| 5 | accel_x_time (+0.005) | day_of_week (+0.002) | num_tickers (+0.014) | num_tickers (+0.005) |
 
-#### 5.2.5 Cross-Dataset Transfer
+The pattern is consistent: `sentiment_score` is the single most important feature for both tree-based models on both datasets, contributing between +0.112 and +0.203 when permuted. The activity features (`time_since_previous`, `ticker_post_rate_24h`) fill out the top three. Everything else contributes small or negligible amounts — particularly `ticker_post_acceleration` and the interaction terms, which never exceed +0.005.
 
-*Table 18: Cross-dataset transfer AUC-ROC (models applied to the other community's test set without retraining).*
+#### 5.2.5 Sentiment Contribution (Phase 1 vs Phase 2)
 
-| Direction | LR | RF | XGBoost | Best |
-|-----------|-----|-----|---------|------|
-| WSB-trained → Pennystocks test | 0.652 | 0.676 | **0.684** | 0.684 |
-| Pennystocks-trained → WSB test | 0.753 | 0.842 | **0.871** | 0.871 |
+The cleanest test of whether sentiment helps is to hold the model constant and compare performance under volume-only labels (Phase 1, w₂=0) vs composite labels (Phase 2, w₁=w₂=0.5):
 
-Transfer from the smaller to the larger dataset (pennystocks → WSB) performs surprisingly well: XGBoost achieves 0.871, only marginally below the 0.892 obtained by training directly on WSB. Transfer in the reverse direction (WSB → pennystocks) produces 0.684, above the minimum tier (0.60) but below target (0.70). This asymmetry suggests that the high-density community's surge dynamics are a subset of the patterns the sparse community produces — a model that learns to cope with data scarcity generalises upward more readily than one trained in abundance generalises downward.
-
-#### 5.2.6 Feature Importance
-
-Permutation importance (10 repeats, scoring=roc_auc) on the test set reveals which features the models actually rely on:
-
-*Table 19: Top-5 permutation importances by model (r/wallstreetbets).*
-
-| Rank | Logistic Regression | Random Forest | XGBoost |
-|------|--------------------:|-------------:|--------:|
-| 1 | word_count (+0.082) | sentiment_score (+0.146) | sentiment_score (+0.203) |
-| 2 | num_tickers (+0.042) | ticker_post_rate_24h (+0.045) | ticker_post_rate_24h (+0.067) |
-| 3 | sentiment_score (+0.035) | word_count (+0.010) | word_count (+0.027) |
-| 4 | title_length (+0.008) | time_since_previous (+0.005) | time_since_previous (+0.003) |
-| 5 | ticker_post_rate_24h (+0.007) | accel_x_time_since_prev (+0.005) | day_of_week (+0.002) |
-
-*Table 20: Top-5 permutation importances by model (r/pennystocks).*
-
-| Rank | Logistic Regression | Random Forest | XGBoost |
-|------|--------------------:|-------------:|--------:|
-| 1 | time_since_previous (+0.128) | sentiment_score (+0.112) | sentiment_score (+0.166) |
-| 2 | sentiment_score (+0.068) | time_since_previous (+0.076) | time_since_previous (+0.054) |
-| 3 | ticker_post_rate_24h (+0.038) | word_count (+0.031) | ticker_post_rate_24h (+0.017) |
-| 4 | day_of_week (+0.006) | title_length (+0.015) | word_count (+0.009) |
-| 5 | title_length (+0.007) | num_tickers (+0.014) | num_tickers (+0.005) |
-
-`sentiment_score` is the dominant predictor for both tree-based models on both datasets, contributing +0.146 to +0.203 in permutation importance. `time_since_previous` and `ticker_post_rate_24h` consistently rank in the top three — the activity features that capture whether discussion is accelerating. `ticker_post_acceleration` and the interaction terms contribute near-zero importance across all models, suggesting they add minimal signal beyond what their component features already provide.
-
-#### 5.2.7 Phase 1 vs Phase 2: Sentiment Contribution
-
-The two-phase experiment directly tests whether sentiment improves prediction:
-
-*Table 21: Phase 1 (volume-only, w₂=0) vs Phase 2 (composite, w₁=w₂=0.5) — best model AUC-ROC.*
+*Table 18: Volume-only (w₂=0) vs composite (w₁=w₂=0.5) — XGBoost AUC-ROC.*
 
 | Dataset | Phase 1 (volume only) | Phase 2 (composite) | Δ AUC |
-|---------|----------------------|--------------------:|------:|
-| r/wallstreetbets | 0.710 (XGB) | 0.892 (XGB) | **+0.182** |
-| r/pennystocks | 0.711 (LR) | 0.753 (RF) | **+0.042** |
+|---------|-----------------------|--------------------:|------:|
+| WSB | 0.710 | 0.892 | +0.182 |
+| Pennystocks | 0.685 | 0.734 | +0.049 |
 
-Incorporating sentiment into the surge definition produces a dramatic improvement on WSB (+18.2 percentage points) and a meaningful improvement on pennystocks (+4.2 points). This confirms that the composite design is not mere complexity — sentiment change genuinely captures a dimension of surge behaviour that volume growth alone misses.
+Adding sentiment to the surge definition improves XGBoost by +18.2 points on WSB and +4.9 on pennystocks. A caveat: changing the weight also changes the surge rate (volume-only produces 0.53% surges on WSB vs 1.44% for the composite), so the two configurations define different prediction tasks. The improvement reflects both richer signal and a slightly more predictable target.
 
-A broader weight sensitivity sweep on WSB (τ=1.5) further characterises this relationship:
+A broader weight sweep on WSB reinforces this finding:
 
-*Table 22: Weight sensitivity — best model AUC-ROC on r/wallstreetbets by sentiment weight (w₂).*
+*Table 19: Weight sensitivity — XGBoost AUC-ROC on r/wallstreetbets (τ=1.5).*
 
-| w₂ (sentiment weight) | w₁ (volume weight) | Best Model | AUC-ROC | Tier |
-|-----------------------|-------------------:|-----------|---------|------|
-| 0.00 | 1.00 | XGBoost | 0.710 | Target |
-| 0.25 | 0.75 | XGBoost | 0.708 | Target |
-| 0.50 | 0.50 | XGBoost | 0.892 | Stretch |
-| 0.75 | 0.25 | XGBoost | 0.861 | Stretch |
-| 1.00 | 0.00 | XGBoost | 0.872 | Stretch |
+| w₂ | w₁ | AUC-ROC | Surge Rate | Tier |
+|----|-----|---------|------------|------|
+| 0.00 | 1.00 | 0.710 | 0.53% | Target |
+| 0.25 | 0.75 | 0.708 | 1.01% | Target |
+| 0.50 | 0.50 | 0.892 | 1.44% | Stretch |
+| 0.75 | 0.25 | 0.861 | 4.30% | Stretch |
+| 1.00 | 0.00 | 0.872 | 9.62% | Stretch |
 
-Performance improves sharply between w₂=0.25 and w₂=0.50, then remains in the stretch tier across all higher sentiment weights. The volume-only configurations (w₂ ≤ 0.25) are constrained to the target tier. This suggests a minimum threshold of sentiment contribution is necessary to define surges meaningfully, after which additional sentiment weight produces diminishing returns. The equal weighting (w₁=w₂=0.50) happens to produce the best single result, though the difference between 0.50 and higher weights is small.
+There is a sharp discontinuity between w₂=0.25 and w₂=0.50 (+0.184 AUC). Part of this jump comes from the surge rate increasing (higher rates make easier targets), but the magnitude is disproportionate to a 0.43 percentage-point rate change — suggesting the sentiment component adds genuine predictive structure. All configurations with w₂ ≥ 0.50 reach the stretch tier; volume-dominant configurations stay at target.
 
 ### 5.3 Critical Analysis
 
