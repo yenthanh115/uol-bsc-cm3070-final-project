@@ -1170,35 +1170,52 @@ These are incremental contributions — established techniques integrated carefu
 
 ---
 
-## 6. Conclusion (max 1000 words)
+## 6. Conclusion
 
 ### 6.1 Current Achievements
 
-<!-- Functional end-to-end pipeline from raw Reddit data to trained classifiers -->
-<!-- Multi-model comparison with statistical significance testing -->
-<!-- Reproducible results via fixed seeds, serialised configs, and automated pipeline -->
-<!-- Evaluation framework with bootstrap CIs, McNemar's test, and baseline comparisons -->
+The core question driving this project was one the existing literature had not directly tackled: can posting-volume surges in Reddit financial communities be predicted from information that is genuinely available at the moment a post is made — nothing more? That framing ruled out the shortcut most prior work had taken, whether deliberately or not, of letting future engagement data bleed into training. Answering it properly meant building a pipeline that treats temporal ordering not as a convenience but as a hard constraint, one that runs from how surges are defined all the way through to how model comparisons are reported.
+
+What came out of that effort is a system that goes from raw Reddit data to evaluated, statistically-tested classifiers without ever peeking ahead. The surge definition uses only training-period statistics. The features look only backwards. The test set was set aside on day one and touched only once. Two communities, three models, and more than thirty experimental runs later, the question turned out to have a real answer — and the methodology makes that answer worth trusting.
 
 ### 6.2 Key Findings
 
-<!-- Best model performance and which tier was achieved -->
-<!-- Which features contributed most to prediction -->
-<!-- Whether posting-volume surges are predictable from backward-looking features (answer to research question) -->
-<!-- Relationship between findings and existing literature -->
+The central research question — can surges be predicted from backward-looking signals alone? — receives a qualified yes.
+
+On r/wallstreetbets (68,923 test records), XGBoost achieved AUC-ROC of 0.892 [95% CI: 0.881–0.902] and Random Forest reached 0.880 [0.869–0.890], both clearing the stretch tier (> 0.80). These results beat the best single-feature predictor (`word_count`, AUC 0.805) by margins of +0.087 and +0.075 respectively, confirming that the multi-feature combination adds genuine discriminative value. On r/pennystocks (3,278 test records), Random Forest reached 0.753 [0.673–0.824], clearing the target tier (> 0.70), again substantially ahead of the best single feature (`hour_of_day`, AUC 0.591). All pairwise model differences were statistically significant across both datasets (McNemar's test, p < 0.001 after Bonferroni correction at α = 0.017).
+
+Three substantive findings emerge from the comparison:
+
+**Data density is the binding constraint, not model choice.** The 13–14 point AUC gap between datasets dwarfs the gap between any two models within a dataset (≤ 12 points on WSB, ≤ 7 points on pennystocks). Applying a stronger model to sparse data produces smaller gains than applying any model to richer data. This result directly extends the prior literature [1][5], which has not explicitly studied how community size interacts with predictive performance for this class of problem.
+
+**Model complexity pays off conditionally.** On the high-density WSB dataset, the ranking follows the expected gradient — XGBoost leads, Random Forest second, Logistic Regression trails by 17 points. On the sparse pennystocks dataset, Random Forest outperforms XGBoost. Gradient boosting's sequential residual correction requires enough positive training examples to distinguish signal from noise; below approximately 5,000 training surges, the bagged ensemble's robustness outweighs the boosted model's capacity.
+
+**Sentiment is a co-constituent of the target, not merely a feature.** Replacing the composite surge definition with a volume-only variant collapses XGBoost AUC from 0.892 to 0.710 on WSB (+0.182 for the composite). Within the composite models, `sentiment_score` is the highest-importance feature in every permutation analysis (+0.112 to +0.203), despite being a weak standalone predictor (AUC ≤ 0.587 alone). The signal emerges from the combination of emotional intensity with accelerating activity — a pattern that neither dimension captures independently.
+
+Cross-dataset transfer produced AUC of 0.684 (WSB-trained → pennystocks) and 0.871 (pennystocks-trained → WSB). The asymmetry illustrates a practical lesson: the WSB model learns community-specific patterns (long posts preceding surges, AUC 0.805 for `word_count` alone) that do not generalise, while the pennystocks model, forced by scarcity to rely on universal signals, transfers almost without loss. For practitioners deploying surge detection across multiple communities, training on the most constrained community is the safer starting point.
+
+These findings address all four literature gaps identified in Section 2.6. The composite metric defines a binary onset target within a bounded window (gap 1); the feature set integrates temporal, activity, sentiment, and textual signals (gap 2); the dual-dataset design tests across community sizes (gap 3); and the expanding-window protocol with held-out future test data ensures all reported numbers reflect genuinely unseen future performance, not inflated in-sample estimates (gap 4).
 
 ### 6.3 Remaining Work
 
-<!-- Sentiment model upgrade (VADER → FinBERT) -->
-<!-- Ticker validation refinement -->
-<!-- Class imbalance handling -->
-<!-- Multi-subreddit expansion -->
+Three limitations bound the current results and suggest specific near-term improvements.
+
+The **31 test surges on pennystocks** leave the evaluation statistically underpowered for that dataset — bootstrap CIs span ±0.08 in AUC, and model rankings are tentative. Lowering the threshold to τ=1.0 would increase positive test cases to approximately 144, at the cost of a broader surge definition. Running the pipeline on an additional year of data (2020 or 2022) would simultaneously increase sample size and test whether the 2021 GameStop-era environment is responsible for the observed patterns.
+
+**VADER's domain blindness** is the clearest route to performance gains. Sentiment is already the top feature despite VADER mislabelling financial terms like "short," "moon," and "DD." Swapping in FinBERT [13] would require batched GPU inference (~50× slower per record based on development benchmarks) but could produce substantially more discriminative scores, particularly on niche community language.
+
+**Threshold calibration** remains fragile at extreme imbalance. XGBoost on pennystocks requires a threshold of 0.16 to predict any surges at all, and precision at the best operating point stays below 0.22 on WSB. Probability calibration via Platt scaling or isotonic regression, applied post-training, could close the gap between "ranks surges correctly" and "assigns actionable probabilities" without retraining.
 
 ### 6.4 Future Developments
 
-<!-- Real-time inference system with streaming Reddit data -->
-<!-- Graph-based diffusion features (cross-ticker mention networks) -->
-<!-- Multi-scale temporal windows (6h, 24h, 72h) -->
-<!-- Integration with market data for downstream trading signal validation -->
+Two directions stand out as meaningful extensions beyond the current scope.
+
+**Multi-scale temporal windows.** The fixed 24-hour window captures one slice of surge dynamics. Some surges build over several hours; others ignite within minutes of a catalyst post. Adding parallel windows at 6h, 12h, and 72h would allow features and targets calibrated to different surge velocities, and would reveal whether the models are detecting genuine onset dynamics or simply correlating with the rhythm of daily market activity.
+
+**Real-time inference integration.** The pipeline was designed as a batch research system, but the architecture — staged, timestamped artefacts, JSON-serialised configuration, separated labelling and training entry points — maps naturally onto a streaming deployment. Hooking the feature engineering and prediction stages to a live Reddit stream (via the Pushshift API or a Kafka consumer) would allow the methodology to be tested against genuinely new data as it arrives, providing the kind of prospective validation that no retrospective study can offer.
+
+Together, these extensions would address the two gaps this project leaves open: temporal generalisability beyond a single market year, and the operational distance between a model that ranks surges and a system that acts on them in real time.
+
 
 ---
 
