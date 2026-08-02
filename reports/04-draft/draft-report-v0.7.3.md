@@ -1196,13 +1196,16 @@ These results fill in the gaps the literature review identified: a surge target 
 
 ### 6.3 Remaining Work
 
-Three limitations bound the current results and suggest specific near-term improvements.
+**The pennystocks evaluation rests on thin ground.** Thirty-one test surges is not a lot to draw conclusions from — the confidence intervals are wide enough that the model rankings for that dataset could easily shift with a different test period. The most straightforward fix within the existing data is to lower the surge threshold, which would bring more positive cases into the test set at the cost of a broader definition of what counts as a surge. The WSB results are not affected by this; with 2,582 test surges they stand on their own.
 
-The **31 test surges on pennystocks** leave the evaluation statistically underpowered for that dataset — bootstrap CIs span ±0.08 in AUC, and model rankings are tentative. Lowering the threshold to τ=1.0 would increase positive test cases to approximately 144, at the cost of a broader surge definition. Running the pipeline on an additional year of data (2020 or 2022) would simultaneously increase sample size and test whether the 2021 GameStop-era environment is responsible for the observed patterns.
+**It is still unclear whether 2021 is representative.** Every result in this project comes from a single calendar year that happened to include the GameStop episode — one of the most unusual periods of retail speculation in recent memory. Some of what the models learned may be general; some may be specific to that environment. Running the pipeline on data from 2020 or 2022 would be the clearest way to find out, and would matter more for the credibility of the conclusions than any model improvement.
 
-**VADER's domain blindness** is the clearest route to performance gains. Sentiment is already the top feature despite VADER mislabelling financial terms like "short," "moon," and "DD." Swapping in FinBERT [13] would require batched GPU inference (~50× slower per record based on development benchmarks) but could produce substantially more discriminative scores, particularly on niche community language.
+**VADER does not speak Reddit finance.** Sentiment turned out to be the most important feature everywhere, which makes its measurement tool the most consequential design choice in the pipeline. Yet VADER was built for general social media text and routinely misreads terms that carry precise meaning in financial communities — "short" is not negative sentiment, "moon" is not a geography reference, "DD" is not a child's television programme. FinBERT [13] would understand these, though applying it across 1.3 million records would require GPU infrastructure the current pipeline does not use.
 
-**Threshold calibration** remains fragile at extreme imbalance. XGBoost on pennystocks requires a threshold of 0.16 to predict any surges at all, and precision at the best operating point stays below 0.22 on WSB. Probability calibration via Platt scaling or isotonic regression, applied post-training, could close the gap between "ranks surges correctly" and "assigns actionable probabilities" without retraining.
+**The models rank surges well but flag them poorly.** At extreme class imbalance, the probability outputs drift so far toward zero that a threshold of 0.16 is needed to get XGBoost to predict anything on pennystocks, and even on WSB most flags turn out to be false alarms. This is not a sign the models are wrong about *which* records are more likely to surge — AUC holds up — but it does mean the raw outputs cannot be used as probabilities without adjustment. Post-training calibration via Platt scaling or isotonic regression is a low-effort fix that would make the scores more directly interpretable.
+
+The first two of these are questions about how far the conclusions of this project extend. The last two are practical gaps between what the system currently produces and what would be needed to actually use it.
+
 
 ### 6.4 Future Developments
 
