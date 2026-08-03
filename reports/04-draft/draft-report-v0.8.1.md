@@ -478,16 +478,17 @@ Precision, recall, and F1 are reported at both the default threshold (0.5) and t
 
 **Sensitivity analysis.** Two sweeps characterise robustness: threshold sensitivity (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) tests whether results degrade gracefully with different surge definitions; weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) tests whether sentiment improves prediction over volume-only labels.
 
+---
+
 ## 4. Implementation
 
 ### 4.1 Code Organisation
 
-The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) that depends on pandas, scikit-learn, XGBoost, vaderSentiment, and NumPy (version bounds specified in `pyproject.toml`). All source code sits under `src/`, split into a core library package and a handful of CLI scripts that drive it:
+The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) depending on pandas, scikit-learn, XGBoost, vaderSentiment, and NumPy. All source code sits under `src/`, split into a core library and CLI scripts:
 
 ```
 src/
 ├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
-│   ├── __init__.py              # Public API exports (PipelineConfig, NormalisationParams, etc.)
 │   ├── config.py                # PipelineConfig dataclass + JSON serialisation
 │   ├── loader.py                # CSV ingestion, ticker extraction, record explosion
 │   ├── windowing.py             # Per-ticker forward/backward 24h counts (searchsorted)
@@ -496,85 +497,40 @@ src/
 │   ├── normalisation.py         # Z-score parameter persistence (train-only stats)
 │   ├── features.py              # 11 backward-only ML features
 │   ├── training.py              # Multi-model training with expanding-window CV
-│   ├── training_models.py       # Data classes (TrainedModel, CVResult, etc.)
 │   ├── evaluation.py            # Metrics, bootstrap CI, McNemar's, tier validation
-│   ├── evaluation_models.py     # Evaluation result data classes
 │   ├── evaluation_figures.py    # Confusion matrices, ROC curves, importance plots
 │   ├── experiment_log.py        # Append-only JSONL experiment tracker
-│   ├── timestamps.py            # Timestamp conversion utilities
-│   ├── cli_logging.py           # Tee-style console + file logging
 │   └── pipeline.py              # Orchestrator: chains stages, manages outputs
-├── eda/
-│   └── eda_pipeline.py          # Exploratory data analysis with figure generation
 ├── tests/                       # 10 test modules (pytest)
-│   ├── test_loader.py
-│   ├── test_windowing.py
-│   ├── test_sentiment.py
-│   ├── test_labelling.py
-│   ├── test_features.py
-│   ├── test_training.py
-│   ├── test_evaluation_significance.py
-│   ├── test_evaluation_figures.py
-│   ├── test_config.py
-│   └── test_pipeline_integration.py
-├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4 + threshold sweep)
+├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
-├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
-├── generate_figures.py          # CLI: standalone figure generation from saved artefacts
-└── generate_prediction_examples.py  # CLI: sample predictions for report examples
+└── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ```
 
-Installing the package in editable mode (`pip install -e .`) registers five console commands, so any experiment can be kicked off from the terminal without navigating into the source tree:
+Each pipeline stage maps to one or two library modules. This means that changes to one stage (for example, swapping the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
 *Table 8: CLI entry points.*
 
-| Command | Script | Purpose |
-|---------|--------|---------|
-| `surge-label` | `run_labeling:main` | Run the labelling pipeline (load → window → sentiment → label → threshold sweep) |
-| `surge-train` | `run_training:main` | Train all three models and produce the full evaluation report |
-| `surge-cross-val` | `run_cross_validation:main` | Test whether a model trained on one subreddit transfers to the other |
-| `surge-figures` | `generate_figures:main` | Regenerate publication figures from saved evaluation artefacts |
-| `surge-examples` | `generate_prediction_examples:main` | Produce worked prediction examples for manual inspection |
+| Command | Purpose |
+|---------|---------|
+| `surge-label` | Run the labelling pipeline (load → window → sentiment → label → threshold sweep) |
+| `surge-train` | Train all three models and produce the full evaluation report |
+| `surge-cross-val` | Test whether a model trained on one subreddit transfers to the other |
+| `surge-figures` | Regenerate publication figures from saved evaluation artefacts |
 
-**How the modules map to the pipeline stages.** Each stage described in Section 3.1 corresponds to one or two library modules. The mapping is deliberate: isolating each stage in its own module means a change to, say, the sentiment backend does not touch the windowing logic, and any stage can be unit-tested in isolation.
-
-| Pipeline Stage | Module(s) | Key Function |
-|----------------|-----------|--------------|
-| 1. Data Loading & Preprocessing | `loader.py` | `load_data()`, `extract_tickers()` |
-| 2. Temporal Windowing | `windowing.py` | `compute_windowed_counts()` |
-| 3. Sentiment Computation | `sentiment.py` | `compute_sentiment()` |
-| 4. Target Labelling | `labelling.py`, `normalisation.py` | `apply_labelling()`, `sweep_thresholds()` |
-| 5. Feature Engineering | `features.py` | `compute_features()`, `get_feature_matrix()` |
-| 6. Training & Evaluation | `training.py`, `evaluation.py` | `train_models()`, `evaluate_model()` |
-
-The `pipeline.py` orchestrator wires stages 1–4 together, seeds the random number generators, logs how many records survive each stage, and finishes with a threshold sweep for sensitivity analysis. Stages 5–6 live in a separate script (`run_training.py`) that picks up the labelled CSV produced by stage 4. Splitting the work this way has a practical benefit: relabelling the data with a different threshold or sentiment weight does not force a full retraining run, and retraining with new hyperparameters does not require re-scoring sentiment across 1.3 million records.
-
-**Configuration and reproducibility.** Section 3.8 describes the reproducibility infrastructure in detail. The implementation consequence is straightforward: a single `PipelineConfig` dataclass holds every tuneable parameter, and a fixed seed (default 42) is applied to Python's `random` and NumPy at pipeline start. Scikit-learn estimators receive the same seed via their `random_state` constructor argument. Every output file carries a timestamp prefix (`YYYY-MM-DD_HH-MM`) that ties it back to the matching experiment log entry, so any result can be traced to the exact configuration that produced it.
-
-**Testing.** Ten pytest modules cover every pipeline stage with unit and integration tests. They exercise edge cases (empty DataFrames, tickers with a single post, missing selftext), verify numerical correctness (windowing counts checked against brute-force reference implementations), and confirm end-to-end behaviour on synthetic data. The full suite runs without the large production datasets.
+A single `PipelineConfig` dataclass holds every tuneable parameter, and a fixed seed (default 42) is applied to Python's `random`, NumPy, and all scikit-learn estimators.
 
 ### 4.2 Data Loading and Preprocessing
 
-The loader (`loader.py`) takes a raw Reddit CSV and turns it into the unit of analysis — one row per (record, ticker) pair, sorted by time — in four steps.
+The loader (`loader.py`) transforms a raw Reddit CSV into the unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps.
 
-**Loading.** The pipeline reads the CSV with pandas and records a SHA-256 file hash for provenance tracking (Section 3.8). During development or CI runs where the real dataset is absent, a synthetic data generator stands in so downstream stages can still be exercised.
+**Text cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) are replaced with empty strings, and null fields are filled likewise. Each row in the archival dataset corresponds to a unique Reddit submission ID, so no deduplication is needed.
 
-**Text cleaning.** Reddit posts often contain `[deleted]` or `[removed]` placeholders left behind by moderation or user deletion. These get replaced with empty strings so they don't pollute downstream text processing. Null `title` and `selftext` fields are filled with empty strings the same way. No deduplication step is needed: each row in the archival dataset already corresponds to a unique Reddit submission ID, and the explosion step that follows only splits rows — it never creates new ones.
+**Ticker extraction.** Two regex patterns run in priority order: (1) dollar-sign tickers (`$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; and (2) standalone 2–5 character uppercase words, which cast a broader net. Both are filtered against a curated stopword set of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, and others). A stopword approach was chosen over a known-ticker list because penny stock tickers change frequently. The worst-case failure mode is a false-positive adding noise to one record, whereas a stale ticker list would silently drop posts about unknown stocks.
 
-**Ticker extraction.** Figuring out which stocks a post is actually discussing is harder than it looks. The extraction logic applies two regex patterns in priority order:
+**Timestamp normalisation and explosion.** Raw timestamps (Unix epoch or datetime strings) are normalised to `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. Multi-ticker posts (for example, "comparing $AMC vs $GME") are exploded into separate rows via `pandas.explode()`. Records yielding zero tickers are dropped.
 
-1. **Dollar-sign pattern** (`$AMC`, `$TSLA`) — highest confidence, since the dollar prefix is an explicit ticker marker in financial communities.
-2. **Uppercase word pattern** (standalone 2–5 character uppercase words) — a broader net that catches tickers mentioned without the dollar sign.
-
-Both patterns are filtered against a curated stopword set of 297 terms, split into eight named categories for easy auditing: common English words (149 terms), Reddit slang and trading verbs (55), finance abbreviations (32), datetime/timezone terms (26), geography (9), market venue names (8), technology buzzwords (7), and currencies (6). Defining the categories as separate Python sets and combining them via union makes it straightforward to add new entries as false positives are discovered.
-
-A heuristic stopword approach was chosen over a known-ticker validation list for two reasons. First, penny stock tickers change frequently as companies list and delist; a static ticker list from 2021 would miss new listings that appear within the dataset's time span. Second, the stopword approach fails gracefully: the worst case is a false-positive ticker adding noise to one record, whereas a missing-ticker list would silently drop posts about stocks it doesn't know about. The trade-offs of this design choice are revisited in Section 5.4.
-
-**Timestamp parsing and sorting.** The raw CSV stores timestamps either as Unix epoch seconds (`created_utc`) or as datetime strings (`created`). Both formats are normalised to timezone-aware `datetime64[ns, UTC]`, and the entire DataFrame is sorted chronologically. This ordering is a hard precondition for the binary-search windowing logic in the next stage and is preserved throughout all subsequent processing.
-
-**Record explosion.** A single post can mention several tickers at once (e.g., "comparing $AMC vs $GME"). These multi-ticker records are split into separate rows — one per ticker — via pandas' `explode()`. After explosion, each row represents one (record, ticker) pair, which is the grain at which features, labels, and predictions operate. Records that yield zero tickers after extraction are dropped entirely:
-
-*Table 9: Loader-stage attrition by dataset (ticker extraction only; further windowing-stage exclusions are reported in Table 4).*
+*Table 9: Loader-stage attrition.*
 
 | Step | r/pennystocks | r/wallstreetbets |
 |------|---------------|------------------|
@@ -582,147 +538,99 @@ A heuristic stopword approach was chosen over a known-ticker validation list for
 | Excluded (no tickers found) | 224,312 (73.7%) | 716,109 (55.3%) |
 | After explosion (record-ticker pairs) | 80,212 | 577,872 |
 
-The high no-ticker rate on r/pennystocks reflects how the community actually talks: many posts are general market commentary, memes, or questions that never name a specific stock. This is a genuine property of the subreddit, not a limitation of the extraction logic. The surviving 80,212 records pass to the windowing stage, where a further 69.0% are excluded for having too few posts in their forward window to determine whether a surge occurred (Table 4).
-
 ### 4.3 Feature Engineering
 
-Section 3.4 covers *what* the eleven features are and *why* each earned its place. This section is about the *how* — algorithmic choices, edge cases handled, and the one constraint that governs every line of code: nothing may peek into the future.
+Eleven features feed the classifiers. The governing constraint is that every feature must be computable from data *at or before* the current record's timestamp. Nothing may peek into the future.
 
-**Reused columns.** Two features come for free because earlier stages already did the work: `sentiment_score` is just the `sentiment_polarity` column renamed, and `ticker_post_rate_24h` is a direct copy of `backward_count` from windowing. Reusing these avoids recomputation, but the real benefit is avoiding the risk of a subtly different definition creeping in. Two more — `hour_of_day` and `day_of_week` — are trivial extractions from `created_utc` with no per-ticker logic involved.
+*Table 11: Feature summary.*
 
-**Time since previous post.** This measures how many hours have passed since the last post about the same ticker. The implementation groups records by ticker (they're already in chronological order from the loader) and takes the timestamp difference between consecutive entries in each group. The first post ever about a given ticker has no predecessor, so it gets a sentinel value of −1 rather than zero — the model needs to tell apart "nothing was said before" from "someone posted one second ago." Tree-based models handle this sentinel naturally (they just split on it); Logistic Regression's StandardScaler normalises it alongside the real values, which works because the −1 cluster sits well away from the positive-valued population.
+| Feature | Source | Description |
+|---------|--------|-------------|
+| `ticker_post_rate_24h` | Windowing | Same-ticker posts in preceding 24 h |
+| `time_since_previous_post` | Loader | Hours since last same-ticker post (−1 if first) |
+| `ticker_post_acceleration` | Computed | Ratio of recent-half to older-half 24 h activity |
+| `sentiment_score` | VADER | Compound polarity (−1 to +1) |
+| `word_count` | Text | Whitespace tokens in title + body |
+| `title_length` | Text | Whitespace tokens in title only |
+| `num_tickers_mentioned` | Loader | Distinct tickers in original post |
+| `hour_of_day` | Timestamp | UTC hour (0–23) |
+| `day_of_week` | Timestamp | Day index (0=Mon, 6=Sun) |
+| `word_count_x_hour` | Interaction | word_count × hour_of_day |
+| `accel_x_time_since_prev` | Interaction | acceleration × time_since_previous |
 
-**Ticker post acceleration.** The most involved feature to compute. It answers a simple question: is discussion about this ticker picking up speed or dying down? The approach splits the backward 24-hour window into two halves and counts posts in each:
+The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering (t−12 h, t] and an older half covering (t−24 h, t−12 h]) and then computes the ratio `count_recent / max(count_older, 1)`. Values above 1.0 indicate accelerating discussion. The core of the implementation uses NumPy's `searchsorted` for O(n log n) counting within each per-ticker group:
 
-- *Recent half*: posts in (t−12h, t], not counting the current record
-- *Older half*: posts in (t−24h, t−12h]
+```python
+# Count posts in recent half (t-12h, t] excluding self
+recent_left = np.searchsorted(times, times - 12H_SECONDS, side="right")
+recent_right = np.searchsorted(times, times, side="left")
+count_recent = recent_right - recent_left
 
-Acceleration is `count_recent / max(count_older, 1)`. Above 1.0 means activity is ramping up; below 1.0 means it's fading. The `max(..., 1)` prevents division by zero when nothing appeared in the older half — silence becomes a baseline of 1, so acceleration just equals the recent count.
+# Count posts in older half (t-24h, t-12h]
+older_left = np.searchsorted(times, times - 24H_SECONDS, side="right")
+older_right = np.searchsorted(times, times - 12H_SECONDS, side="right")
+count_older = older_right - older_left
 
-The counting relies on NumPy's `searchsorted` over sorted per-ticker timestamp arrays, the same O(n log n) binary-search trick used in the windowing stage. Even on the 577,872-row wallstreetbets dataset this stays fast.
+acceleration = count_recent / np.maximum(count_older, 1)
+```
 
-**Word count and title length.** Both are straightforward whitespace-split token counts. `word_count` combines title and selftext; `title_length` uses title alone. Posts without body text (link posts, one-line reactions) get their word count from the title only. These features are deliberately coarse — character-level counts or TF-IDF vectors would balloon dimensionality without a clear hypothesis about what the extra detail would buy.
-
-**Number of tickers mentioned.** Since the dataset is exploded (one row per ticker per post), a post mentioning three stocks shows up as three separate rows. This feature recovers the original post's breadth: group by record `id`, count distinct tickers. A single-stock post scores 1; a comparison covering $AMC, $GME, and $BB scores 3 on all three of its rows.
-
-**Interaction features.** Two hand-crafted products round out the set:
-
-- `word_count_x_hour` = word_count × hour_of_day — gives the model an explicit signal for the interplay between content length and posting time, so it doesn't have to discover the combination through multi-level splits alone.
-- `accel_x_time_since_prev` = ticker_post_acceleration × time_since_previous — captures sudden acceleration after a stretch of silence. For first-occurrence records (where `time_since_previous` = −1), the product is zeroed out rather than letting the sentinel produce a meaningless negative value.
-
-**What comes out.** Once all eleven columns are in place, the module logs the feature matrix shape and per-feature summary statistics (mean, std, min, max) on non-excluded records. A helper function (`get_feature_matrix()`) then slices out just those eleven columns as a clean DataFrame ready for model training, dropping all the intermediate and metadata columns. On the wallstreetbets dataset the whole computation finishes in under 10 seconds — the searchsorted calls dominate, but per-ticker grouping keeps each individual array small enough to stay fast.
+The two interaction features (`word_count_x_hour`, `accel_x_time_since_prev`) give models an explicit signal for combined effects, such as sudden acceleration after a period of silence, without requiring multi-level splits to discover the interaction. An ablation (Experiment B2) confirmed a consistent +1.4pp AUC lift from these terms.
 
 ### 4.4 Surge Labelling
 
-Section 3.3 covers the *why* behind the composite surge metric. This section is about the *how* — where the leakage-prevention boundary lives in code, what sequence the steps follow, and what happens when things go wrong.
+The labelling module converts raw windowing and sentiment outputs into binary surge/no-surge labels while enforcing strict temporal isolation.
 
-**The temporal split.** The labelling module's first job is to stamp every record as `train` or `test`. It converts timestamps to epoch seconds, finds the 80th percentile, and draws the line there — everything at or before that point goes to training, the rest to test. Since records are already in chronological order, this puts roughly 80% of them in training and 20% in test. The split is deliberately plain: one cut on sorted time, no stratification, no shuffling. Any randomness here would undermine the temporal ordering the whole pipeline relies on.
+**Temporal split.** Records are divided at the 80th percentile of timestamps: one cut on sorted time, no shuffling. Everything at or before the cutpoint goes to training; the rest to test.
 
-**Computing z-score parameters.** With the split done, the module calculates mean (μ) and population standard deviation (σ, `ddof=0`) for both the volume growth ratio from windowing and the absolute sentiment shift from stage 3 — using *only* included training records. Population std is a deliberate choice: the training partition is the reference distribution everything else gets measured against, not a sample of some larger unknown population. "Included" matters too: records the windowing stage flagged as excluded (too few posts in their forward window) get skipped here, since their volume growth values come from insufficient data and would skew the statistics. The four parameters that come out (μ_vol, σ_vol, μ_sent, σ_sent) are frozen and written to JSON as part of the pipeline summary, so any later inference run can normalise fresh data the exact same way without needing the training set.
+**Z-score normalisation.** Mean and population standard deviation for volume growth ratio and sentiment shift are computed from *included training records only*. These frozen parameters are then applied to both partitions, so the test set is measured against a distribution it never contributed to. This is the core leakage-prevention mechanism.
 
-**Normalisation.** Every non-excluded record — training *and* test — gets z-scored using those frozen training statistics. This is the leakage-prevention boundary in action: the test partition's raw values are measured against a distribution it never contributed to. If σ happens to be zero (possible on very sparse tickers where every training record has identical volume growth), z-scores are set to 0.0 rather than blowing up to infinity. Excluded records get NaN across all derived columns, so they propagate cleanly as missing data and can't be mistaken for legitimate zeros downstream.
-
-**The composite metric.** With z-scores in hand, computing the composite is straightforward:
+**Composite metric and thresholding.** The surge composite combines the two z-scores:
 
 > *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
-The weights live in `PipelineConfig` — `weight_volume` and `weight_sentiment`, both defaulting to 0.5. Setting `weight_sentiment = 0` gives the Phase 1 (volume-only) variant for the ablation comparison described in Section 3.3. The module logs which mode it's running in, so experiment records are self-documenting.
+A record is labelled surge (1) if its composite exceeds threshold τ, and no-surge (0) otherwise. A `sweep_thresholds()` function evaluates τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5} in a single pass for sensitivity analysis. Setting `weight_sentiment = 0` gives the volume-only variant used in the Phase 1 ablation.
 
-**Thresholding.** The binary label comes from a single comparison: `surge_label = 1 if composite > τ, else 0`. Excluded records get NaN instead. Class distribution stats (surge count, no-surge count, rate, imbalance ratio) are computed and logged per partition, so you can immediately see whether the chosen τ gives enough positive examples to train on.
+### 4.5 Model Training and Evaluation
 
-**Threshold sweep.** Rather than re-running the pipeline five times to test different τ values, `sweep_thresholds()` does it in one pass. It loops over the configured list (default: [0.5, 1.0, 1.5, 2.0, 2.5]), creates a fresh DataFrame copy and a tweaked config for each, and produces a complete set of class distribution metrics per τ. This is what powers the sensitivity analysis in Section 3.7 — one invocation, all five variants, written out together.
-
-**Edge cases handled in code:**
-
-- *Empty DataFrame* — returns immediately with empty columns and zeroed statistics (shows up in unit tests).
-- *All records excluded* — logs a warning and sets every label to NaN (can happen on extremely sparse tickers at high `min_window_count` settings).
-- *σ = 0* — z-scores default to 0.0 with a logged warning rather than crashing.
-- *Weights summing to ≠ 1* — perfectly fine by design. The composite is a weighted sum, not a weighted average, and since τ is always picked empirically through the threshold sweep, the absolute scale doesn't matter. A different weight sum just shifts where τ needs to land to produce a given surge rate.
-
-**Output.** The module appends five columns to the DataFrame: `partition`, `z_volume`, `z_sentiment`, `composite`, and `surge_label`. The result is saved as `{timestamp}_labelled_dataset.csv` in the output directory (following the timestamp-prefix convention from Section 4.1), with the `NormalisationStats` written to the accompanying pipeline summary JSON. The training script picks up the CSV by path; downstream inference loads the normalisation params from JSON to apply identical scaling to new data.
-
-### 4.5 Model Training
-
-Section 3.5 picks the three model families and Section 3.6 lays out the temporal validation design. This section is about how all of that actually runs — the grids that get searched, the mechanics of the expanding-window splits, and the train → select → retrain flow from start to finish.
-
-**Data preparation.** The training script loads the labelled CSV from Section 4.4, keeps only records where `partition == "train"` and `excluded == False`, pulls the eleven feature columns into a NumPy matrix, and grabs the binary `surge_label` as the target vector. It also computes the class imbalance ratio (negatives / positives) — XGBoost's `scale_pos_weight` grid needs this number.
-
-**Expanding-window fold construction.** The training partition gets sliced into four chronological blocks of roughly equal size. From those four blocks, the module builds three expanding-window splits:
-
-- Split 1: train on block 1, validate on block 2
-- Split 2: train on blocks 1–2, validate on block 3
-- Split 3: train on blocks 1–3, validate on block 4
-
-Once built, a verification step checks that `max(train_timestamp) < min(val_timestamp)` for every split. If that invariant fails, the pipeline raises an error rather than quietly training on future data.
-
-**Hyperparameter grids.** Each model searches a grid sized to be thorough without being wasteful:
+**Expanding-window cross-validation.** The training partition is sliced into four chronological blocks. Three expanding splits are constructed (train on block 1, validate on 2; train on blocks 1–2, validate on 3; train on blocks 1–3, validate on 4) with a hard check that `max(train_time) < min(val_time)` in every split. Each model type searches a hyperparameter grid:
 
 *Table 10: Hyperparameter search spaces.*
 
 | Model | Parameters Searched | Grid Size |
 |-------|--------------------|-----------| 
-| Logistic Regression | C ∈ {0.01, 0.1, 1, 10, 100}, l1_ratio ∈ {0, 1} | 10 configs |
-| Random Forest | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 10, None}, min_samples_leaf ∈ {1, 2, 5} | 36 configs |
-| XGBoost | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 7}, learning_rate ∈ {0.01, 0.1, 0.3}, scale_pos_weight ∈ {1, ratio/2, ratio} | ≤50 configs |
+| Logistic Regression | C ∈ {0.01, 0.1, 1, 10, 100}, l1_ratio ∈ {0, 1} | 10 |
+| Random Forest | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 10, None}, min_samples_leaf ∈ {1, 2, 5} | 36 |
+| XGBoost | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 7}, learning_rate ∈ {0.01, 0.1, 0.3}, scale_pos_weight ∈ {1, ratio/2, ratio} | ≤50 |
 
-For Logistic Regression, `penalty='elasticnet'` with `l1_ratio=0` gives pure L2 (Ridge) and `l1_ratio=1` gives pure L1 (Lasso) — the two regularisation extremes rather than intermediate blends, keeping the grid compact. All LR models use `class_weight='balanced'` and the `saga` solver (the only one that supports the elastic net penalty). Random Forest likewise uses `class_weight='balanced'`. XGBoost takes a different approach to imbalance: it searches three `scale_pos_weight` values — no reweighting (1.0), moderate (imbalance_ratio / 2), and full (imbalance_ratio) — and fixes `eval_metric='logloss'` for convergence monitoring. The XGBoost grid is capped at 50 configurations so training stays manageable.
+For each configuration, a `StandardScaler` is fit fresh on the training fold alone (preventing validation leakage), and the configuration with the highest mean validation AUC wins. The winner is then retrained on the entire training partition before touching the test set.
 
-**The training loop.** For each model type, the pipeline walks through every hyperparameter configuration and runs all three expanding-window splits on each:
+**Evaluation.** Each model produces predicted probabilities on the held-out test partition (scaled using only training statistics). From these, the pipeline computes precision, recall, F1, and AUC-ROC. Bootstrap confidence intervals (1,000 resamples, seeded) give 95% CIs on all metrics.
 
-1. Fit a `StandardScaler` on that split's training portion and transform both train and validation features.
-2. Build the model with the current hyperparameters and the fixed seed.
-3. Fit and score: AUC-ROC on the validation fold's predicted probabilities.
-4. If a validation fold has only one class (possible in early folds of sparse datasets), fall back to AUC = 0.5 rather than crashing.
+McNemar's pairwise test checks whether model differences are statistically significant (Bonferroni-corrected α = 0.017). Single-feature Logistic Regression baselines establish the floor each full model must beat. Finally, AUC is checked against predefined success tiers (minimum > 0.60, target > 0.70, stretch > 0.80).
 
-The configuration with the highest mean AUC across the three folds wins. The scaler is re-fit fresh for each split — the validation fold's feature distribution never leaks into training-fold scaling. Same logic as the z-score normalisation in Section 4.4, just applied at the feature level.
+Figure 4 shows the combined ROC curves for all three models on the r/wallstreetbets test set. The random baseline (dashed diagonal) represents an AUC of 0.5; all three trained models sit well above it, confirming that the feature set carries genuine predictive signal for surge events.
 
-**Final retraining.** With the best hyperparameters locked in, the winning model gets retrained on the *entire* training partition — all four blocks, not just the first three — with a single StandardScaler fit. This squeezes every available training record into the final model before it ever touches the held-out test set. The scaler is saved alongside the model; any future prediction has to go through this exact scaler.
+![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the r/wallstreetbets held-out test set. The diagonal represents a random classifier (AUC = 0.5).](../figures/11_roc_curves_combined.png)
 
-**Threshold tuning.** After retraining, the final model predicts probabilities on the last validation fold (block 4) using the final scaler. There's a methodological trade-off here worth being upfront about: the final model was trained on all four blocks *including* block 4, so these threshold-tuning predictions are technically in-sample. The alternative — holding out a separate slice just for threshold selection — would shrink the training data. The in-sample threshold is accepted because (a) a threshold is a simple operating-point choice, not a learned parameter that could overfit in the usual sense, (b) the test set stays completely untouched, and (c) evaluation reports metrics at both the tuned and default (0.5) thresholds so readers can judge the difference themselves. The tuned threshold gets stored with the serialised model.
+*Figure 4: ROC curves, model comparison on r/wallstreetbets test partition.*
 
-**Model serialisation.** Each trained model is saved as a joblib file bundling the fitted estimator, the StandardScaler, the winning hyperparameters, the optimal threshold, and metadata (timestamp, phase, seed). Filename pattern: `{model_name}_{phase}_{seed}_{timestamp}.joblib`. A `latest_models.json` manifest tracks which files belong to the most recent run, so the evaluation script can find them without path guessing.
+Figure 5 shows permutation-based feature importance (mean decrease in AUC when each feature is shuffled). Temporal activity features, particularly `ticker_post_acceleration` and `time_since_previous_post`, dominate across all three models, validating the design emphasis on discussion-velocity signals.
 
-**Timing.** Most of the wall-clock time goes to Random Forest — 36 configs, each growing parallel trees via `n_jobs=-1`. XGBoost is faster per configuration but searches up to 50 combinations. Logistic Regression breezes through its 10 configs. On the wallstreetbets training set (388,149 records), a full three-model run typically wraps up within 15–25 minutes on a multi-core machine.
+![Grouped horizontal bar chart showing permutation importance (mean decrease in AUC-ROC) for all eleven features across the three models.](../figures/13_feature_importance_comparison.png)
 
-### 4.6 Evaluation Pipeline
+*Figure 5: Feature importance comparison (permutation importance, test set).*
 
-Section 3.7 lays out what gets measured and why. This section is about the machinery that actually produces those numbers — scoring the test set, running the statistical tests, and assembling the final output. The whole evaluation runs as part of the `surge-train` script: once training finishes, the same invocation carries straight through to evaluation without needing a second command.
+### 4.6 Implementation Decisions Driven by Empirical Findings
 
-**Test-set prediction.** Each trained model is applied to the held-out test partition (`partition == "test"`, `excluded == False`). The model's saved StandardScaler handles feature transformation — the test set never sees its own statistics. What comes out is a vector of predicted probabilities per model; binary predictions are derived later by thresholding at either the default 0.5 or the tuned operating point, depending on what's needed downstream.
+**Timestamp unit mismatch.** An early conversion error in the temporal split caused 89% record exclusion and left only 7 test surges, far too few for stable evaluation. This motivated the strict temporal-ordering verification checks (`max(train_time) < min(val_time)`) now built into the training loop.
 
-**Per-model metrics.** From probabilities and default-threshold predictions, the module computes precision, recall, F1, and AUC-ROC using scikit-learn's standard functions. Confusion matrices get explicit `labels=[0, 1]` to keep cell ordering stable even when a model predicts only one class — something that actually happened during early experiments with extreme imbalance. If the test set has only one class present, AUC defaults to 0.5 with a logged warning rather than blowing up.
+**Data sparsity.** The r/pennystocks dataset (80K records) produced as few as 7 positive test examples at higher threshold settings, with AUC estimates dominated by noise. Bringing in r/wallstreetbets (577K records, 2,582 test surges) gave stable evaluation numbers and enabled the cross-dataset transfer experiment.
 
-**Bootstrap confidence intervals.** The test set is resampled with replacement 1,000 times and all four metrics are recomputed on each draw. The 2.5th and 97.5th percentiles give the 95% CI. If a bootstrap sample ends up with just one class (rare, but possible when positive counts are small), that iteration contributes AUC = 0.5 rather than being thrown out. The whole thing is seeded so it reproduces identically.
+**Threshold collapse.** At τ = 1.5 (1.44% surge rate, 102:1 imbalance), XGBoost achieved AUC 0.888 but predicted zero surges at the default 0.5 decision boundary. This was a calibration problem, not a model failure. Lowering τ to 1.0 (approximately 5% surge rate) and adding `scale_pos_weight` to the grid resolved it.
 
-**McNemar's pairwise test.** For each model pair, the module counts discordant predictions — records where one model got it right and the other didn't — and builds a 2×2 contingency table. The predictions come from sklearn's default 0.5 threshold (via `model.predict()`), keeping the comparison fair rather than letting per-model threshold tuning tilt the results. Small discordant counts (<25) get an exact binomial test; larger ones use the chi-squared approximation. With three pairs to compare, the significance threshold is Bonferroni-corrected to α = 0.017.
+### 4.7 Implementation Status
 
-**Baseline comparisons.** A single-feature Logistic Regression (with `class_weight='balanced'`) is trained and evaluated for each of the eleven features individually. This gives eleven single-feature AUC values; the best one becomes the bar the full models need to clear. The random baseline is 0.5 by definition — beating that just means the features carry *some* signal.
-
-**Success tier classification.** Each model's AUC gets checked against the three tier boundaries (minimum > 0.60, target > 0.70, stretch > 0.80). The best model's tier determines the overall project verdict.
-
-**Final summary.** Everything above — metrics, McNemar results, baselines, tier assignments, recommended config — gets packed into a `FinalSummary` dataclass and written out as a timestamped JSON file. This single artefact is what Section 5 draws on when presenting results.
-
-### 4.7 Challenges and Decisions
-
-Development didn't follow the design document in a straight line. Several problems surfaced during implementation that forced course corrections — some small, some fundamental.
-
-**Timestamp unit mismatch (July 8–9).** The most disruptive bug was a unit conversion error in the temporal split logic. An early run produced a `split_timestamp` roughly 1000× too small, which cascaded into 89% record exclusion (most forward windows looked empty) and left just 7 surges in the test set — nowhere near enough for meaningful evaluation. The fix itself was simple (consistent epoch-second handling throughout), but the episode ate a full debugging session and motivated adding the temporal-ordering verification check described in Section 4.5.
-
-**Data sparsity on r/pennystocks.** The original development dataset (r/pennystocks, 80,212 exploded records) produced exclusion rates between 69% and 89% depending on the `min_window_count` setting — the parameter that controls how many forward-window posts a record needs before its label counts as trustworthy. Higher values give cleaner labels but throw away more data. At `min_window_count=3`, test sets shrank to as few as 7 positive examples. AUC estimates from 7 surges are dominated by noise — one misranked record swings the metric by ±0.07. This was the main reason for bringing in r/wallstreetbets as a second dataset. With 457,072 usable records and 2,582 test surges, evaluation numbers finally became stable.
-
-**Sentiment as a computational bottleneck.** VADER is fast per-record (~0.1ms), but applied across 1.3M raw wallstreetbets records it ate ~870 of the pipeline's ~900 second runtime. (Sentiment runs as stage 3, between windowing and labelling; it doesn't have its own implementation subsection because the logic is straightforward — the challenge was purely one of scale.) Two optimisations brought things under control: skipping records the windowing stage had already flagged as excluded (they don't need scores for training anyway) and caching the VADER analyzer at module level instead of creating a new one per call.
-
-**Precision/recall collapse at default threshold.** On the wallstreetbets dataset at τ=1.5 (1.44% surge rate, 102:1 imbalance), XGBoost hit AUC 0.888 but predicted zero surges at the 0.5 threshold — precision and recall both exactly 0.0. The model was ranking surges correctly, but its probability outputs clustered far below 0.5 because of the extreme class prior. This wasn't a model failure; it was a calibration problem. Lowering τ to 1.0 (pushing the surge rate to ~5%) and adding `scale_pos_weight` to the XGBoost grid fixed it, and motivated the validation-fold threshold tuning described in Section 4.5.
-
-**Feature dropping hurt more than noise removal helped (Experiment B1).** Removing the two weakest single-feature AUC predictors (`sentiment_score` at 0.47, `ticker_post_rate_24h` at 0.56) was supposed to reduce noise. Instead it dropped Random Forest AUC from 0.740 to 0.655 — an 8.5 percentage point loss. The takeaway: features with poor individual discrimination can still contribute when working alongside others. Both were restored and remain in the final eleven.
-
-**Interaction features (Experiment B2).** Adding two hand-crafted interaction terms (`word_count_x_hour`, `accel_x_time_since_prev`) lifted Random Forest AUC by +1.4 percentage points on the pennystocks dataset. Modest but consistent, and since the features cost almost nothing to compute, they stayed.
-
-**TextBlob → VADER switch.** The initial sentiment backend (TextBlob) was swapped for VADER after observing that TextBlob scored Reddit-style emphatic text (capitalisation, exclamation marks, slang intensifiers) as near-neutral. VADER's social-media-aware rules gave more dispersed polarity distributions and slightly better downstream AUC. The switchable backend architecture meant this was a config change, not a rewrite.
-
-### 4.8 Implementation Status
-
-All six pipeline stages are fully implemented and produce complete artefacts end-to-end:
+All six pipeline stages are fully implemented and produce complete artefacts end-to-end.
 
 | Stage | Status | Key Output |
 |-------|--------|------------|
@@ -733,9 +641,7 @@ All six pipeline stages are fully implemented and produce complete artefacts end
 | 5. Feature Engineering | Complete | 11-feature matrix |
 | 6. Training & Evaluation | Complete | 3 trained models + full evaluation JSON |
 
-Both datasets (r/pennystocks and r/wallstreetbets) run through the complete pipeline with reproducible results. Cross-dataset transfer evaluation, bootstrap confidence intervals, and McNemar's significance tests all work correctly. The experiment log holds 20+ runs documenting the progression from initial prototype to final reported numbers. All code in the core `surge_pipeline/` package passes the 10-module pytest suite, mypy type checking, and ruff linting without errors; the auxiliary `eda/` module carries one unused-variable warning that doesn't affect pipeline operation.
-
-With the implementation complete, the next section presents and analyses the results it produces.
+Both datasets run through the complete pipeline with reproducible results. Cross-dataset transfer evaluation, bootstrap confidence intervals, and McNemar's significance tests all function correctly. The 10-module pytest suite, mypy type checking, and ruff linting pass without errors.
 
 ---
 
