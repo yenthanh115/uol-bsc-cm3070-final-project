@@ -215,6 +215,7 @@ This project addresses these gaps directly. The composite surge metric (Section 
 ---
 
 ## 3. Design
+
 <!-- 
 SIDE NOTE (DELETE LATER)
 - why use Reddit not X or other platform
@@ -288,20 +289,17 @@ When writing or reviewing your design section, ensure it satisfies these four cr
 * Disclose: Report all limitations, ethical steps, and structural constraints openly.
 
 -->
+
 ### 3.1 System Architecture
 
-The prediction system is implemented as a linear staged pipeline, where each stage consumes the output of the previous one and produces a well-defined intermediate artifact. This staged design was chosen over a monolithic approach for two reasons: it allows each stage to be tested and validated independently, and it enables re-running downstream stages (e.g., retraining with different hyperparameters) without recomputing expensive upstream operations (e.g., sentiment scoring of 1.3M records).
+The prediction system is a six-stage linear pipeline. Each stage consumes the previous stage's output and writes a well-defined intermediate artefact to disk, which means downstream stages can be re-executed independently without recomputing expensive upstream operations.
 
-The pipeline comprises six stages:
-
-1. **Data Loading and Preprocessing** — CSV ingestion, text cleaning, regex-based ticker extraction with stopword filtering, and record explosion (one row per record-ticker pair)
-2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts using vectorised binary search (forward counts are used for target labelling only; features use backward counts exclusively)
+1. **Data Loading and Preprocessing** — CSV ingestion, text cleaning, regex-based ticker extraction, record explosion (one row per record-ticker pair)
+2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts via vectorised binary search
 3. **Sentiment Computation** — VADER compound scoring per record, with title-fallback for missing selftext
-4. **Target Labelling** — Temporal 80/20 split, z-score normalisation using training-partition statistics only, composite metric computation, and binary thresholding
-5. **Feature Engineering** — Eleven backward-only features derived from timestamps and text (detailed in Section 3.4)
-6. **Model Training and Evaluation** — Expanding-window temporal cross-validation, hyperparameter tuning, test-set evaluation, and statistical comparison
-
-Each stage writes its output to disk (CSV or joblib-serialised objects), creating an audit trail from raw data to final predictions. The pipeline is invoked via CLI entry points with configuration parameters passed as arguments, enabling reproducible execution with different settings (e.g., threshold sweeps, dataset switching) without code modification.
+4. **Target Labelling** — Temporal 80/20 split, z-score normalisation from training-partition statistics only, composite metric computation, binary thresholding
+5. **Feature Engineering** — Eleven backward-only features (Section 3.4)
+6. **Model Training and Evaluation** — Expanding-window temporal cross-validation, hyperparameter tuning, test-set evaluation, statistical comparison
 
 ```mermaid
 graph TD
@@ -318,55 +316,20 @@ graph TD
     style G fill:#c8e6c9,stroke:#2e7d32
     style H fill:#fff9c4,stroke:#f9a825
 ```
-*Figure 2: Pipeline architecture. Shading indicates the three critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).*
+*Figure 2: Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).*
 
-A key architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. This constraint propagates through the pipeline: sentiment is scored from the record's own text (not future replies), features use only backward-looking windows, z-scores use training-partition statistics, and validation folds are strictly ordered in time. The design ensures that any prediction the system makes could, in principle, have been made at the moment the post was created — a necessary condition for any predictive system operating on temporal data.
-
+The overarching architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. Sentiment uses only the record's own text, features use backward-looking windows exclusively, z-scores are frozen from training-partition statistics, and validation folds are strictly time-ordered.
 
 ### 3.2 Data Selection and Characteristics
 
+Reddit was selected because its subreddit structure concentrates stock discussion into retrievable, topically focused communities; posts are publicly archived for reproducible research; and its threaded format yields timestamped submissions with text suitable for temporal and sentiment feature extraction.
 
-<!-- Why Reddit as a data source (public, threaded, subreddit-specific, ticker-rich) -->
-<!-- Why not other platforms: Twitter/X ephemeral stream lacks persistent threading; StockTwits smaller user base and less organic discussion; Reddit combines persistent threaded posts with large active communities -->
-<!-- Why these two subreddits specifically: -->
-<!--   r/pennystocks — sparse niche community (80,212 records), low-cap focus, tests model under data scarcity -->
-<!--   r/wallstreetbets — high-volume mainstream forum (1,293,981 records), tests scalability and signal extraction from noise -->
-<!-- Dual-dataset design: opposite ends of data density spectrum to test generalisability -->
-<!-- Time range covered, record structure (columns/fields available) -->
+Two subreddits were chosen to represent opposite ends of the data density spectrum:
 
-<!-- Survivorship bias: deleted or moderated posts are not captured in the archival dataset; the analysed data represents only posts that remained publicly visible at collection time -->
-<!-- Snapshot timing: engagement metrics (score, num_comments) are frozen at collection time and may not reflect final values — this is why the project uses timestamp-derived features rather than engagement scores -->
-<!-- Completeness: potential gaps due to Reddit API rate limits or archival service downtime during collection period -->
-<!-- Single-platform scope: findings may not generalise to other financial discussion platforms with different user bases and moderation norms -->
-<!-- Temporal coverage: results are bound to the specific time period captured; market regime changes or platform policy shifts outside this window may alter surge dynamics -->
+- **r/pennystocks** is a sparse niche community (80,212 exploded records) focused on low-capitalisation equities. It tests whether the methodology degrades gracefully under data scarcity.
+- **r/wallstreetbets** is a high-volume mainstream forum (577,872 exploded records). It tests whether the pipeline scales and whether signal can be extracted from noise.
 
-<!-- Source: pre-collected CSV exports from academic/archival Reddit datasets -->
-<!-- Specific source: [https://www.kaggle.com/datasets/leukipp/reddit-finance-data, specific Kaggle dataset, search through Reddit API] -->
-<!-- No live API scraping — static snapshot ensures reproducibility -->
-<!-- Fields retained: timestamp, title, selftext, subreddit, score, num_comments, etc. -->
-<!-- Any filtering applied at collection time (date range, post type) -->
-
-<!-- Data quality notes: -->
-<!-- Known issues in raw data: deleted/removed posts (showing as [removed] or [deleted]), missing selftext fields, duplicate records -->
-<!-- These are addressed in preprocessing (Section 4.2); noted here for transparency about raw data state -->
-
-
-<!-- Public data: Reddit posts are publicly accessible; no private or deleted content used -->
-<!-- Anonymity: no attempt to identify or profile individual users; no individual users singled out in results or examples (aggregated analysis only) -->
-<!-- No personally identifiable information (PII) retained or processed -->
-<!-- Purpose: academic research only; no trading decisions were made based on model outputs -->
-<!-- Ethics approval: formal ethics approval was not required for analysis of publicly available aggregated data under university guidelines — [confirm and state explicitly] -->
-<!-- Compliance with university ethics guidelines and Reddit's terms of service -->
-<!-- Data storage: local only, not redistributed beyond project submission -->
-
-Reddit was selected as the data source for **three reasons**: its subreddit structure creates topically focused communities where stock discussion is concentrated and retrievable; posts are publicly accessible and archived, enabling reproducible research without API rate constraints; and its threaded format produces timestamped submissions with text content suitable for both temporal and sentiment feature extraction. Alternative platforms were considered and rejected — Twitter/X's ephemeral stream lacks persistent threading, StockTwits has a smaller user base with less organic discussion diversity, and proprietary trading forums are not publicly accessible.
-
-Two subreddits were selected to represent opposite ends of the data density spectrum:
-
-- **r/pennystocks** — A niche community focused on low-capitalisation equities. Its sparse ticker distribution (thousands of tickers, most with very few posts) tests whether the methodology degrades gracefully under data scarcity.
-- **r/wallstreetbets** — A high-volume mainstream forum with concentrated ticker discussion. Its density (hundreds of posts per day on popular tickers) tests whether the pipeline scales and whether signal can be extracted from a noisier, higher-volume environment.
-
-This dual-dataset design directly addresses literature gap 3 (domain specificity) by applying the same pipeline to two communities with fundamentally different characteristics, and enables cross-dataset transfer evaluation — testing whether models trained on one community generalise to the other.
+This dual-dataset design addresses literature gap 3 (domain specificity) and enables cross-dataset transfer evaluation.
 
 *Table 4: Dataset characteristics.*
 
@@ -376,25 +339,19 @@ This dual-dataset design directly addresses literature gap 3 (domain specificity
 | Date range | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-12-31 |
 | After ticker extraction (exploded) | 80,212 | 577,872 |
 | Usable records (post-exclusion) | 24,827 | 457,072 |
-| Exclusion rate | 69.0% | 20.9% |
 | Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
 | Test surges | 31 | 2,582 |
-| Test surge rate | 0.95% | 3.75% |
 | Test imbalance ratio | 105:1 | 26:1 |
 
-Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], which was compiled by querying the Reddit API for submissions matching finance-related criteria across multiple subreddits. The files used cover the full calendar year 2021. This period was chosen because it spans the January GameStop episode through the subsequent normalisation, capturing both peak surge activity and quieter periods. It provides temporal variety for the expanding-window cross-validation design. No live API scraping was performed; the static snapshot ensures that any researcher with the same input files can reproduce identical results.
+Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full calendar year 2021 (spanning the January GameStop episode through subsequent normalisation). No live API scraping was performed; the static snapshot ensures reproducibility. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (`score`, `num_comments`) that are retained for transparency but *not* used as features.
 
-Each record contains: a Unix timestamp (`created`), post title, optional selftext body, and engagement fields (`score`, `num_comments`) that are *not* used as features but are retained for transparency. The pipeline extracts ticker symbols from title and selftext using regex with stopword filtering, then explodes multi-ticker records into one row per record-ticker pair — the unit of analysis for feature engineering and prediction.
+**Ethical considerations.** All data consists of publicly posted submissions; analysis is aggregated at the ticker level with no attempt to identify individual users. The project is academic research only; no trading decisions were made from model outputs.
 
-**Ethical considerations.** All data consists of publicly posted Reddit submissions; no private, deleted, or moderated content is included in the archived dataset. No attempt is made to identify or profile individual users — analysis is aggregated at the ticker level. No personally identifiable information is retained or processed. The project is academic research only; no trading decisions were made from model outputs. Formal ethics approval was not required under university guidelines for analysis of publicly available aggregated data.
-
-**Known limitations.** The archival dataset exhibits survivorship bias: posts deleted or removed by moderators before the archive snapshot are not captured. Engagement metrics (`score`, `num_comments`) are frozen at collection time and may not reflect final values — this is precisely why the project uses timestamp-derived posting volume rather than engagement scores as the prediction target. Potential gaps exist from Reddit API rate limits during the original archival collection. Results are bound to the 2021 time period; market regime shifts or platform policy changes outside this window may alter surge dynamics.
+**Known limitations.** The archival dataset exhibits survivorship bias (deleted/moderated posts are absent), engagement metrics are frozen at collection time, and results are bound to the 2021 period.
 
 ### 3.3 Surge Definition (Target Variable)
 
-Defining "surge" as a binary label is the central design challenge. A naive approach, such as flagging any ticker that crosses a fixed posting-count threshold, fails because tickers have wildly different baselines. A ticker that normally attracts 2 posts per day behaves very differently from one that attracts 200; a fixed count would permanently label high-volume tickers as "surging" while missing genuine spikes in quieter discussions. What matters is not how many posts appear, but whether the current activity is *statistically unusual* for that ticker's recent history.
-
-The solution is a composite metric that normalises volume growth relative to the training distribution and combines it with sentiment change:
+A fixed posting-count threshold fails because tickers have different baselines. What matters is whether current activity is *statistically unusual* for that ticker's history. The solution is a composite metric that normalises volume growth relative to the training distribution and combines it with sentiment change:
 
 > *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
@@ -403,19 +360,12 @@ For each record mentioning ticker *X* at time *t*, the pipeline:
 1. Counts *X*-mentioning posts in a forward window (*t*, *t*+24h] and a backward window (*t*−24h, *t*]
 2. Computes volume growth: (forward_count / max(backward_count, 1)) − 1
 3. Computes sentiment shift: |mean(forward_sentiments) − current_sentiment|
-4. Z-score normalises both components using training-partition statistics only (μ and σ frozen from the 80% temporal split)
-5. Combines the weighted z-scores into the composite
-6. Labels surge=1 if composite > threshold *τ*, else surge=0
+4. Z-score normalises both using training-partition statistics only (μ and σ frozen from the 80% temporal split)
+5. Combines weighted z-scores into the composite; labels surge=1 if composite > τ. Records with too few posts in their forward window are excluded as unlabellable.
 
-Records with too few posts in their forward window are excluded because there is simply not enough data to judge whether a "surge" has occurred.
+Z-scoring identifies growth that is statistically unusual regardless of a ticker's typical volume. The parameters are computed exclusively from the training partition to prevent leakage into the target variable.
 
-**Why include sentiment at all?** The literature suggests surges involve heightened emotional tone alongside increased activity [4][10]. Volume alone would miss cases where a small community becomes markedly more agitated without posting more frequently. The composite captures both dimensions while remaining configurable: setting w₂=0 reduces to volume-only, enabling direct comparison of whether sentiment adds predictive value (the Phase 1 vs Phase 2 experiment described below).
-
-**Why z-scores rather than raw percentages?** A ticker going from 1 to 5 posts and one going from 100 to 500 posts both show 400% growth, but the first case might be random noise while the second represents a genuine community-wide event. Z-scoring against the training distribution identifies growth that is *statistically unusual*, applying the same standard regardless of a ticker's typical activity level.
-
-**Preventing leakage in the labels themselves.** The z-score parameters are computed exclusively from the training partition and frozen before the test partition is labelled. Without this step, the mean and standard deviation would incorporate test-period information, subtly contaminating the target variable. This is a form of data leakage that would inflate evaluation metrics.
-
-**Choosing the threshold τ.** The threshold controls how "extreme" an event must be to count as a surge. Higher values produce rarer, more dramatic surges but worsen class imbalance:
+Including sentiment captures cases where a community becomes markedly more agitated without necessarily posting more frequently [4][10]. Setting w₂=0 reduces the definition to volume-only, enabling direct comparison (Phase 1 vs Phase 2).
 
 *Table 5: Threshold sensitivity on r/wallstreetbets (457,072 usable records).*
 
@@ -427,67 +377,51 @@ Records with too few posts in their forward window are excluded because there is
 | 2.0 | 2,873 | 0.6% | 158:1 |
 | 2.5 | 1,348 | 0.3% | 338:1 |
 
-τ=1.0 was selected for the primary evaluation. It produces a ~5% surge rate, which is rare enough to be meaningful but common enough (22,384 events across the dataset, 2,582 in the test set) for statistically reliable model evaluation. A secondary run at τ=1.5 on r/pennystocks tests behaviour under more extreme imbalance.
+τ=1.0 was selected for primary evaluation: rare enough to be meaningful, common enough (2,582 test surges on WSB) for statistically reliable evaluation. A secondary run at τ=1.5 on r/pennystocks tests behaviour under more extreme imbalance.
 
-**Two-phase validation of the composite design.** To determine whether the sentiment component genuinely improves prediction or merely adds noise, the experiment is run twice: Phase 1 with w₂=0 (volume-only labels) and Phase 2 with w₁=w₂=0.5 (equal composite). If Phase 2 outperforms Phase 1, sentiment contributes meaningful signal; if not, the simpler volume-only definition suffices.
+**Two-phase validation.** Phase 1 uses w₂=0 (volume-only labels); Phase 2 uses w₁=w₂=0.5 (equal composite). Comparing them determines whether sentiment genuinely improves prediction. A full weight sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) is reported as supplementary sensitivity analysis in Section 3.7.
 
 ### 3.4 Feature Engineering
 
-All features satisfy the backward-looking constraint from Section 3.1: only information available at or before observation time *t* is used. The most tempting predictors, Reddit score and comment count, are excluded for exactly this reason. They look predictive because they *are* the surge; including them would be circular.
+All features satisfy the backward-looking constraint: only information available at or before time *t* is used. Reddit `score` and `num_comments` are excluded because they accumulate *after* posting and reflect the very engagement dynamics the model is trying to predict.
 
-With that constraint in mind, the eleven features are organised into four groups:
+*Table 6: Feature definitions. All features use backward-looking or concurrent information only.*
 
-*Table 6: Feature definitions. All features are computed at observation time t using only backward-looking or concurrent information.*
+| Feature | Category | Definition |
+|---------|----------|------------|
+| `sentiment_score` | Content | VADER compound sentiment of the post text |
+| `word_count` | Content | Words in selftext (0 if absent) |
+| `title_length` | Content | Character count of title |
+| `num_tickers_mentioned` | Content | Distinct tickers extracted from the post |
+| `hour_of_day` | Temporal | Hour of post creation (UTC) |
+| `day_of_week` | Temporal | Day of post creation (Monday=0) |
+| `time_since_previous` | Activity | Seconds since previous same-ticker post |
+| `ticker_post_rate_24h` | Activity | Same-ticker posts in preceding 24 hours |
+| `ticker_post_acceleration` | Activity | Rate ratio: count in preceding 12h ÷ count in 12h before that |
+| `word_count_x_hour` | Interaction | word_count × hour_of_day |
+| `accel_x_time_since_prev` | Interaction | ticker_post_acceleration × time_since_previous |
 
-| Feature | Category | Type | Definition |
-|---------|----------|------|------------|
-| `sentiment_score` | Content | Continuous [−1, 1] | VADER compound sentiment of the post text |
-| `word_count` | Content | Discrete ≥ 0 | Number of words in selftext (0 if absent) |
-| `title_length` | Content | Discrete ≥ 0 | Character count of the post title |
-| `num_tickers_mentioned` | Content | Discrete ≥ 1 | Number of distinct tickers extracted from the post |
-| `hour_of_day` | Temporal | Discrete [0–23] | Hour of post creation (UTC) |
-| `day_of_week` | Temporal | Discrete [0–6] | Day of post creation (Monday=0) |
-| `time_since_previous` | Activity | Continuous ≥ 0 | Seconds since the previous post mentioning the same ticker |
-| `ticker_post_rate_24h` | Activity | Continuous ≥ 0 | Number of same-ticker posts in the preceding 24 hours |
-| `ticker_post_acceleration` | Activity | Continuous | Posting rate ratio: count in preceding 12h divided by count in the 12h before that |
-| `word_count_x_hour` | Interaction | Continuous | word_count × hour_of_day |
-| `accel_x_time_since_prev` | Interaction | Continuous | ticker_post_acceleration × time_since_previous |
-
-**Content features** describe what is being said. Sentiment provides a proxy for emotional intensity [4]. Word count and title length reflect how much effort a poster invested (longer posts tend to be substantive analysis rather than one-line reactions). Ticker count distinguishes focused single-stock discussion from broad market commentary.
-
-**Temporal features** describe when the post appears. Hour and day of week encode cyclical patterns tied to market hours and weekend effects. Surges may cluster around market open or after-hours earnings releases, making timing a useful contextual signal.
-
-**Activity features** describe how the ticker's discussion has been behaving recently. These draw most directly on the popularity prediction literature [1][5]: if posts about a ticker are arriving faster than usual, a surge may already be forming. The `time_since_previous` feature adapts Cheng et al.'s "early propagation speed" concept to the discussion-forum setting, while `ticker_post_acceleration` measures whether the rate itself is increasing or decreasing.
-
-**Interaction features** were added after experiment B2 showed that manually constructed feature combinations improved Random Forest AUC by +1.4 percentage points on the pennystocks dataset. Even tree-based models, which can in principle discover interactions through splits, benefited from having cross-feature products available directly. The `word_count_x_hour` interaction captures a specific pattern observed during EDA: long posts written during pre-market hours (the typical "DD" analysis posts) appear disproportionately before surges.
-
-**What was left out.** Reddit's `score` (upvotes minus downvotes) and `num_comments` are available in the raw data but deliberately excluded. These fields accumulate *after* a post is created and reflect the very engagement dynamics the model is trying to predict. Using them would be equivalent to telling the model the answer, and any performance gains would not generalise to real-time prediction where these values are not yet available.
+Content features capture what is said (emotional intensity, post effort, discussion focus). Temporal features encode cyclical patterns tied to market hours. Activity features draw on the popularity prediction literature [1][5], since accelerating posting rates signal that a surge may be forming. Interaction features were added after experiment B2 showed that manually constructed combinations improved Random Forest AUC by +1.4pp on pennystocks.
 
 ### 3.5 Model Selection
 
-Rather than picking a single model and optimising it, this project compares three classifier families to answer a specific question: does model complexity actually help for surge prediction? If a simple linear model performs nearly as well as a gradient boosting ensemble, the surge signal is straightforward and the features do most of the work. If complex models pull clearly ahead, the data contains non-linear patterns that simpler approaches miss.
+Three classifier families span the complexity spectrum, testing whether model complexity actually helps for surge prediction:
 
-The three families were chosen to span the complexity spectrum:
+- **Logistic Regression (LR)** is the interpretable baseline. It fits a linear decision boundary with elastic net regularisation. If LR performs well, the surge signal is approximately linearly separable.
+- **Random Forest (RF)** represents bagged ensembles. It captures non-linear relationships through tree splits and handles noisy features gracefully. Fernández-Delgado et al. [16] found that random forests achieved the highest overall accuracy across 121 benchmark datasets.
+- **XGBoost** represents sequential boosting. Each tree corrects the mistakes of the previous ensemble, with L1/L2 regularisation on leaf weights to prevent overfitting. Gradient boosting dominates recent tabular data competitions and consistently ranks among the top performers on structured problems.
 
-- **Logistic Regression (LR)** is the interpretable baseline. It fits a linear decision boundary with elastic net regularisation (combined L1/L2), making it the simplest model in this comparison. If LR performs well, the surge signal is approximately linearly separable in the feature space.
-- **Random Forest (RF)** represents bagged ensembles. It captures non-linear relationships through tree splits, handles noisy features gracefully, and provides built-in importance estimates. Fernández-Delgado et al. [16] found that random forests achieved the highest overall accuracy across 121 benchmark datasets.
-- **XGBoost** represents sequential boosting. Each tree corrects the mistakes of the previous ensemble, with L1/L2 regularisation on leaf weights to prevent overfitting. Gradient boosting methods, the family XGBoost belongs to, consistently rank among the top performers on structured tabular data [16].
+**Primary metric: AUC-ROC.** With surge rates of 1–5%, accuracy is uninformative (a model predicting "no surge" for every record achieves 95–99% accuracy while being useless). AUC measures how well the model *ranks* surge-likely records above non-surge records, independent of threshold. Precision, recall, and F1 are reported as secondary metrics at both the default (0.5) and validation-tuned thresholds.
 
-Together, these three cover linear, bagged ensemble, and boosted ensemble approaches. The comparison reveals whether surge prediction benefits from increasing model capacity or whether the features themselves carry the signal.
-
-**Why AUC-ROC as the primary metric.** With surge rates between 1% and 5%, accuracy tells us almost nothing. A model that predicts "no surge" for every record achieves 95–99% accuracy while being completely useless. AUC-ROC measures how well the model *ranks* surge-likely records above non-surge records, regardless of where the classification threshold is set. This makes it the right metric when the optimal operating point is not known in advance. Precision, recall, and F1 are reported as secondary metrics at both the default (0.5) and validation-tuned thresholds.
-
-**Handling class imbalance.** Resampling techniques like SMOTE generate synthetic minority-class samples by interpolating between existing ones. For temporally ordered data this is problematic: a synthetic record created between two time points has no meaningful timestamp and could introduce spurious temporal patterns. Instead, the pipeline uses cost-sensitive learning. Logistic Regression and Random Forest use `class_weight='balanced'`, which scales the loss inversely proportional to class frequency. XGBoost uses `scale_pos_weight` set to the negative-to-positive ratio. Both approaches penalise minority-class errors more heavily during training without manufacturing artificial data points.
+**Handling class imbalance.** SMOTE is inappropriate for temporally ordered data because synthetic records lack meaningful timestamps. Instead, the pipeline uses cost-sensitive learning: `class_weight='balanced'` for LR and RF; `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
 ### 3.6 Temporal Validation Design
 
-Standard k-fold cross-validation randomly assigns records to folds, which means a model might train on posts from October and validate on posts from March. For temporal prediction tasks, this is a form of cheating: the model has seen future patterns before being asked to predict them. Bergmeir and Benítez [15] showed that this inflates accuracy estimates, sometimes substantially. Since this project's central claim is that surges can be predicted from *past* information alone, the validation protocol must respect time ordering throughout.
+Standard k-fold cross-validation violates temporal ordering, since a model might train on October posts and validate on March posts. Bergmeir and Benítez [15] showed this inflates accuracy estimates. The pipeline uses a two-level temporal strategy instead:
 
-The pipeline uses a two-level temporal strategy:
+**Level 1: Train/test split (80/20 by timestamp).** The first 80% of chronologically sorted records form the training partition; the final 20% form the held-out test set, used exactly once for final metrics.
 
-**Level 1: Train/test split (80/20 by timestamp).** All records are sorted chronologically. The first 80% form the training partition; the final 20% form the held-out test set. The test set is never seen during model selection, hyperparameter tuning, or threshold calibration. It is used exactly once to produce the final reported metrics.
-
-**Level 2: Expanding-window cross-validation within training (k=4 folds).** Within the training partition, hyperparameters are selected using an expanding-window scheme with four folds:
+**Level 2: Expanding-window CV within training (k=4).**
 
 ```mermaid
 gantt
@@ -507,57 +441,29 @@ gantt
     Train     :done, 0, 75
     Val       :active, 75, 100
 ```
-*Figure 3: Expanding-window cross-validation structure. Each fold trains on all data up to a cutoff point and validates on the next temporal block. The training window grows with each fold, mimicking how a deployed model would accumulate more history over time.*
+*Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
 
-In each fold, the training window includes all records from the start up to a split point, and the validation window is the next chronological block. This means:
-
-- No validation record is ever earlier than any training record (temporal ordering preserved)
-- The training set grows with each fold (mimicking deployment, where more history accumulates over time)
-- Each fold tests generalisation to a genuinely unseen future period
-
-**Why k=4 rather than k=5 or k=10?** The choice is constrained by the data. Each validation fold must contain enough surge events to produce a stable AUC estimate. With a 5% surge rate and the training partition spanning roughly 9.5 months, four folds produce validation blocks of approximately 2.5 months each, yielding hundreds of positive cases per fold on the WSB dataset. More folds would produce shorter validation windows with fewer surges, increasing variance in the fold-level AUC estimates.
-
-**Threshold tuning on validation folds.** The classification threshold (the probability cutoff above which the model predicts "surge") is not set to the default 0.5. Instead, after hyperparameter selection, the threshold that maximises F1 on the validation folds is identified and applied to the test set. This avoids optimising the threshold on test data, which would leak test-set information into the decision rule.
-
+No validation record is ever earlier than any training record. Four temporal blocks produce validation windows of approximately 2.5 months each, yielding enough surge events per fold for stable AUC estimates. After hyperparameter selection, the threshold maximising F1 on validation folds is identified and applied to the test set (avoiding threshold optimisation on test data).
 
 ### 3.7 Evaluation Framework
 
-The evaluation must answer four questions: (1) Do the models predict surges better than trivial strategies? (2) Do the models differ meaningfully from each other? (3) How confident can we be in the reported metrics? (4) Does the methodology transfer across communities?
+The evaluation answers four questions: Do models predict surges better than trivial strategies? Do they differ meaningfully from each other? How confident are the reported metrics? Does the methodology transfer across communities?
 
-#### Success Tiers
-
-A model that cannot discriminate surges from non-surges has AUC-ROC of 0.5. But how much better than 0.5 counts as "useful"? Without a directly comparable prior study (the literature review identifies this as a gap), the project defines three performance tiers based on conventional interpretations of AUC in the machine learning literature:
+*Table 7a: Success tiers.*
 
 | Tier | AUC-ROC | Interpretation |
 |------|---------|----------------|
-| Minimum | > 0.60 | Weak but above-chance discrimination; the features contain *some* predictive signal |
-| Target | > 0.70 | Moderate discrimination; practically useful for ranking records by surge likelihood |
-| Stretch | > 0.80 | Strong discrimination; the model reliably separates surges from non-surges |
+| Minimum | > 0.60 | Weak but above-chance discrimination |
+| Target | > 0.70 | Moderate; practically useful for ranking |
+| Stretch | > 0.80 | Strong; reliably separates surges from non-surges |
 
-These thresholds are conservative. The cascade prediction literature reports higher values (Cheng et al. [5] achieved AUC 0.877), but those studies used engagement-based features and non-temporal evaluation protocols that likely inflate results. The tiers here reflect what is achievable under the strict backward-looking constraint this project imposes.
+These are conservative relative to the cascade prediction literature (e.g., Cheng et al. [5] achieved 0.877), which used engagement-based features and non-temporal evaluation that likely inflate results.
 
-#### Baseline Comparisons
+**Baselines.** A random baseline (AUC=0.5) tests whether models beat chance. Single-feature Logistic Regressions for each of the eleven features test whether multi-feature combination adds value over the best individual predictor.
 
-Each baseline isolates a specific question about the source of predictive performance:
+**Statistical robustness.** Bootstrap confidence intervals (1,000 resamples of the test set, 95% CI from 2.5th/97.5th percentiles) quantify metric uncertainty without distributional assumptions. McNemar's test with Bonferroni correction (α=0.017 for the three pairwise comparisons: LR vs RF, LR vs XGB, RF vs XGB) determines whether model differences are statistically significant.
 
-- **Random baseline (AUC = 0.5)** — Does the model beat chance? If not, the features carry no signal.
-- **Single-feature baselines** — For each of the eleven features, a single-feature Logistic Regression is trained and its AUC recorded. This determines whether the multi-feature combination adds value over the best individual predictor. If the full model barely exceeds the best single feature, the additional complexity is unjustified.
-
-#### Statistical Robustness
-
-Reporting a single AUC number without uncertainty is misleading — it could be unstable due to the particular test-set composition. Three mechanisms quantify reliability:
-
-**Bootstrap confidence intervals (1,000 iterations).** The test set is resampled with replacement 1,000 times, and AUC-ROC is computed on each resample. The 2.5th and 97.5th percentiles form the 95% confidence interval. Bootstrap was chosen over parametric alternatives because AUC has no simple closed-form variance estimator under class imbalance, and the bootstrap makes no distributional assumptions.
-
-**McNemar's test for pairwise model comparison.** When two models are trained on the same data and evaluated on the same test set, their predictions are *paired* — each record receives a prediction from both. McNemar's test examines the 2×2 table of concordant and discordant predictions (records where one model is correct and the other is not). This is more appropriate than a paired t-test (which requires continuous outputs) or an independent test (which ignores the paired structure). With three model pairs (LR vs RF, LR vs XGB, RF vs XGB), the family-wise error rate is controlled with Bonferroni correction (α = 0.05 / 3 = 0.017). Bonferroni was chosen over less conservative corrections (e.g., Holm) because with only three comparisons the power loss is negligible and the interpretation is simpler.
-
-**Training stability.** All runs use a single fixed seed (42) to ensure exact reproducibility. Bootstrap confidence intervals on the test set quantify evaluation uncertainty, though they do not capture variance from training randomness (a limitation discussed in Section 5.4).
-
-#### Metrics and Thresholds
-
-Models are evaluated using four metrics on the held-out test set:
-
-*Table 7: Evaluation metrics.*
+*Table 7b: Evaluation metrics.*
 
 | Metric | Role |
 |--------|------|
@@ -566,110 +472,11 @@ Models are evaluated using four metrics on the held-out test set:
 | Recall | Proportion of actual surges detected |
 | F1-Score | Harmonic mean of precision and recall |
 
-Precision, recall, and F1 depend on the classification threshold. These are reported at two operating points: the default threshold of 0.5, and the validation-tuned threshold identified during cross-validation (Section 3.6). Comparing the two reveals how much threshold tuning matters — if default-threshold F1 is near zero but tuned-threshold F1 is reasonable, the model has discriminative ability that only becomes apparent at the right operating point.
+Precision, recall, and F1 are reported at both the default threshold (0.5) and the validation-tuned threshold.
 
-#### Cross-Dataset Transfer Protocol
+**Cross-dataset transfer.** Models trained on one subreddit are evaluated directly on the other without retraining. AUC-ROC is the primary transfer metric since the optimal operating point differs between communities (WSB 3.75% vs pennystocks 0.95% surge rate). Transfer AUC exceeding 0.60 indicates that surge patterns share cross-community structure.
 
-To test whether the pipeline captures general surge dynamics or merely overfits to community-specific patterns, models trained on r/wallstreetbets are evaluated directly on r/pennystocks (and vice versa) without retraining. This is a stringent test: the two communities differ in posting density, ticker distribution, user demographics, and discussion norms.
-
-The transfer evaluation computes full metrics (AUC-ROC, precision, recall, F1) at both the default and source-community-tuned thresholds, but **AUC-ROC is the primary comparison metric** since the optimal operating point almost certainly differs between communities — a threshold tuned on WSB's 3.75% surge rate is unlikely to be appropriate for pennystocks' 0.95% rate. If transfer AUC exceeds the minimum tier (0.60), the underlying surge patterns share structure across communities. If it falls below, community-specific calibration is necessary — a meaningful finding either way, as it reveals whether "surge" is a universal phenomenon or a community-specific one.
-
-#### Sensitivity Analysis
-
-Two parameter sweeps characterise how robust the results are to design choices:
-
-- **Threshold sensitivity (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5})** — How does the surge definition affect model performance? If results collapse at slightly different τ values, the methodology is fragile. If performance degrades gracefully, the approach is robust to the specific threshold chosen.
-- **Weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0})** — Does sentiment actually help? Setting w₂=0 produces volume-only labels (Phase 1); increasing w₂ adds sentiment influence. This directly tests whether the composite design outperforms the simpler alternative, providing the evidence needed to justify (or reject) including sentiment in the surge definition.
-
-### 3.8 Reproducibility and Configuration
-
-Reproducibility is a first-class design constraint rather than an afterthought. Every pipeline run must produce identical outputs given identical inputs and configuration, and every output artefact must be traceable back to the exact parameters that generated it. This requirement is motivated by two concerns: scientific validity (any reported result must be independently verifiable) and practical iteration (when sweeping thresholds or weights across dozens of runs, an analyst must know which configuration produced which outcome).
-
-#### Deterministic Execution via Fixed Seeds
-
-All stochastic operations in the pipeline are governed by a single random seed (default: 42) applied at the start of each run. The pipeline seeds Python's built-in `random` module and NumPy's `np.random` at the start of execution, before any computation begins. This seed propagates through all downstream operations: scikit-learn's `RandomForestClassifier` and `LogisticRegression` receive `random_state=random_seed` as a constructor argument, and XGBoost receives it via the hyperparameter grid. Because the pipeline processes records in deterministic order (sorted by timestamp for temporal operations, stable-sorted for ties), the combination of fixed seeds and deterministic ordering guarantees bit-for-bit identical outputs across runs on the same machine.
-
-#### Configuration as Data
-
-All pipeline parameters are held in a single `PipelineConfig` dataclass that supports round-trip JSON serialisation (serialise via `to_json()` / `save_json()`, deserialise via `from_json()` / `load_json()`):
-
-```json
-{
-  "file_path": "input/raw/r_wallstreetbets_submissions_reddit.csv",
-  "output_dir": "output/processed",
-  "temporal_split_ratio": 0.8,
-  "surge_method": "forward_growth",
-  "min_window_count": 1,
-  "threshold_tau": 1.5,
-  "sentiment_model": "vader",
-  "weight_volume": 0.75,
-  "weight_sentiment": 0.25,
-  "thresholds": [0.5, 1.0, 1.5, 2.0, 2.5],
-  "random_seed": 42
-}
-```
-
-Every pipeline run writes this configuration to the output directory alongside its results (`YYYY-MM-DD_HH-MM_pipeline_config.json`), creating a permanent link between any output artefact and the exact parameters that produced it. Configuration can flow in two directions: parameters are specified individually via CLI arguments for exploratory runs, or a saved JSON file is loaded wholesale via `--config path/to/config.json` to reproduce a previous run exactly.
-
-This design means that reproducing any historical result requires only two things: the original input CSV and the saved configuration JSON. The command `surge-label --config output/processed/2026-07-18_19-09_pipeline_config.json` will recreate the exact labelling output from that run.
-
-#### CLI Design
-
-The pipeline exposes five named console scripts (defined in `pyproject.toml`), separating concerns so that expensive upstream stages need not be repeated when only downstream parameters change. The labelling script (`surge-label`) accepts all configuration parameters individually or via `--config`; the training script (`surge-train`) consumes the labelled CSV output and runs feature engineering through evaluation. Each script also accepts `--verbose` for debug-level logging, `--log-file auto` for persisted log output, and `--notes` for free-text annotation of the experiment. The full list of entry points and their parameters is detailed in Section 4.1 (Table 8).
-
-#### Experiment Log
-
-An append-only JSONL file (`output/experiment_log.jsonl`) records metadata for every pipeline run. Each line is a self-contained JSON object:
-
-```json
-{
-  "run_id": "2026-07-18_19-09",
-  "pipeline": "labelling",
-  "timestamp": "2026-07-18T19:09:42",
-  "git_sha": "a3f7c2d",
-  "config": { "...all parameters..." },
-  "outputs": ["2026-07-18_19-09_labelled.csv", "2026-07-18_19-09_pipeline_config.json"],
-  "summary": { "total_records": 457072, "surge_rate": 0.049, "duration_s": 312.4 },
-  "notes": "WSB full run, composite weights 0.75/0.25"
-}
-```
-
-The JSONL format was chosen for three properties: it is append-safe (a crash mid-write cannot corrupt existing entries), Git-friendly (each run adds exactly one line, producing clean diffs), and queryable via `pandas.read_json("experiment_log.jsonl", lines=True)` for longitudinal analysis across experiments. The Git SHA links each run to the exact code version that produced it, enabling reconstruction of the full dependency environment from the repository state at that commit.
-
-#### Model Serialisation
-
-Trained models are persisted via joblib, chosen over Python's built-in pickle for its efficient handling of NumPy arrays within scikit-learn estimators and over ONNX for its simplicity in a research (non-deployment) context. Each model file is timestamped and stored alongside its evaluation metrics. The StandardScaler fitted on training data is serialised jointly with the model to ensure that any future inference applies identical feature normalisation.
-
-#### Artefact Traceability
-
-The combination of these mechanisms creates a complete audit trail from raw data to final predictions:
-
-```
-Input CSV → [surge-label + config.json] → Labelled CSV
-         → [surge-train + labelled CSV]  → Trained models (joblib)
-                                          → Evaluation metrics (JSON)
-                                          → Figures (PNG)
-                                          → experiment_log.jsonl (append)
-```
-
-Every artefact in the `output/` directory carries a timestamp prefix that links it to the corresponding experiment log entry and configuration JSON, making it possible to reconstruct the full provenance chain for any reported result.
-
-#### Scope of the Reproducibility Guarantee
-
-The reproducibility mechanisms described above guarantee identical results *on the same machine with the same library versions*. Three factors limit stronger guarantees:
-
-- **NumPy version sensitivity.** The legacy `np.random.seed` API uses global state whose implementation may change across major NumPy releases. The project requires `numpy>=1.24` as a minimum bound but does not hard-pin the version; the Git SHA in the experiment log allows the exact dependency state to be recovered from `pyproject.toml` at that commit.
-- **Platform-dependent floating point.** Different CPU architectures (x86 vs ARM) and compiler optimisations may produce subtly different floating-point results, particularly in aggregation operations over large arrays. Bit-for-bit cross-platform reproducibility is not guaranteed.
-- **No containerised environment.** The project does not provide a Docker image or pinned lockfile freezing the full transitive dependency tree. For a student research project this is an acceptable trade-off; a production system would require stricter environment isolation.
-
-These limitations do not affect the validity of the reported results (which were all produced on a single machine with a fixed environment), but they are noted for transparency about the scope of the reproducibility claim.
-
----
-
-
-
-
----
+**Sensitivity analysis.** Two sweeps characterise robustness: threshold sensitivity (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) tests whether results degrade gracefully with different surge definitions; weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) tests whether sentiment improves prediction over volume-only labels.
 
 ## 4. Implementation
 
