@@ -47,30 +47,30 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Section 3: Design
 
-| # | Question | Status | Where Addressed | Notes |
-|---|----------|--------|-----------------|-------|
-| 3.1 | What is the overall pipeline architecture? | DONE | §3.1 | Six-stage linear pipeline with diagram |
-| 3.2 | Why Reddit (platform justification)? | DONE | §3.2 | Subreddit structure, public archives, text suitability |
-| 3.2a | Why Reddit specifically? (delegated from §1, Q1.6) | DONE | §3.2 | Full justification lives here; intro has brief forward reference |
-| 3.2b | Why these two subreddits? (delegated from §1, Q1.7) | DONE | §3.2 | Density spectrum rationale explained here |
-| 3.3 | Why these two subreddits? | DONE | §3.2 | Density spectrum + cross-dataset transfer motivation |
-| 3.4 | How is "surge" defined formally? | DONE | §3.3 | Composite metric with z-scores, threshold, weights |
-| 3.5 | Why use a composite metric? | PARTIAL | §3.3 | Stated that sentiment captures agitation without volume increase, but could be stronger |
-| 3.6 | How are features chosen and justified? | DONE | §3.4 | 11 features with backward-looking constraint |
-| 3.7 | Why exclude engagement scores? | DONE | §3.4 | Accumulate after posting, would introduce leakage |
-| 3.7a | Why exclude engagement scores? (delegated from §1, Q1.13) | DONE | §3.4 | Full reasoning here; intro states principle only |
-| 3.8 | Why these three models? | DONE | §3.5 | Complexity spectrum: linear → bagged → boosted |
-| 3.8a | Why binary classification not regression/multi-class/anomaly detection? (delegated from §1, Q1.4) | PARTIAL | §3.5 | Currently not explicitly justified in §3.5 either — needs adding |
-| 3.9 | Why AUC-ROC as primary metric? | DONE | §3.5 | Accuracy uninformative at 1–5% surge rate |
-| 3.10 | How is class imbalance handled? | DONE | §3.5 | Cost-sensitive learning (no SMOTE for temporal data) |
-| 3.11 | How does temporal validation work? | DONE | §3.6 | Expanding-window CV, 80/20 temporal split |
-| 3.12 | Why k=4 (not 5 or 10)? | PARTIAL | §3.6 | Implied (2.5-month windows for enough surges) but not explicitly justified |
-| 3.13 | What are the success criteria? | DONE | §3.7 | Three tiers: minimum/target/stretch |
-| 3.14 | How are models compared statistically? | DONE | §3.7 | Bootstrap CI + McNemar's with Bonferroni |
-| 3.15 | Is the study reproducible? | DONE | §3.1, §4.1 | Fixed seed, config dataclass, deterministic pipeline |
-| 3.16 | What about data drift / temporal non-stationarity? | MISSING | — | Not discussed in design (appears only in §5.3.4 as a finding) |
-| 3.17 | Why not use an API for live data? | MISSING | — | Implied by "static CSV" but not justified |
-| 3.18 | What are the ethical considerations? | DONE | §3.2 | Public data, aggregated analysis, no user identification |
+| # | Question | Status | Where Addressed | Priority | Action |
+|---|----------|--------|-----------------|----------|--------|
+| 3.1 | What is the overall pipeline architecture? | DONE | §3.1 | MUST-HAVE | No action needed |
+| 3.2 | Why Reddit (platform justification)? | DONE | §3.2 | MUST-HAVE | No action needed |
+| 3.2a | Why Reddit specifically? (delegated from §1, Q1.6) | DONE | §3.2 | MUST-HAVE | No action needed; full justification lives here |
+| 3.2b | Why these two subreddits? (delegated from §1, Q1.7) | DONE | §3.2 | MUST-HAVE | No action needed; density spectrum rationale explained here |
+| 3.3 | Why these two subreddits? | DONE | §3.2 | MUST-HAVE | No action needed |
+| 3.4 | How is "surge" defined formally? | DONE | §3.3 | MUST-HAVE | No action needed |
+| 3.5 | Why use a composite metric? | PARTIAL | §3.3 | MUST-HAVE | Strengthen justification: currently says sentiment captures agitation without volume increase, but should also state why a single-signal definition is insufficient (volume-only surges are noisier and harder to predict — Phase 1 results confirm this empirically). One sentence. |
+| 3.6 | How are features chosen and justified? | DONE | §3.4 | MUST-HAVE | No action needed |
+| 3.7 | Why exclude engagement scores? | DONE | §3.4 | MUST-HAVE | No action needed |
+| 3.7a | Why exclude engagement scores? (delegated from §1, Q1.13) | DONE | §3.4 | MUST-HAVE | No action needed; full reasoning here |
+| 3.8 | Why these three models? | DONE | §3.5 | MUST-HAVE | No action needed |
+| 3.8a | Why binary classification not regression/multi-class/anomaly detection? (delegated from §1, Q1.4) | PARTIAL | §3.5 | MUST-HAVE | Add 2–3 sentences: surges are present-or-absent events within a fixed window (not graded), making binary classification natural. Anomaly detection is unsupervised and cannot leverage known surge labels. Regression on magnitude conflates "how big" with "did it happen" — the operationally useful question is binary. |
+| 3.9 | Why AUC-ROC as primary metric? | DONE | §3.5 | MUST-HAVE | No action needed |
+| 3.10 | How is class imbalance handled? | DONE | §3.5 | MUST-HAVE | No action needed |
+| 3.11 | How does temporal validation work? | DONE | §3.6 | MUST-HAVE | No action needed |
+| 3.12 | Why k=4 (not 5 or 10)? | PARTIAL | §3.6 | SHOULD-HAVE | Add one sentence: "Four blocks produce ~2.5-month validation windows, each containing enough surge events for stable AUC estimates while keeping the minimum training set large enough for meaningful model fitting. Higher k would thin the validation folds below reliable evaluation." |
+| 3.13 | What are the success criteria? | DONE | §3.7 | MUST-HAVE | No action needed |
+| 3.14 | How are models compared statistically? | DONE | §3.7 | MUST-HAVE | No action needed |
+| 3.15 | Is the study reproducible? | DONE | §3.1, §4.1 | MUST-HAVE | No action needed |
+| 3.16 | What about data drift / temporal non-stationarity? | MISSING | — | SHOULD-HAVE | Add one sentence in §3.6 acknowledging it as a known risk: "Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period." Findings then appear naturally in §5.3.4. |
+| 3.17 | Why not use an API for live data? | MISSING | — | NICE-TO-HAVE | One sentence in §3.2: "Static archival CSVs ensure exact reproducibility; live API scraping would introduce temporal variability between runs and complicate replication." Low priority — most readers won't ask this. |
+| 3.18 | What are the ethical considerations? | DONE | §3.2 | MUST-HAVE | No action needed |
 
 ---
 
