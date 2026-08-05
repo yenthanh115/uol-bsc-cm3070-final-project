@@ -29,16 +29,19 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Section 2: Literature Review
 
-| # | Question | Status | Where Addressed | Notes |
-|---|----------|--------|-----------------|-------|
-| 2.1 | Can online attention be predicted at all? | DONE | §2.1 | Szabo & Huberman, Lerman & Hogg |
-| 2.2 | Can prediction happen before engagement accumulates? | DONE | §2.2 | Bandari et al., Cheng et al. |
-| 2.3 | Does sentiment carry predictive value in finance? | DONE | §2.3 | Bollen et al., VADER, FinBERT |
-| 2.4 | Do Reddit financial communities generate useful signal? | DONE | §2.4 | Long et al., Costola et al., Mancini et al. |
-| 2.5 | What methodological weaknesses exist in prior work? | DONE | §2.5 | Temporal leakage across reviewed studies |
-| 2.6 | What specific gap does this project fill? | DONE | §2.6 | Four gaps identified and mapped to design |
-| 2.7 | How do the reviewed studies relate to each other (synthesis)? | PARTIAL | §2.1–2.4 | Mostly sequential; cross-study synthesis could be stronger |
-| 2.8 | Are there conflicting findings across studies? | MISSING | — | No contradictions discussed |
+| # | Question | Status | Where Addressed | Priority | Action |
+|---|----------|--------|-----------------|----------|--------|
+| 2.1 | Can online attention be predicted at all? | DONE | §2.1 | MUST-HAVE | No action needed |
+| 2.2 | Can prediction happen before engagement accumulates? | DONE | §2.2 | MUST-HAVE | No action needed |
+| 2.3 | Does sentiment carry predictive value in finance? | DONE | §2.3 | MUST-HAVE | No action needed |
+| 2.4 | Do Reddit financial communities generate useful signal? | DONE | §2.4 | MUST-HAVE | No action needed |
+| 2.5 | What methodological weaknesses exist in prior work? | DONE | §2.5 | MUST-HAVE | No action needed |
+| 2.6 | What specific gap does this project fill? | DONE | §2.6 | MUST-HAVE | No action needed |
+| 2.7 | How do the reviewed studies relate to each other (synthesis)? | PARTIAL | §2.1–2.4 | SHOULD-HAVE | Add 2–3 cross-reference sentences linking studies across subsections (e.g., Cheng's temporal propagation speed relates to Bollen's mood timing; Costola's consensus formation connects to Lerman & Hogg's network dynamics) |
+| 2.8 | Are there conflicting findings across studies? | MISSING | — | NICE-TO-HAVE | One sentence noting the Szabo/Cheng tension: early popularity strongly predicts final outcome [1] vs. cascade prediction accuracy plateaus after initial phase [5]. Optional: Bollen's 87.6% claim vs. Fernández-Delgado's caution about evaluation methodology |
+| 2.9 | What is the current state of surge/burst detection specifically? | MISSING | — | SHOULD-HAVE | Kong et al. [7] does hashtag bursts but the review doesn't distinguish their burst detection (hashtag-level, real-time) from this project's surge prediction (ticker-level, pre-onset). One sentence would sharpen the gap claim. |
+| 2.10 | Why are these 17 sources sufficient? (scope of review) | MISSING | — | NICE-TO-HAVE | A brief scope statement at the start of §2 ("This review covers three intersecting strands...") would signal deliberate selectivity rather than accidental sparseness |
+| 2.11 | Are there studies that tried surge prediction and failed? | MISSING | — | NICE-TO-HAVE | Negative results strengthen a gap argument. If none exist, stating "no study was found that attempts..." explicitly in §2.6 is useful. Currently implied but not stated. |
 
 ---
 
