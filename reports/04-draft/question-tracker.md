@@ -13,16 +13,16 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 1.1 | What is the problem? | DONE | §1.2 | MUST-HAVE | No action needed |
 | 1.2 | Why does it matter? Who benefits? | PARTIAL | §1.2 | MUST-HAVE | Add 1–2 sentences clarifying use case (narrative monitoring, manipulation surveillance, or attention research — pick one concrete scenario) |
 | 1.3 | What exactly are you predicting? | DONE | §1.3 | MUST-HAVE | No action needed |
-| 1.4 | Why binary classification (not regression, multi-class, anomaly detection)? | PARTIAL | §1.3 | DELEGATE to §3.5 | One clause in §1.3 is enough; full justification belongs in Design |
+| 1.4 | Why binary classification (not regression, multi-class, anomaly detection)? | DEFERRED | §3.5 | — | One clause in §1.3 is enough; full justification moved to §3.5 |
 | 1.5 | Why ML over simpler alternatives (rule-based threshold, z-score alert)? | MISSING | — | MUST-HAVE | Add one sentence: a fixed threshold cannot combine heterogeneous signals or adapt to non-linear interactions |
-| 1.6 | Why Reddit specifically? | PARTIAL | §1.4 | DELEGATE to §3.2 | Already sufficient with forward reference; §3.2 handles the full justification |
-| 1.7 | Why these two subreddits? | PARTIAL | §1.4 | DELEGATE to §3.2 | Already present at intro level; density explanation belongs in Design |
+| 1.6 | Why Reddit specifically? | DEFERRED | §3.2 | — | Already sufficient with forward reference; full justification moved to §3.2 |
+| 1.7 | Why these two subreddits? | DEFERRED | §3.2 | — | Already present at intro level; density explanation moved to §3.2 |
 | 1.8 | What is the hypothesis / expected outcome? | MISSING | — | SHOULD-HAVE | Add one sentence in §1.1: "The hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges, and that performance scales with data density." |
 | 1.9 | What are the objectives? | DONE | §1.1 | MUST-HAVE | No action needed |
 | 1.10 | What's in/out of scope? | DONE | §1.4 | MUST-HAVE | No action needed |
 | 1.11 | How does this relate to the CM3005 template? | PARTIAL | §1.1 | NICE-TO-HAVE | One clarifying sentence for the marker; low priority for external readers |
 | 1.12 | What's the structure of the rest of the report? | MISSING | — | SHOULD-HAVE | Add 3–4 line roadmap paragraph at end of Section 1 |
-| 1.13 | Why exclude engagement scores (upvotes)? | PARTIAL | §1.3 | DELEGATE to §3.4 | One sentence stating the principle in intro; detailed reasoning in Design |
+| 1.13 | Why exclude engagement scores (upvotes)? | DEFERRED | §3.4 | — | One sentence stating the principle in intro; detailed reasoning moved to §3.4 |
 | 1.14 | Why use a combined metric (volume + sentiment) not just volume? | MISSING | — | MUST-HAVE (brief) | Add one sentence: "Volume alone misses cases where sentiment intensifies without a proportional posting increase; combining both captures a richer phenomenon." Full justification in §3.3 and §5.2.5 |
 
 ---
@@ -48,12 +48,16 @@ Tracks which questions a reader might ask, where they are (or should be) address
 |---|----------|--------|-----------------|-------|
 | 3.1 | What is the overall pipeline architecture? | DONE | §3.1 | Six-stage linear pipeline with diagram |
 | 3.2 | Why Reddit (platform justification)? | DONE | §3.2 | Subreddit structure, public archives, text suitability |
+| 3.2a | Why Reddit specifically? (delegated from §1, Q1.6) | DONE | §3.2 | Full justification lives here; intro has brief forward reference |
+| 3.2b | Why these two subreddits? (delegated from §1, Q1.7) | DONE | §3.2 | Density spectrum rationale explained here |
 | 3.3 | Why these two subreddits? | DONE | §3.2 | Density spectrum + cross-dataset transfer motivation |
 | 3.4 | How is "surge" defined formally? | DONE | §3.3 | Composite metric with z-scores, threshold, weights |
 | 3.5 | Why use a composite metric? | PARTIAL | §3.3 | Stated that sentiment captures agitation without volume increase, but could be stronger |
 | 3.6 | How are features chosen and justified? | DONE | §3.4 | 11 features with backward-looking constraint |
 | 3.7 | Why exclude engagement scores? | DONE | §3.4 | Accumulate after posting, would introduce leakage |
+| 3.7a | Why exclude engagement scores? (delegated from §1, Q1.13) | DONE | §3.4 | Full reasoning here; intro states principle only |
 | 3.8 | Why these three models? | DONE | §3.5 | Complexity spectrum: linear → bagged → boosted |
+| 3.8a | Why binary classification not regression/multi-class/anomaly detection? (delegated from §1, Q1.4) | PARTIAL | §3.5 | Currently not explicitly justified in §3.5 either — needs adding |
 | 3.9 | Why AUC-ROC as primary metric? | DONE | §3.5 | Accuracy uninformative at 1–5% surge rate |
 | 3.10 | How is class imbalance handled? | DONE | §3.5 | Cost-sensitive learning (no SMOTE for temporal data) |
 | 3.11 | How does temporal validation work? | DONE | §3.6 | Expanding-window CV, 80/20 temporal split |
