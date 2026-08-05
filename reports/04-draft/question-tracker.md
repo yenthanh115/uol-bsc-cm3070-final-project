@@ -139,10 +139,10 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Cross-Cutting Questions (should be addressed somewhere)
 
-| # | Question | Status | Best Section | Notes |
-|---|----------|--------|--------------|-------|
-| C.1 | Why not anomaly detection instead of classification? | MISSING | §1 or §3.5 | Never justified |
-| C.2 | Could a simple threshold rule work just as well? | MISSING | §1 or §5 | The baseline comparison (Table 15) partially addresses this but doesn't frame it as "would a rule suffice?" |
-| C.3 | What about data drift over time? | PARTIAL | §3 or §5 | Found as a result (§5.3.4) but not anticipated in design |
-| C.4 | Why 24-hour windows specifically? | PARTIAL | §3.3 | Stated as scope, acknowledged as limitation in §5.4.2, but not justified |
-| C.5 | How would this work in practice (deployment scenario)? | MISSING | §1.2 or §6 | Out of scope declared but no sketch of how it *could* work |
+| # | Question | Status | Best Section | Priority | Action |
+|---|----------|--------|--------------|----------|--------|
+| C.1 | Why not anomaly detection instead of classification? | MISSING | §3.5 | MUST-HAVE | Covered by Q3.8a. When that fix is applied (2–3 sentences justifying binary classification over alternatives including anomaly detection), this is resolved. No separate action needed beyond completing 3.8a. |
+| C.2 | Could a simple threshold rule work just as well? | PARTIAL | §5.2.2 | SHOULD-HAVE | Table 15 shows multi-feature models beat the best single-feature baseline (+0.087 to +0.162 AUC). Reframe one sentence: "The best single-feature predictor (equivalent to a threshold rule on one signal) achieves 0.805 on WSB — strong, but the multi-feature models add 8.7 AUC points by combining signals a single rule cannot integrate." This closes the "would a rule suffice?" question explicitly. |
+| C.3 | What about data drift over time? | PARTIAL | §3.6 | SHOULD-HAVE | Covered by Q3.16. When that fix is applied (one sentence acknowledging drift as a design-stage risk), the design-to-evaluation arc is complete. No separate action beyond completing 3.16. |
+| C.4 | Why 24-hour windows specifically? | PARTIAL | §3.3 | SHOULD-HAVE | Add one sentence in §3.3: "A 24-hour window aligns with the daily trading cycle and captures overnight-to-open discussion patterns; shorter windows (6h) risk insufficient post counts for stable statistics, while longer windows (72h) blur the distinction between surge onset and sustained activity." Acknowledged as a limitation in §5.4.2 — this provides the forward justification. |
+| C.5 | How would this work in practice (deployment scenario)? | MISSING | §6.3 | NICE-TO-HAVE | The project explicitly declares deployment out of scope. However, one sentence sketching a plausible use case would strengthen motivation without overstepping: "In deployment, the pipeline would ingest a rolling stream of posts, recompute features hourly, and flag tickers whose predicted surge probability crosses a tuned threshold — functioning as a screening layer that reduces thousands of tickers to a manageable watchlist for human review." Place at end of §6.3 or in §1.2 alongside the stakeholder discussion. |
