@@ -121,12 +121,19 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Section 6: Conclusion
 
-| # | Question | Status | Where Addressed | Notes |
-|---|----------|--------|-----------------|-------|
-| 6.1 | What was achieved? | DONE | §6.1 | Pipeline works end-to-end, question answered |
-| 6.2 | What are the key findings? | DONE | §6.2 | Data density > model complexity; sentiment interactive |
-| 6.3 | What are the limitations? | DONE | §6.3 | Four limitations bounded |
-| 6.4 | What's next? | DONE | §6.3 | Multi-scale windows, live testing |
+| # | Question | Status | Where Addressed | Priority | Action |
+|---|----------|--------|-----------------|----------|--------|
+| 6.1 | What was achieved? | DONE | §6.1 | MUST-HAVE | No action needed |
+| 6.2 | What are the key findings? | DONE | §6.2 | MUST-HAVE | No action needed |
+| 6.3 | What are the limitations? | DONE | §6.3 | MUST-HAVE | No action needed |
+| 6.4 | What's next? | DONE | §6.3 | MUST-HAVE | No action needed |
+| 6.5 | Does the conclusion introduce new information? | DONE | — | MUST-HAVE (negative) | No action needed. The conclusion correctly synthesises without introducing new data or arguments. This is the right approach. |
+| 6.6 | Does it answer the research question explicitly? | DONE | §6.2 | MUST-HAVE | No action needed. "The short answer to the central research question is yes" — clear and direct. |
+| 6.7 | Are the three contributions restated concisely? | PARTIAL | §6.1–6.2 | SHOULD-HAVE | §5.5 states three contributions explicitly; §6 weaves them into narrative prose but doesn't re-enumerate them. A reader skimming only the conclusion might miss one. Consider a single sentence: "The project contributes a leakage-free methodology, a composite surge metric, and empirical evidence that data density is the binding constraint." |
+| 6.8 | Is there a clear "so what" for the reader? | PARTIAL | §6.2 | SHOULD-HAVE | The findings are stated but the implication for practitioners is implicit. One sentence bridging to action: "For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication — a sparse community needs more history, not a better algorithm." |
+| 6.9 | Does the future work connect back to limitations? | DONE | §6.3 | MUST-HAVE | No action needed. Each future direction maps to a stated limitation (VADER → FinBERT, fixed window → multi-scale, retrospective → live). |
+| 6.10 | Is there a final closing statement? | DONE | §6.3 | MUST-HAVE | No action needed. "The question this project set out to answer... has been answered. What remains is finding out how far that answer extends." — effective closing. |
+| 6.11 | Does the conclusion acknowledge what was NOT achieved? | PARTIAL | §6.3 | NICE-TO-HAVE | Limitations are stated but there's no explicit statement about objectives that fell short. §5.1 shows all objectives were met, so this may not apply — but one could note that pennystocks results are tentative (31 test surges) and that the methodology is validated but not the deployment case. Already implicit; making it explicit would strengthen intellectual honesty. |
 
 ---
 
