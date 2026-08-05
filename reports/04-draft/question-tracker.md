@@ -76,15 +76,20 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Section 4: Implementation
 
-| # | Question | Status | Where Addressed | Notes |
-|---|----------|--------|-----------------|-------|
-| 4.1 | How is the code organised? | DONE | §4.1 | Module-by-module breakdown |
-| 4.2 | How does data loading work? | DONE | §4.2 | Text cleaning, ticker extraction, explosion |
-| 4.3 | How are features computed? | DONE | §4.3 | Searchsorted approach, interaction terms |
-| 4.4 | How does labelling prevent leakage? | DONE | §4.4 | Frozen z-score params from training only |
-| 4.5 | How are models trained and evaluated? | DONE | §4.5 | Expanding-window CV, grid search, threshold tuning |
-| 4.6 | What problems were encountered and solved? | DONE | §4.6 | Timestamp bug, sparsity, threshold collapse |
-| 4.7 | Is the implementation complete? | DONE | §4.7 | All six stages functional, tests pass |
+| # | Question | Status | Where Addressed | Priority | Action |
+|---|----------|--------|-----------------|----------|--------|
+| 4.1 | How is the code organised? | DONE | §4.1 | MUST-HAVE | No action needed |
+| 4.2 | How does data loading work? | DONE | §4.2 | MUST-HAVE | No action needed |
+| 4.3 | How are features computed? | DONE | §4.3 | MUST-HAVE | No action needed |
+| 4.4 | How does labelling prevent leakage? | DONE | §4.4 | MUST-HAVE | No action needed |
+| 4.5 | How are models trained and evaluated? | DONE | §4.5 | MUST-HAVE | No action needed |
+| 4.6 | What problems were encountered and solved? | DONE | §4.6 | MUST-HAVE | No action needed |
+| 4.7 | Is the implementation complete? | DONE | §4.7 | MUST-HAVE | No action needed |
+| 4.8 | What are the key dependencies and their versions? | PARTIAL | §4.1 | SHOULD-HAVE | §4.1 lists libraries (pandas, scikit-learn, XGBoost, vaderSentiment, NumPy) but no version pins. One sentence or a small table of pinned versions would aid reproducibility claims. |
+| 4.9 | How long does the pipeline take to run? | MISSING | — | NICE-TO-HAVE | Runtime context helps readers gauge feasibility. One sentence: "The full pipeline completes in ~X minutes on [hardware spec] for the WSB dataset." Not critical but strengthens the practical contribution. |
+| 4.10 | How is the ticker stopword list maintained/validated? | PARTIAL | §4.2 | NICE-TO-HAVE | §4.2 mentions 297 terms across 8 categories but doesn't explain how the list was built or validated. One sentence on methodology (manual curation from false-positive analysis) would suffice. |
+| 4.11 | What happens when a ticker has too few posts for windowing? | PARTIAL | §4.4 | SHOULD-HAVE | §4.4 mentions "records with too few posts in their forward window are excluded as unlabellable" but doesn't state the minimum threshold or how many records are lost. Table 9 shows attrition at loading stage but not at labelling exclusion. |
+| 4.12 | How are the hyperparameter grids justified? | PARTIAL | §4.5 | SHOULD-HAVE | Table 10 lists the grids but doesn't explain why those specific ranges (e.g., why max_depth goes to 10 but not 15, why learning_rate stops at 0.3). One sentence: "Ranges were chosen from common defaults in the scikit-learn/XGBoost documentation, narrowed by preliminary runs on the first validation fold." |
 
 ---
 
