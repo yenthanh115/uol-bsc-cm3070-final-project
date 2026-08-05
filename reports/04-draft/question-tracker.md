@@ -95,20 +95,27 @@ Tracks which questions a reader might ask, where they are (or should be) address
 
 ## Section 5: Evaluation
 
-| # | Question | Status | Where Addressed | Notes |
-|---|----------|--------|-----------------|-------|
-| 5.1 | Were objectives met? | DONE | §5.1 | Each objective revisited with evidence |
-| 5.2 | What are the raw performance numbers? | DONE | §5.2.1 | Tables 11–13 |
-| 5.3 | Are model differences statistically significant? | DONE | §5.2.2 | McNemar's test, all significant |
-| 5.4 | Do models transfer across communities? | DONE | §5.2.3 | Cross-dataset AUC table |
-| 5.5 | Which features matter most? | DONE | §5.2.4 | Permutation importance |
-| 5.6 | Does sentiment actually help? | DONE | §5.2.5 | Phase 1 vs Phase 2 comparison |
-| 5.7 | Why does XGBoost lose on pennystocks? | DONE | §5.3.1 | Insufficient positives for boosting |
-| 5.8 | Why is sentiment important if it's weak alone? | DONE | §5.3.2 | Interactive signal with activity features |
-| 5.9 | Why does transfer work asymmetrically? | DONE | §5.3.3 | Feature over-reliance on word_count |
-| 5.10 | What are the limitations? | DONE | §5.4.1 | Sample size, single year, VADER, calibration |
-| 5.11 | What would improve results? | DONE | §5.4.2 | Prioritised improvement table |
-| 5.12 | What's original about this work? | DONE | §5.5 | Three contributions stated |
+| # | Question | Status | Where Addressed | Priority | Action |
+|---|----------|--------|-----------------|----------|--------|
+| 5.1 | Were objectives met? | DONE | §5.1 | MUST-HAVE | No action needed |
+| 5.2 | What are the raw performance numbers? | DONE | §5.2.1 | MUST-HAVE | No action needed |
+| 5.3 | Are model differences statistically significant? | DONE | §5.2.2 | MUST-HAVE | No action needed |
+| 5.4 | Do models transfer across communities? | DONE | §5.2.3 | MUST-HAVE | No action needed |
+| 5.5 | Which features matter most? | DONE | §5.2.4 | MUST-HAVE | No action needed |
+| 5.6 | Does sentiment actually help? | DONE | §5.2.5 | MUST-HAVE | No action needed |
+| 5.7 | Why does XGBoost lose on pennystocks? | DONE | §5.3.1 | MUST-HAVE | No action needed |
+| 5.8 | Why is sentiment important if it's weak alone? | DONE | §5.3.2 | MUST-HAVE | No action needed |
+| 5.9 | Why does transfer work asymmetrically? | DONE | §5.3.3 | MUST-HAVE | No action needed |
+| 5.10 | What are the limitations? | DONE | §5.4.1 | MUST-HAVE | No action needed |
+| 5.11 | What would improve results? | DONE | §5.4.2 | MUST-HAVE | No action needed |
+| 5.12 | What's original about this work? | DONE | §5.5 | MUST-HAVE | No action needed |
+| 5.13 | How do results compare to published baselines? | PARTIAL | §5.5 | SHOULD-HAVE | §5.5 states direct comparison is not possible (different datasets/protocols). This is honest but could be strengthened: one sentence comparing the AUC range (0.75–0.89) to the broader literature's reported figures (Cheng 0.877, Bandari ~84%) while noting protocol differences make direct comparison invalid. Contextualises rather than claims superiority. |
+| 5.14 | Is the precision (0.217) actually useful in practice? | PARTIAL | §5.3.4 | SHOULD-HAVE | §5.3.4 raises the concern ("four of five flags are false alarms") but doesn't frame it as a practical trade-off: at what alert volume does this become useful? If a system monitors 500 tickers, 0.217 precision means ~4 real surges per 20 flags — is that acceptable for a screening tool? One sentence contextualising the operating point would help. |
+| 5.15 | Could the validation-test gap (F1 0.911 → 0.145) indicate overfitting rather than non-stationarity? | PARTIAL | §5.3.4 | SHOULD-HAVE | §5.3.4 attributes the gap to temporal non-stationarity but doesn't rule out overfitting to validation-fold patterns. One sentence distinguishing: "AUC remains high (0.880) on test, indicating ranking ability transfers; the F1 collapse reflects threshold miscalibration under distribution shift rather than wholesale model failure." |
+| 5.16 | Are the bootstrap CIs on pennystocks wide enough to overlap between models? | PARTIAL | §5.2.1 | NICE-TO-HAVE | Table 11 shows RF [0.673–0.824] and XGB [0.641–0.821] — these overlap substantially. One sentence acknowledging that "model rankings on pennystocks are not statistically distinguishable by CI overlap alone, though McNemar's confirms they differ in prediction pattern" would pre-empt the critique. |
+| 5.17 | Is the structural correlation between sentiment feature and target a problem? | PARTIAL | §5.4.1 | SHOULD-HAVE | Listed as a limitation ("not leakage but a circularity") — good. But could be stronger: explicitly state what would be needed to rule it out (a feature set excluding sentiment entirely achieving comparable AUC). Phase 1 partially does this but the connection isn't drawn explicitly. |
+| 5.18 | How sensitive are results to the specific threshold τ=1.0? | DONE | §5.2.5 | MUST-HAVE | No action needed; Table 19 weight sweep covers this. |
+| 5.19 | Would the models work on a different time period? | PARTIAL | §5.4.1 | SHOULD-HAVE | Listed as a limitation (single calendar year) but no estimate of likely degradation. One sentence: "The 2021 dataset includes an unprecedented retail speculation event (GameStop); models may underperform on calmer periods where surges are rarer and less structured." |
 
 ---
 
