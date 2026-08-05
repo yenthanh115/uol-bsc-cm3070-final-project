@@ -748,6 +748,8 @@ All comparisons are significant. The large WSB χ² values reflect 68,923 paired
 | WSB | 0.500 | 0.805 (word_count) | 0.892 (XGB) | +0.087 |
 | Pennystocks | 0.500 | 0.591 (hour_of_day) | 0.753 (RF) | +0.162 |
 
+The best single-feature predictor is equivalent to a threshold rule on one signal. On WSB it reaches 0.805, which is already strong, but the multi-feature models add another 8.7 AUC points by combining signals that no single rule can integrate. On pennystocks the gap is even wider (+0.162), where the best individual feature barely clears 0.591 and multi-feature combination is what makes the task solvable at all.
+
 #### 5.2.3 Cross-Dataset Transfer
 
 *Table 16: Cross-dataset transfer AUC-ROC (no retraining).*
