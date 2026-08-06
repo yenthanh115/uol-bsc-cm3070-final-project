@@ -365,6 +365,8 @@ For each record mentioning ticker *X* at time *t*, the pipeline:
 
 Z-scoring identifies growth that is statistically unusual regardless of a ticker's typical volume. The parameters are computed exclusively from the training partition to prevent leakage into the target variable.
 
+The 24-hour window aligns with the daily trading cycle and captures overnight-to-open discussion patterns that drive next-day attention. Shorter windows (6h) risk insufficient post counts per ticker for stable statistics, particularly on sparser communities. Longer windows (72h) blur the distinction between surge onset and sustained activity, making the label less useful as an early-warning signal. The sensitivity analysis in Section 5.4.2 revisits this choice and identifies multi-scale windows as a priority improvement.
+
 Including sentiment captures cases where a community becomes markedly more agitated without necessarily posting more frequently [4][10]. Setting w₂=0 reduces the definition to volume-only, enabling direct comparison (Phase 1 vs Phase 2).
 
 *Table 5: Threshold sensitivity on r/wallstreetbets (457,072 usable records).*
@@ -913,6 +915,8 @@ Two directions would take the methodology somewhere it has not been:
 **Multi-scale temporal windows.** The system uses a single 24-hour lookback and 24-hour lookahead. Surges do not all operate on the same timescale. Adding parallel windows at 6h, 12h, and 72h would let the model match its prediction horizon to the type of surge it is trying to catch, and would reveal whether the current findings are partly an artefact of how one window size aligns with daily posting rhythms.
 
 **Testing predictions against live data.** Everything here is retrospective, a simulation of prediction rather than prediction itself. Connecting the pipeline to a live stream, where predictions are recorded before outcomes are known, would produce the kind of evidence that retrospective evaluation, however carefully designed, cannot provide.
+
+In deployment, the pipeline would ingest a rolling stream of posts, recompute features hourly, and flag tickers whose predicted surge probability crosses a tuned threshold — functioning as a screening layer that reduces thousands of tickers to a manageable watchlist for human review. Building that system is beyond the present scope, but nothing in the architecture prevents it.
 
 The question this project set out to answer, whether surges can be predicted without future information, has been answered. What remains is finding out how far that answer extends.
 
