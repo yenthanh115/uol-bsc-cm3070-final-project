@@ -14,16 +14,16 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 1.2 | Why does it matter? Who benefits? | PARTIAL | §1.2 | MUST-HAVE | Add 1–2 sentences clarifying use case (narrative monitoring, manipulation surveillance, or attention research — pick one concrete scenario) |
 | 1.3 | What exactly are you predicting? | DONE | §1.3 | MUST-HAVE | No action needed |
 | 1.4 | Why binary classification (not regression, multi-class, anomaly detection)? | DEFERRED | §3.5 | — | One clause in §1.3 is enough; full justification moved to §3.5 |
-| 1.5 | Why ML over simpler alternatives (rule-based threshold, z-score alert)? | MISSING | — | MUST-HAVE | Add one sentence: a fixed threshold cannot combine heterogeneous signals or adapt to non-linear interactions |
+| 1.5 | Why ML over simpler alternatives (rule-based threshold, z-score alert)? | DONE | §1.2 | MUST-HAVE | Added sentence at end of §1.2: a simple threshold cannot combine heterogeneous signals or adapt to non-linear interactions; a learning-based approach is needed. |
 | 1.6 | Why Reddit specifically? | DEFERRED | §3.2 | — | Already sufficient with forward reference; full justification moved to §3.2 |
 | 1.7 | Why these two subreddits? | DEFERRED | §3.2 | — | Already present at intro level; density explanation moved to §3.2 |
-| 1.8 | What is the hypothesis / expected outcome? | MISSING | — | SHOULD-HAVE | Add one sentence in §1.1: "The hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges, and that performance scales with data density." |
+| 1.8 | What is the hypothesis / expected outcome? | DONE | §1.1 | SHOULD-HAVE | Added after objectives: "The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, and that predictive performance scales with data density rather than model complexity." |
 | 1.9 | What are the objectives? | DONE | §1.1 | MUST-HAVE | No action needed |
 | 1.10 | What's in/out of scope? | DONE | §1.4 | MUST-HAVE | No action needed |
 | 1.11 | How does this relate to the CM3005 template? | PARTIAL | §1.1 | NICE-TO-HAVE | One clarifying sentence for the marker; low priority for external readers |
-| 1.12 | What's the structure of the rest of the report? | MISSING | — | SHOULD-HAVE | Add 3–4 line roadmap paragraph at end of Section 1 |
+| 1.12 | What's the structure of the rest of the report? | DONE | §1.6 | SHOULD-HAVE | Added §1.6 "Report Structure" with 4-line roadmap paragraph after the Gantt chart. |
 | 1.13 | Why exclude engagement scores (upvotes)? | DEFERRED | §3.4 | — | One sentence stating the principle in intro; detailed reasoning moved to §3.4 |
-| 1.14 | Why use a combined metric (volume + sentiment) not just volume? | MISSING | — | MUST-HAVE (brief) | Add one sentence: "Volume alone misses cases where sentiment intensifies without a proportional posting increase; combining both captures a richer phenomenon." Full justification in §3.3 and §5.2.5 |
+| 1.14 | Why use a combined metric (volume + sentiment) not just volume? | DONE | §1.3 | MUST-HAVE (brief) | Added sentence in §1.3: "Volume alone misses cases where a community becomes markedly more agitated without a proportional posting increase; combining both signals captures a richer, more structured phenomenon (confirmed empirically in Section 5.2.5)." |
 
 ---
 
