@@ -445,7 +445,7 @@ gantt
 ```
 *Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
 
-The key guarantee is that every validation record comes strictly after all training records in time — the model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
+The key guarantee is that every validation record comes strictly after all training records in time. The model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
 One risk this design cannot eliminate is temporal non-stationarity: surge dynamics may shift across the year as market regimes change. The expanding-window approach helps by always training on the longest available history, but it cannot adjust to regime shifts that happen within the test period. Section 5.3.4 examines the evidence for this.
 
 ### 3.7 Evaluation Framework
