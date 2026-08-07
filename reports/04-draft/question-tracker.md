@@ -68,8 +68,8 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 3.13 | What are the success criteria? | DONE | §3.7 | MUST-HAVE | No action needed |
 | 3.14 | How are models compared statistically? | DONE | §3.7 | MUST-HAVE | No action needed |
 | 3.15 | Is the study reproducible? | DONE | §3.1, §4.1 | MUST-HAVE | No action needed |
-| 3.16 | What about data drift / temporal non-stationarity? | MISSING | — | SHOULD-HAVE | Add one sentence in §3.6 acknowledging it as a known risk: "Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period." Findings then appear naturally in §5.3.4. |
-| 3.17 | Why not use an API for live data? | MISSING | — | NICE-TO-HAVE | One sentence in §3.2: "Static archival CSVs ensure exact reproducibility; live API scraping would introduce temporal variability between runs and complicate replication." Low priority — most readers won't ask this. |
+| 3.16 | What about data drift / temporal non-stationarity? | DONE | §3.6 | SHOULD-HAVE | Added sentence in §3.6 acknowledging non-stationarity as a known risk, with forward reference to §5.3.4 for empirical evidence. |
+| 3.17 | Why not use an API for live data? | DONE | §3.2 | NICE-TO-HAVE | Added sentence in §3.2 explaining that static CSVs ensure reproducibility while live API scraping would introduce temporal variability. |
 | 3.18 | What are the ethical considerations? | DONE | §3.2 | MUST-HAVE | No action needed |
 
 ---

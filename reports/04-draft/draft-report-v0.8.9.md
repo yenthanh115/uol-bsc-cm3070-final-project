@@ -351,7 +351,7 @@ This dual-dataset design addresses literature gap 3 (domain specificity) and ena
 | Test surges | 31 | 2,582 |
 | Test imbalance ratio | 105:1 | 26:1 |
 
-Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full calendar year 2021 (spanning the January GameStop episode through subsequent normalisation). No live API scraping was performed; the static snapshot ensures reproducibility. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (`score`, `num_comments`) that are retained for transparency but *not* used as features.
+Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full calendar year 2021 (spanning the January GameStop episode through subsequent normalisation). Static archival CSVs ensure exact reproducibility; live API scraping would introduce temporal variability between runs and complicate replication. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (`score`, `num_comments`) that are retained for transparency but *not* used as features.
 
 **Ethical considerations.** All data consists of publicly posted submissions; analysis is aggregated at the ticker level with no attempt to identify individual users. The project is academic research only; no trading decisions were made from model outputs.
 
@@ -456,7 +456,8 @@ gantt
 *Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
 
 The key guarantee is that every validation record comes strictly after all training records in time. The model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
-One risk this design cannot eliminate is temporal non-stationarity: surge dynamics may shift across the year as market regimes change. The expanding-window approach helps by always training on the longest available history, but it cannot adjust to regime shifts that happen within the test period. Section 5.3.4 examines the evidence for this.
+
+Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period. Section 5.3.4 examines empirical evidence for this concern.
 
 ### 3.7 Evaluation Framework
 
