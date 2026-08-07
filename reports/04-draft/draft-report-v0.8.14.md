@@ -10,7 +10,7 @@ Social media discussions in online financial communities, such as Reddit, can sh
 
 ### 1.1 Project Concept and Objectives
 
-This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this binary task.
+This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. The template calls for predicting when online content will gain traction; this project instantiates that brief by targeting posting-volume surges on Reddit financial communities. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this binary task.
 
 The project has three objectives:
 
@@ -24,7 +24,7 @@ The underlying hypothesis is that backward-looking temporal and textual features
 
 Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
 
-This is primarily a research question: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities.
+This is primarily a research question: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities. As a concrete scenario, consider a compliance team monitoring a brokerage's universe of covered stocks: an automated system that flags tickers showing surge precursors would let analysts focus on the five or ten names most likely to dominate tomorrow's discussion, rather than scanning thousands of threads manually.
 
 Prior work in this area tends to focus on related but distinct problems: forecasting eventual content reach rather than detecting rapid onset, or predicting price movements rather than social media dynamics themselves. In the reviewed literature, predicting the onset of a volume-and-sentiment surge for individual tickers within a short-term window remains largely unaddressed (see Section 2.6).
 
@@ -175,7 +175,7 @@ Long et al. [9] demonstrated that r/WallStreetBets posting volume correlated wit
 
 Mancini et al. [11] applied this principle to pump-and-dump detection, building predictive models from the language and timing of forum posts associated with manipulated stocks. Their work confirmed that text-based features from financial discussion forums achieve classification performance significantly above random baselines for predicting anomalous stock activity.
 
-These studies collectively establish that **Reddit financial communities generate measurable, predictive signals**, but all predict *market outcomes* (returns, trading volume, manipulation) rather than *social media dynamics* themselves. The question of whether the discussion itself will escalate, whether a ticker's posting volume is about to surge, remains unaddressed. This is the specific prediction target of the present project.
+These studies collectively establish that **Reddit financial communities generate measurable, predictive signals**, but all predict *market outcomes* (returns, trading volume, manipulation) rather than *social media dynamics* themselves. Notably, these findings connect back to earlier work: Costola et al.'s consensus formation patterns [10] parallel the network-mediated discovery dynamics that Lerman and Hogg [2] described on Digg, while Long et al.'s observation that posting volume *precedes* trading activity [9] echoes Cheng et al.'s finding [5] that early propagation speed predicts later growth. The question of whether the discussion itself will escalate, whether a ticker's posting volume is about to surge, remains unaddressed. This is the specific prediction target of the present project.
 
 ### 2.5. Methodological Weaknesses in Prior Work
 
@@ -375,7 +375,7 @@ Z-scoring identifies growth that is statistically unusual regardless of a ticker
 
 The 24-hour window aligns with the daily trading cycle and captures overnight-to-open discussion patterns that drive next-day attention. Shorter windows (6h) risk insufficient post counts per ticker for stable statistics, particularly on sparser communities. Longer windows (72h) blur the distinction between surge onset and sustained activity, making the label less useful as an early-warning signal. The sensitivity analysis in Section 5.4.2 revisits this choice and identifies multi-scale windows as a priority improvement.
 
-Including sentiment captures cases where a community becomes markedly more agitated without necessarily posting more frequently [4][10]. Setting w₂=0 reduces the definition to volume-only, enabling direct comparison (Phase 1 vs Phase 2).
+Including sentiment captures cases where a community becomes markedly more agitated without necessarily posting more frequently [4][10]. A volume-only definition produces noisier, less structured surges that are harder to predict, as confirmed empirically: Phase 1 (w₂=0) yields AUC 0.710 vs Phase 2's 0.892 on WSB (Section 5.2.5). Setting w₂=0 reduces the definition to volume-only, enabling that direct comparison.
 
 *Table 5: Threshold sensitivity on r/wallstreetbets (457,072 usable records).*
 
@@ -455,7 +455,7 @@ gantt
 ```
 *Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
 
-The key guarantee is that every validation record comes strictly after all training records in time. The model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
+The key guarantee is that every validation record comes strictly after all training records in time. The model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates while keeping the minimum training set large enough for meaningful model fitting. Higher k would thin the validation folds below reliable evaluation. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
 
 Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period. Section 5.3.4 examines empirical evidence for this concern.
 
@@ -498,7 +498,7 @@ Precision, recall, and F1 are reported at both the default threshold (0.5) and t
 
 ### 4.1 Code Organisation
 
-The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) depending on pandas, scikit-learn, XGBoost, vaderSentiment, and NumPy. All source code sits under `src/`, split into a core library and CLI scripts:
+The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) depending on pandas (≥2.0), scikit-learn (≥1.3), XGBoost (≥2.0), vaderSentiment (≥3.3.2), and NumPy (≥1.24). Exact pinned versions are recorded in `requirements.txt` and in each experiment log entry for full reproducibility. All source code sits under `src/`, split into a core library and CLI scripts:
 
 ```
 src/
@@ -540,7 +540,7 @@ The loader (`loader.py`) transforms a raw Reddit CSV into the unit of analysis (
 
 **Text cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) are replaced with empty strings, and null fields are filled likewise. Each row in the archival dataset corresponds to a unique Reddit submission ID, so no deduplication is needed.
 
-**Ticker extraction.** Two regex patterns run in priority order: (1) dollar-sign tickers (`$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; and (2) standalone 2–5 character uppercase words, which cast a broader net. Both are filtered against a curated stopword set of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, and others). A stopword approach was chosen over a known-ticker list because penny stock tickers change frequently. The worst-case failure mode is a false-positive adding noise to one record, whereas a stale ticker list would silently drop posts about unknown stocks.
+**Ticker extraction.** Two regex patterns run in priority order: (1) dollar-sign tickers (`$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; and (2) standalone 2–5 character uppercase words, which cast a broader net. Both are filtered against a curated stopword set of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, and others), built through iterative false-positive analysis on early pipeline runs and manually reviewed for completeness. A stopword approach was chosen over a known-ticker list because penny stock tickers change frequently. The worst-case failure mode is a false-positive adding noise to one record, whereas a stale ticker list would silently drop posts about unknown stocks.
 
 **Timestamp normalisation and explosion.** Raw timestamps (Unix epoch or datetime strings) are normalised to `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. Multi-ticker posts (for example, "comparing $AMC vs $GME") are exploded into separate rows via `pandas.explode()`. Records yielding zero tickers are dropped.
 
@@ -602,7 +602,7 @@ The labelling module converts raw windowing and sentiment outputs into binary su
 
 > *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
 
-A record is labelled surge (1) if its composite exceeds threshold τ, and no-surge (0) otherwise. A `sweep_thresholds()` function evaluates τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5} in a single pass for sensitivity analysis. Setting `weight_sentiment = 0` gives the volume-only variant used in the Phase 1 ablation.
+A record is labelled surge (1) if its composite exceeds threshold τ, and no-surge (0) otherwise. Records whose forward window contains fewer than two same-ticker posts are excluded as unlabellable, since a single post cannot produce a meaningful volume growth ratio. This exclusion accounts for the attrition from 577,872 exploded records to 457,072 usable records on WSB (Table 4), with the gap reflecting tickers near the end of the dataset whose 24-hour forward window extends beyond the data boundary. A `sweep_thresholds()` function evaluates τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5} in a single pass for sensitivity analysis. Setting `weight_sentiment = 0` gives the volume-only variant used in the Phase 1 ablation.
 
 ### 4.5 Model Training and Evaluation
 
@@ -616,7 +616,7 @@ A record is labelled surge (1) if its composite exceeds threshold τ, and no-sur
 | Random Forest | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 10, None}, min_samples_leaf ∈ {1, 2, 5} | 36 |
 | XGBoost | n_estimators ∈ {50, 100, 200}, max_depth ∈ {3, 5, 7}, learning_rate ∈ {0.01, 0.1, 0.3}, scale_pos_weight ∈ {1, ratio/2, ratio} | ≤50 |
 
-For each configuration, a `StandardScaler` is fit fresh on the training fold alone (preventing validation leakage), and the configuration with the highest mean validation AUC wins. The winner is then retrained on the entire training partition before touching the test set.
+For each configuration, a `StandardScaler` is fit fresh on the training fold alone (preventing validation leakage), and the configuration with the highest mean validation AUC wins. Ranges were chosen from common defaults in the scikit-learn and XGBoost documentation, then narrowed by preliminary runs on the first validation fold to exclude values that consistently underperformed. The winner is then retrained on the entire training partition before touching the test set.
 
 **Evaluation.** Each model produces predicted probabilities on the held-out test partition (scaled using only training statistics). From these, the pipeline computes precision, recall, F1, and AUC-ROC. Bootstrap confidence intervals (1,000 resamples, seeded) give 95% CIs on all metrics.
 
@@ -891,7 +891,7 @@ Direct comparison with published baselines is not possible, as no reviewed study
 
 The core question driving this project was one the existing literature had not directly tackled: can posting-volume surges in Reddit financial communities be predicted from information that is genuinely available at the moment a post is made, and nothing more? That framing ruled out the shortcut most prior work had taken, whether deliberately or not, of letting future engagement data bleed into training. Answering it properly meant building a pipeline that treats temporal ordering not as a convenience but as a hard constraint, one that runs from how surges are defined all the way through to how model comparisons are reported.
 
-What came out of that effort is a system that goes from raw Reddit data to evaluated, statistically-tested classifiers without ever peeking ahead. Two communities, three models, and more than thirty experimental runs later, the question turned out to have a real answer, and the methodology makes that answer worth trusting.
+What came out of that effort is a system that goes from raw Reddit data to evaluated, statistically-tested classifiers without ever peeking ahead. Two communities, three models, and more than thirty experimental runs later, the question turned out to have a real answer, and the methodology makes that answer worth trusting. In summary, the project contributes a leakage-free methodology, a composite surge metric, and empirical evidence that data density is the binding constraint on prediction quality.
 
 ### 6.2 Key Findings
 
@@ -907,9 +907,11 @@ Three things came out of the experiments that were not obvious going in:
 
 Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on WSB yields AUC 0.871, nearly matching the native result, but training on WSB and testing on pennystocks yields only 0.684. WSB models lean heavily on word count as a feature, because long analytical posts tend to precede surges there, and that pattern simply does not exist in the other community. Models trained on sparse data, despite lower absolute performance on their own community, spread their reliance across weaker signals and end up learning something closer to universal.
 
+For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication. A sparse community needs more history, not a better algorithm.
+
 ### 6.3 Limitations and Future Work
 
-Four limitations bound the current conclusions:
+Four limitations bound the current conclusions. All three objectives were met (Section 5.1), but the pennystocks results rest on only 31 test surges and should be treated as tentative rather than definitive. Likewise, the methodology has been validated for retrospective prediction but not for deployment under live conditions, which would introduce latency, missing data, and distribution drift that the current evaluation cannot capture.
 
 **The pennystocks evaluation rests on thin ground.** Thirty-one test surges produce confidence intervals wide enough that model rankings could shift with a different test period. Lowering the surge threshold would bring more positive cases into the test set at some cost to definitional precision.
 

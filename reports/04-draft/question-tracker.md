@@ -11,7 +11,7 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | # | Question | Status | Where Addressed | Priority | Action |
 |---|----------|--------|-----------------|----------|--------|
 | 1.1 | What is the problem? | DONE | §1.2 | MUST-HAVE | No action needed |
-| 1.2 | Why does it matter? Who benefits? | PARTIAL | §1.2 | MUST-HAVE | Add 1–2 sentences clarifying use case (narrative monitoring, manipulation surveillance, or attention research — pick one concrete scenario) |
+| 1.2 | Why does it matter? Who benefits? | DONE | §1.2 | MUST-HAVE | Added concrete scenario: a compliance team monitoring covered stocks uses automated surge flags to focus on the few tickers most likely to dominate tomorrow's discussion, rather than scanning thousands of threads manually. |
 | 1.3 | What exactly are you predicting? | DONE | §1.3 | MUST-HAVE | No action needed |
 | 1.4 | Why binary classification (not regression, multi-class, anomaly detection)? | DEFERRED | §3.5 | — | One clause in §1.3 is enough; full justification moved to §3.5 |
 | 1.5 | Why ML over simpler alternatives (rule-based threshold, z-score alert)? | DONE | §1.2 | MUST-HAVE | Added sentence at end of §1.2: a simple threshold cannot combine heterogeneous signals or adapt to non-linear interactions; a learning-based approach is needed. |
@@ -20,7 +20,7 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 1.8 | What is the hypothesis / expected outcome? | DONE | §1.1 | SHOULD-HAVE | Added after objectives: "The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, and that predictive performance scales with data density rather than model complexity." |
 | 1.9 | What are the objectives? | DONE | §1.1 | MUST-HAVE | No action needed |
 | 1.10 | What's in/out of scope? | DONE | §1.4 | MUST-HAVE | No action needed |
-| 1.11 | How does this relate to the CM3005 template? | PARTIAL | §1.1 | NICE-TO-HAVE | One clarifying sentence for the marker; low priority for external readers |
+| 1.11 | How does this relate to the CM3005 template? | DONE | §1.1 | NICE-TO-HAVE | Added clarifying sentence: "The template calls for predicting when online content will gain traction; this project instantiates that brief by targeting posting-volume surges on Reddit financial communities." |
 | 1.12 | What's the structure of the rest of the report? | DONE | §1.6 | SHOULD-HAVE | Added §1.6 "Report Structure" with 4-line roadmap paragraph after the Gantt chart. |
 | 1.13 | Why exclude engagement scores (upvotes)? | DEFERRED | §3.4 | — | One sentence stating the principle in intro; detailed reasoning moved to §3.4 |
 | 1.14 | Why use a combined metric (volume + sentiment) not just volume? | DONE | §1.3 | MUST-HAVE (brief) | Added sentence in §1.3: "Volume alone misses cases where a community becomes markedly more agitated without a proportional posting increase; combining both signals captures a richer, more structured phenomenon (confirmed empirically in Section 5.2.5)." |
@@ -37,7 +37,7 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 2.4 | Do Reddit financial communities generate useful signal? | DONE | §2.4 | MUST-HAVE | No action needed |
 | 2.5 | What methodological weaknesses exist in prior work? | DONE | §2.5 | MUST-HAVE | No action needed |
 | 2.6 | What specific gap does this project fill? | DONE | §2.6 | MUST-HAVE | No action needed |
-| 2.7 | How do the reviewed studies relate to each other (synthesis)? | PARTIAL | §2.1–2.4 | SHOULD-HAVE | Add 2–3 cross-reference sentences linking studies across subsections (e.g., Cheng's temporal propagation speed relates to Bollen's mood timing; Costola's consensus formation connects to Lerman & Hogg's network dynamics) |
+| 2.7 | How do the reviewed studies relate to each other (synthesis)? | DONE | §2.4 | SHOULD-HAVE | Added cross-reference sentences linking Costola's consensus formation to Lerman & Hogg's network dynamics, and Long et al.'s volume-precedes-trading observation to Cheng et al.'s early-propagation-predicts-growth finding. |
 | 2.8 | Are there conflicting findings across studies? | DONE | §2.1 | NICE-TO-HAVE | Added one sentence noting the Szabo/Cheng tension: early popularity strongly predicts final outcome [1] vs. cascade prediction accuracy plateaus after initial phase [5]. |
 | 2.9 | What is the current state of surge/burst detection specifically? | DONE | §2.1 | SHOULD-HAVE | Added sentence after Kong et al. [7] distinguishing their burst detection (hashtag-level, contemporaneous, real-time) from this project's surge prediction (ticker-level, pre-onset). |
 | 2.10 | Why are these 17 sources sufficient? (scope of review) | DONE | §2.1 | NICE-TO-HAVE | Added scope statement at start of §2.1: "This review covers three intersecting research strands... The seventeen sources cited here represent the seminal and most-cited works within each strand rather than an exhaustive survey." |
@@ -55,7 +55,7 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 3.2b | Why these two subreddits? (delegated from §1, Q1.7) | DONE | §3.2 | MUST-HAVE | No action needed; density spectrum rationale explained here |
 | 3.3 | Why these two subreddits? | DONE | §3.2 | MUST-HAVE | No action needed |
 | 3.4 | How is "surge" defined formally? | DONE | §3.3 | MUST-HAVE | No action needed |
-| 3.5 | Why use a composite metric? | PARTIAL | §3.3 | MUST-HAVE | Strengthen justification: currently says sentiment captures agitation without volume increase, but should also state why a single-signal definition is insufficient (volume-only surges are noisier and harder to predict — Phase 1 results confirm this empirically). One sentence. |
+| 3.5 | Why use a composite metric? | DONE | §3.3 | MUST-HAVE | Added sentence stating volume-only surges are noisier and harder to predict, with Phase 1 empirical confirmation (AUC 0.710 vs 0.892). |
 | 3.6 | How are features chosen and justified? | DONE | §3.4 | MUST-HAVE | No action needed |
 | 3.7 | Why exclude engagement scores? | DONE | §3.4 | MUST-HAVE | No action needed |
 | 3.7a | Why exclude engagement scores? (delegated from §1, Q1.13) | DONE | §3.4 | MUST-HAVE | No action needed; full reasoning here |
@@ -64,7 +64,7 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 3.9 | Why AUC-ROC as primary metric? | DONE | §3.5 | MUST-HAVE | No action needed |
 | 3.10 | How is class imbalance handled? | DONE | §3.5 | MUST-HAVE | No action needed |
 | 3.11 | How does temporal validation work? | DONE | §3.6 | MUST-HAVE | No action needed |
-| 3.12 | Why k=4 (not 5 or 10)? | PARTIAL | §3.6 | SHOULD-HAVE | Add one sentence: "Four blocks produce ~2.5-month validation windows, each containing enough surge events for stable AUC estimates while keeping the minimum training set large enough for meaningful model fitting. Higher k would thin the validation folds below reliable evaluation." |
+| 3.12 | Why k=4 (not 5 or 10)? | DONE | §3.6 | SHOULD-HAVE | Added sentences: four blocks produce ~2.5-month validation windows with enough surge events for stable AUC; higher k would thin folds below reliable evaluation. |
 | 3.13 | What are the success criteria? | DONE | §3.7 | MUST-HAVE | No action needed |
 | 3.14 | How are models compared statistically? | DONE | §3.7 | MUST-HAVE | No action needed |
 | 3.15 | Is the study reproducible? | DONE | §3.1, §4.1 | MUST-HAVE | No action needed |
@@ -85,11 +85,11 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 4.5 | How are models trained and evaluated? | DONE | §4.5 | MUST-HAVE | No action needed |
 | 4.6 | What problems were encountered and solved? | DONE | §4.6 | MUST-HAVE | No action needed |
 | 4.7 | Is the implementation complete? | DONE | §4.7 | MUST-HAVE | No action needed |
-| 4.8 | What are the key dependencies and their versions? | PARTIAL | §4.1 | SHOULD-HAVE | §4.1 lists libraries (pandas, scikit-learn, XGBoost, vaderSentiment, NumPy) but no version pins. One sentence or a small table of pinned versions would aid reproducibility claims. |
+| 4.8 | What are the key dependencies and their versions? | DONE | §4.1 | SHOULD-HAVE | Added version constraints (pandas ≥2.0, scikit-learn ≥1.3, XGBoost ≥2.0, vaderSentiment ≥3.3.2, NumPy ≥1.24) and noted exact pins are in requirements.txt and experiment logs. |
 | 4.9 | How long does the pipeline take to run? | DONE | §4.7 | NICE-TO-HAVE | Added sentence in §4.7: approximately 8 minutes for pennystocks and 19 minutes for WSB on a standard laptop CPU, with sentiment computation as the dominant cost. |
-| 4.10 | How is the ticker stopword list maintained/validated? | PARTIAL | §4.2 | NICE-TO-HAVE | §4.2 mentions 297 terms across 8 categories but doesn't explain how the list was built or validated. One sentence on methodology (manual curation from false-positive analysis) would suffice. |
-| 4.11 | What happens when a ticker has too few posts for windowing? | PARTIAL | §4.4 | SHOULD-HAVE | §4.4 mentions "records with too few posts in their forward window are excluded as unlabellable" but doesn't state the minimum threshold or how many records are lost. Table 9 shows attrition at loading stage but not at labelling exclusion. |
-| 4.12 | How are the hyperparameter grids justified? | PARTIAL | §4.5 | SHOULD-HAVE | Table 10 lists the grids but doesn't explain why those specific ranges (e.g., why max_depth goes to 10 but not 15, why learning_rate stops at 0.3). One sentence: "Ranges were chosen from common defaults in the scikit-learn/XGBoost documentation, narrowed by preliminary runs on the first validation fold." |
+| 4.10 | How is the ticker stopword list maintained/validated? | DONE | §4.2 | NICE-TO-HAVE | Added clause: "built through iterative false-positive analysis on early pipeline runs and manually reviewed for completeness." |
+| 4.11 | What happens when a ticker has too few posts for windowing? | DONE | §4.4 | SHOULD-HAVE | Added: records with fewer than two same-ticker posts in the forward window are excluded as unlabellable. Noted this accounts for the 577K to 457K attrition on WSB (tickers near data boundary). |
+| 4.12 | How are the hyperparameter grids justified? | DONE | §4.5 | SHOULD-HAVE | Added sentence: "Ranges were chosen from common defaults in the scikit-learn and XGBoost documentation, then narrowed by preliminary runs on the first validation fold to exclude values that consistently underperformed." |
 
 ---
 
@@ -129,11 +129,11 @@ Tracks which questions a reader might ask, where they are (or should be) address
 | 6.4 | What's next? | DONE | §6.3 | MUST-HAVE | No action needed |
 | 6.5 | Does the conclusion introduce new information? | DONE | — | MUST-HAVE (negative) | No action needed. The conclusion correctly synthesises without introducing new data or arguments. This is the right approach. |
 | 6.6 | Does it answer the research question explicitly? | DONE | §6.2 | MUST-HAVE | No action needed. "The short answer to the central research question is yes" — clear and direct. |
-| 6.7 | Are the three contributions restated concisely? | PARTIAL | §6.1–6.2 | SHOULD-HAVE | §5.5 states three contributions explicitly; §6 weaves them into narrative prose but doesn't re-enumerate them. A reader skimming only the conclusion might miss one. Consider a single sentence: "The project contributes a leakage-free methodology, a composite surge metric, and empirical evidence that data density is the binding constraint." |
-| 6.8 | Is there a clear "so what" for the reader? | PARTIAL | §6.2 | SHOULD-HAVE | The findings are stated but the implication for practitioners is implicit. One sentence bridging to action: "For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication — a sparse community needs more history, not a better algorithm." |
+| 6.7 | Are the three contributions restated concisely? | DONE | §6.1 | SHOULD-HAVE | Added sentence at end of §6.1: "The project contributes a leakage-free methodology, a composite surge metric, and empirical evidence that data density is the binding constraint on prediction quality." |
+| 6.8 | Is there a clear "so what" for the reader? | DONE | §6.2 | SHOULD-HAVE | Added sentence at end of §6.2: "For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication. A sparse community needs more history, not a better algorithm." |
 | 6.9 | Does the future work connect back to limitations? | DONE | §6.3 | MUST-HAVE | No action needed. Each future direction maps to a stated limitation (VADER → FinBERT, fixed window → multi-scale, retrospective → live). |
 | 6.10 | Is there a final closing statement? | DONE | §6.3 | MUST-HAVE | No action needed. "The question this project set out to answer... has been answered. What remains is finding out how far that answer extends." — effective closing. |
-| 6.11 | Does the conclusion acknowledge what was NOT achieved? | PARTIAL | §6.3 | NICE-TO-HAVE | Limitations are stated but there's no explicit statement about objectives that fell short. §5.1 shows all objectives were met, so this may not apply — but one could note that pennystocks results are tentative (31 test surges) and that the methodology is validated but not the deployment case. Already implicit; making it explicit would strengthen intellectual honesty. |
+| 6.11 | Does the conclusion acknowledge what was NOT achieved? | DONE | §6.3 | NICE-TO-HAVE | Added opening sentences to §6.3: all objectives met, but pennystocks results are tentative (31 surges) and the methodology is validated for retrospective prediction only, not live deployment. |
 
 ---
 
