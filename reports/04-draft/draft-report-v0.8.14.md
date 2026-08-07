@@ -389,7 +389,7 @@ Including sentiment captures cases where a community becomes markedly more agita
 
 τ=1.0 was selected for primary evaluation: rare enough to be meaningful, common enough (2,582 test surges on WSB) for statistically reliable evaluation. A secondary run at τ=1.5 on r/pennystocks tests behaviour under more extreme imbalance.
 
-**Two-phase validation.** Phase 1 uses w₂=0 (volume-only labels); Phase 2 uses w₁=w₂=0.5 (equal composite). Comparing them determines whether sentiment genuinely improves prediction. A full weight sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) is reported as supplementary sensitivity analysis in Section 3.7.
+**Two-phase validation.** Phase 1 uses w₂=0 (volume-only labels); Phase 2 uses w₁=w₂=0.5 (equal composite). Comparing them determines whether sentiment genuinely improves prediction. A full weight sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) is reported as supplementary sensitivity analysis in Section 3.8.
 
 ### 3.4 Feature Engineering
 
@@ -413,7 +413,26 @@ All features satisfy the backward-looking constraint: only information available
 
 Content features capture what is said (emotional intensity, post effort, discussion focus). Temporal features encode cyclical patterns tied to market hours. Activity features draw on the popularity prediction literature [1][5], since accelerating posting rates signal that a surge may be forming. Interaction features were added after experiment B2 showed that manually constructed combinations improved Random Forest AUC by +1.4pp on pennystocks.
 
-### 3.5 Model Selection
+### 3.5 Methodological Scope: Techniques Adopted and Excluded
+
+The project template identifies several technique families as relevant to social media trend prediction: time-series forecasting (ARIMA, LSTM), network analysis (centrality measures, community detection), natural language processing (sentiment analysis, topic modelling, word embeddings), machine learning (classification, regression), and data visualisation. This project adopts a subset of these and excludes others based on the specific operationalisation of the problem.
+
+**Adopted techniques:**
+
+- *Sentiment analysis* (NLP): VADER compound scoring extracts emotional intensity from post text, contributing both to the composite surge metric and as a predictive feature. This is the NLP technique most directly relevant to detecting shifts in community tone before surges.
+- *Machine learning classification*: Three classifier families (Logistic Regression, Random Forest, XGBoost) predict the binary surge target using engineered features. Classification is the natural fit for the "will it surge or not?" question.
+- *Temporal feature engineering*: Activity rates, acceleration ratios, and time-since-previous features capture the temporal dynamics that the time-series literature identifies as predictive of future attention [1][5], implemented as per-record features rather than as a separate forecasting model.
+- *Data visualisation*: ROC curves, confusion matrices, feature importance plots, and threshold sensitivity charts communicate model behaviour and results.
+
+**Excluded techniques and rationale:**
+
+- *Time-series forecasting (ARIMA, LSTM)*: These model a continuous trajectory over time (e.g., "how many posts will ticker X receive tomorrow?"). The present project asks a binary question ("will a surge occur?") at the per-record level rather than forecasting a time series. The temporal signal is captured through engineered features (posting rate, acceleration) that feed directly into classifiers, which is more appropriate for a binary onset-detection task than fitting a separate forecasting model per ticker. Additionally, LSTM would require sequence-formatted input per ticker with sufficient history, which is infeasible for the long tail of tickers with sparse posting histories.
+- *Network analysis (centrality, community detection)*: Network methods require a graph structure — user interaction networks, reply trees, or cross-posting links. The archival dataset contains only top-level submissions with no reply-graph or user-interaction metadata. Constructing a meaningful network would require either comment-level data (unavailable in this dataset) or cross-referencing user posting histories (which would introduce user-level analysis outside the project's ticker-level scope). The template's suggestion of network analysis applies more naturally to diffusion studies tracking *how* trends spread through a social graph; this project instead asks *whether* a surge will occur, which is answerable from aggregate temporal and textual signals without network structure.
+- *Topic modelling and word embeddings*: Topic models (LDA, BERTopic) extract latent thematic structure across a corpus, which is useful for characterising *what* is being discussed but less directly useful for predicting *when* discussion will intensify. Word embeddings (Word2Vec, GloVe) would require either pre-training on domain text or using general-purpose vectors that miss financial semantics. Both techniques add substantial computational cost (particularly over 1.3M records) for uncertain marginal gain over the simpler sentiment signal that already dominates feature importance. These remain viable future extensions (Section 5.4.2) but were deprioritised in favour of depth in temporal validation and statistical evaluation.
+
+The guiding principle was depth over breadth: rather than applying five techniques superficially, the project applies classification with rigorous temporal validation, comprehensive statistical testing, and multi-experiment sensitivity analysis. The excluded techniques remain relevant to the broader problem space and are acknowledged as future directions where they would add value (Section 5.4.2).
+
+### 3.6 Model Selection
 
 **Why binary classification?** A ticker either surges within the next 24 hours or it doesn't, with no meaningful in-between. That makes binary classification the natural fit. Regression would ask "how big?" when the real question is "did it happen?" Multi-class buckets (small/medium/large) would require arbitrary cut-points and make the class-imbalance problem worse. Anomaly detection is unsupervised, so it can't use the labelled surge history; it would also flag every rare surge as anomalous regardless of whether it has any distinguishing structure.
 
@@ -427,7 +446,7 @@ Three classifier families span the complexity spectrum, testing whether model co
 
 **Handling class imbalance.** SMOTE is inappropriate for temporally ordered data because synthetic records lack meaningful timestamps. Instead, the pipeline uses cost-sensitive learning: `class_weight='balanced'` for LR and RF; `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
-### 3.6 Temporal Validation Design
+### 3.7 Temporal Validation Design
 
 Standard k-fold cross-validation violates temporal ordering, since a model might train on October posts and validate on March posts. Bergmeir and Benítez [15] showed this inflates accuracy estimates. The pipeline uses a two-level temporal strategy instead:
 
@@ -459,7 +478,7 @@ The key guarantee is that every validation record comes strictly after all train
 
 Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period. Section 5.3.4 examines empirical evidence for this concern.
 
-### 3.7 Evaluation Framework
+### 3.8 Evaluation Framework
 
 The evaluation answers four questions: Do models predict surges better than trivial strategies? Do they differ meaningfully from each other? How confident are the reported metrics? Does the methodology transfer across communities?
 
