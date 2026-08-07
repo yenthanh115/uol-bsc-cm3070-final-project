@@ -655,7 +655,7 @@ All six pipeline stages are fully implemented and produce complete artefacts end
 | 5. Feature Engineering | Complete | 11-feature matrix |
 | 6. Training & Evaluation | Complete | 3 trained models + full evaluation JSON |
 
-Both datasets run through the complete pipeline with reproducible results. Cross-dataset transfer evaluation, bootstrap confidence intervals, and McNemar's significance tests all function correctly. The 10-module pytest suite, mypy type checking, and ruff linting pass without errors.
+Both datasets run through the complete pipeline with reproducible results. End-to-end runtime (labelling through evaluation) is approximately 8 minutes for r/pennystocks and 19 minutes for r/wallstreetbets on a standard laptop CPU, with sentiment computation as the dominant cost. Cross-dataset transfer evaluation, bootstrap confidence intervals, and McNemar's significance tests all function correctly. The 10-module pytest suite, mypy type checking, and ruff linting pass without errors.
 
 ---
 
