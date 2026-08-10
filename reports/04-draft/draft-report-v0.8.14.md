@@ -2,7 +2,7 @@
 
 ## Abstract
 
-Social media discussions in online financial communities, such as Reddit, can shift from quiet to frenzied within hours, yet detecting these **posting-volume surges** before they fully develop has received little research attention, partly because most prior approaches inadvertently use future information, a problem known as **data leakage**. This project mainly asked a question: can surges be predicted using only features that are genuinely available at observation time? <!-- why not just use only volume growth or sentiment change, why use combined, this project not only provide solution directly but also an experiment of how to find the appropriate solution for this question --> To answer this, a composite surge metric was built from normalised volume growth and sentiment change, and **eleven features** were drawn from timestamps and text content, deliberately excluding <!--too specific but do not explain why exlcuding it --> engagement scores that only settle after a post has already gained traction. Three classifiers (Logistic Regression, Random Forest, and XGBoost) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche r/pennystocks (80,212 records) and the high-traffic r/wallstreetbets (1,293,981 records). On the larger dataset, XGBoost achieved AUC-ROC of 0.861 and Random Forest reached 0.854, both clearing the stretch performance tier <!--  it reads as jargon -->; on the sparser community, Random Forest attained 0.746 at the target tier. All pairwise differences proved statistically significant (McNemar's test, p < 0.017 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.694, useful but clearly requiring community-specific recalibration. Taken together, these findings show that **machine learning** can anticipate surges from backward-looking signals alone <!-- -->, that data density is the main bottleneck for **binary classification** accuracy, and that the leakage-free methodology developed here transfers readily to other timestamped  platforms.
+Social media discussions in online financial communities can shift from quiet to frenzied within hours, yet predicting these posting-volume surges before they fully develop remains largely unaddressed. A recurring methodological weakness compounds the gap: many prior approaches inadvertently use future information, making reported results unreliable. This project asked a question: *can surges be predicted using only features that are genuinely available at time?* To answer this, a composite surge metric combining normalised volume growth with sentiment change was defined to capture multifaceted surges, and predictive features were engineered exclusively from information available at observation time. Three classifiers ranging from simple to complex (**Logistic Regression, Random Forest, and XGBoost**) were trained with expanding-window **temporal cross-validation** and tested on held-out future data from two subreddits at opposite ends of the density spectrum: the niche **r/pennystocks** (80,212 records) and the high-traffic **r/wallstreetbets** (1,293,981 records). The best model XGBoost achieved AUC-ROC of 0.892 on the high-volume community and RandomForest reached 0.734 on the sparse one, that suggests data density, not model choice, is the binding constraint. All pairwise differences proved statistically significant (McNemar's test, p < 0.001 after Bonferroni correction), and cross-dataset transfer produced AUC of 0.684, useful but requiring community-specific recalibration. Overall, these findings show that machine learning can anticipate surges from backward-looking signals alone, that prediction quality scales with data availability rather than model complexity. This evaluation framework keeps the past and future strictly separated at every step, making it a great fit for other timestamped platforms as well.
 
 ---
 
@@ -10,7 +10,7 @@ Social media discussions in online financial communities, such as Reddit, can sh
 
 ### 1.1 Project Concept and Objectives
 
-This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. The template calls for predicting when online content will gain traction; this project instantiates that brief by targeting posting-volume surges on Reddit financial communities. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this binary task.
+This project follows the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*. The template asks whether data-driven models can predict when trends emerge on social media platoformss; this project instantiates that brief by targeting posting-volume surges on Reddit financial communities. It builds a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this task.
 
 The project has three objectives:
 
@@ -42,7 +42,7 @@ The target derives from posting volume (timestamp-based record counts) rather th
 
 **Out of scope:** Real-time ingestion, production deployment, trading signal generation, multi-class targets, cross-platform fusion.
 
-The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.746 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
+The system achieves AUC-ROC of 0.892 on the high-density dataset and 0.753 on the sparse dataset, demonstrating that surges are predictable from observation-time features but that data density significantly affects performance.
 
 ### 1.5 Project Timeline
 
@@ -53,6 +53,7 @@ The system achieves AUC-ROC of 0.861 on the high-density dataset and 0.746 on th
 
 ### 1.6 Report Structure
 
+<!-- passed review -->
 The remainder of this report is organised as follows. Section 2 reviews the literature on online attention prediction, financial sentiment, and Reddit-specific research, identifying the gaps this project addresses. Section 3 details the design: surge definition, feature engineering, model selection, and temporal validation. Section 4 describes the implementation, including code organisation and decisions driven by empirical findings. Section 5 presents results, statistical validation, critical analysis, and limitations. Section 6 concludes with key findings and future directions.
 
 ---
@@ -696,7 +697,7 @@ In short: surges are predictable from observation-time features. The binding con
 
 #### 5.1.2 Objective 2: Compare Multiple ML Approaches
 
-On WSB, complexity pays clearly: XGBoost (0.892) > Random Forest (0.880) > Logistic Regression (0.707), all pairwise differences statistically significant (McNemar's test, p < 0.001 after Bonferroni correction). The 17.3-point gap between LR and XGBoost is operationally meaningful.
+On WSB, complexity pays clearly: XGBoost (0.892) > Random Forest (0.880) > Logistic Regression (0.707), all pairwise differences statistically significant (McNemar's test, p < 0.001 after Bonferroni correction). The 18.5-point gap between LR and XGBoost is operationally meaningful.
 
 On pennystocks, Random Forest leads (0.753), followed by XGBoost (0.734) and LR (0.680). The inversion, where boosting underperforms bagging, is itself a finding analysed in Section 5.3.1. All pairwise comparisons remain significant (p < 0.001).
 
