@@ -17,18 +17,34 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 
 ## Phase A: Section-by-Section Deep Review
 
-### A1. Abstract (ước ~260 words)
+### A1. Abstract (~269 words) ✅ REVIEWED
 
 **Mục tiêu:** Tóm tắt toàn bộ project trong 1 đoạn. Reader phải biết: vấn đề gì, làm gì, kết quả ra sao.
 
-- [ ] Câu mở đầu nêu problem rõ ràng?
-- [ ] Methodology tóm tắt đủ (composite metric, 11 features, 3 classifiers, temporal CV)?
-- [ ] Kết quả chính xác và khớp với Section 5 (0.892, 0.880, 0.753)?
-- [ ] Cross-transfer AUC = 0.684 khớp Table 16?
-- [ ] Conclusion sentence nêu contribution chính?
-- [ ] Không có jargon chưa define (stretch tier → đã fix thành "AUC > 0.80")?
-- [ ] Đọc to lên — nghe tự nhiên không?
-- [ ] Xóa hết HTML comments (`<!-- ... -->`)
+- [x] Câu mở đầu nêu problem rõ ràng? ✓ (surges + largely unaddressed)
+- [x] Methodology tóm tắt đủ? ✓ (composite metric, observation-time features, 3 classifiers, temporal CV)
+- [x] Kết quả chính xác? ✓ XGBoost 0.892 (WSB), RF 0.753 (pennystocks) — khớp Table 11
+- [x] Cross-transfer AUC = 0.684 khớp Table 16? ✓
+- [x] Conclusion sentence nêu contribution chính? ✓ (3 findings: predict from past, density > complexity, framework transferable)
+- [x] Không có jargon chưa define? ✓ (đã bỏ "stretch/target tier")
+- [x] Đọc to lên — nghe tự nhiên? ✓ (đã fix flow qua nhiều lần edit)
+- [x] HTML comments đã xóa hết? ✓
+
+**Issues đã fix trong quá trình review:**
+- "platoformss" → N/A (không ở Abstract)
+- Old numbers (0.861/0.854/0.746) → updated to 0.892/0.753
+- Cross-transfer 0.694 → 0.684
+- "stretch performance tier" jargon → removed
+- "mainly asked a question" → "The central question is:"
+- "sinple" → "simple"
+- "RandomForest" → "Random Forest"
+- RF pennystocks 0.734 (sai) → 0.753 (đúng)
+- "a great fit" → rewritten to academic register
+- Run-on sentence ("that suggests") → ", suggesting that"
+- Fragment cuối → merged into complete sentence
+- "at time?" → "at observation time?"
+- Bold trên "machine learning" → removed
+- "our findings" voice → acceptable (used once)
 
 ---
 
@@ -53,6 +69,7 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 - [ ] Distinguishes "trend" vs "surge" clearly?
 - [ ] Explains composite metric motivation (volume alone misses agitation)?
 - [ ] Forward ref to Section 3.3 — đúng?
+- [ ] HTML comments nếu còn → xóa cuối cùng
 
 #### §1.4 Scope
 - [ ] In/out scope concise?
