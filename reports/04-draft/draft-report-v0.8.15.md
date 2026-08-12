@@ -18,17 +18,17 @@ The project has three objectives:
 - Compare multiple ML approaches to find out whether more complex models actually improve prediction over simpler baselines
 - Confirm that predictions hold up on unseen future time periods by using temporal evaluation protocols that prevent data leakage, a common methodological weakness in social media prediction studies
 
-The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, <!--do not understand meaning of the later point --> and that predictive performance scales with data density rather than model complexity.
+The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, and that predictive performance scales with data density rather than model complexity.
 
 ### 1.2 Problem Statement and Motivation
 
 Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
 
-This is primarily a research question: can the onset of a social media surge be detected from the discussion patterns that precede it? Answering this question also has practical relevance for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how attention propagates through online communities. As a concrete scenario, consider a compliance team monitoring a brokerage's universe of covered stocks: an automated system that flags tickers showing surge precursors would let analysts focus on the five or ten names most likely to dominate tomorrow's discussion, rather than scanning thousands of threads manually.
+This is primarily a research question: Can we spot a social media surge before it happens by looking at early discussion patterns? The answer holds practical value for financial analysts seeking early warning of emerging narratives, surveillance teams watching for manipulation, and quantitative researchers studying how how attention spreads through digital communities. For instance, a compliance team monitoring covered stocks could use an automated system to flag early surge signals, allowing analysts to focus on the top five or ten high-risk tickers instead of manually scanning thousands of threads.
 
-Prior work in this area tends to focus on related but distinct problems: forecasting eventual content reach rather than detecting rapid onset, or predicting price movements rather than social media dynamics themselves. In the reviewed literature, predicting the onset of a volume-and-sentiment surge for individual tickers within a short-term window remains largely unaddressed (see Section 2.6).
+Previous research focuses on related but different problems: forecasting eventual content reach rather than a sudden surge, or predicting price movements rather than social media dynamics themselves. Current research rarely addresses how to predict sudden, short-term spikes in volume and sentiment for specific stock tickers (see Section 2.6).
 
-This project explores whether such surges are predictable from the discussion patterns that precede them. A simple threshold on a single metric (for example, flagging any ticker exceeding +2σ in volume) cannot combine heterogeneous signals or adapt to non-linear interactions between them; a learning-based approach is needed to integrate temporal, textual, and sentiment features into a unified prediction.
+This project examines whether upcoming surges can be predicted from early discussion patterns. Standard rule-based heuristics, such as flagging a ticker when volume exceeds +2σ. They are insufficient for this task because they cannot capture non-linear interactions across diverse data streams. To overcome these limitations, we propose a learning-based approach that integrates temporal, textual, and sentiment features into a unified predictive framework.
 
 ### 1.3 Prediction Scope and Surge Definition
 

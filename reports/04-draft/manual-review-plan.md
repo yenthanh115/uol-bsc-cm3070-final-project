@@ -53,17 +53,17 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 **Đọc từng paragraph:**
 
 #### §1.1 Project Concept and Objectives
-- [ ] Paragraph 1: Nêu template gốc + instantiation → rõ ràng?
-- [ ] Fix typo "platoformss" → "platforms"
-- [ ] 3 objectives: mỗi bullet có action verb + measurable outcome?
-- [ ] Hypothesis paragraph: "scales with data density rather than model complexity" — tự giải thích được không? (comment cũ nói "do not understand")
-- [ ] Xóa comment `<!--do not understand meaning of the later point -->` (cuối cùng)
+- [x] Paragraph 1: Nêu template gốc + instantiation → rõ ràng?
+- [x] Fix typo "platoformss" → "platforms"
+- [x] 3 objectives: mỗi bullet có action verb + measurable outcome?
+- [x] Hypothesis paragraph: "scales with data density rather than model complexity" — tự giải thích được không? (comment cũ nói "do not understand")
+- [x] Xóa comment `<!--do not understand meaning of the later point -->` (cuối cùng)
 
 #### §1.2 Problem Statement and Motivation
-- [ ] Para 1: Problem → vivid example (2 posts → 50 posts)
-- [ ] Para 2: Research question + practical relevance → tốt?
-- [ ] Para 3: Literature gap (forward reference to 2.6) — reader có bị lost không?
-- [ ] Para 4: Why ML not simple threshold → justifies approach?
+- [x] Para 1: Problem → vivid example (2 posts → 50 posts)
+- [x] Para 2: Research question + practical relevance → tốt?
+- [x] Para 3: Literature gap (forward reference to 2.6) — reader có bị lost không?
+- [x] Para 4: Why ML not simple threshold → justifies approach?
 
 #### §1.3 Prediction Scope and Surge Definition
 - [ ] Distinguishes "trend" vs "surge" clearly?
