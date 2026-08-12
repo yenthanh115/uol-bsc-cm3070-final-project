@@ -66,22 +66,17 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 - [x] Para 4: Why ML not simple threshold → justifies approach?
 
 #### §1.3 Prediction Scope and Surge Definition
-- [ ] Distinguishes "trend" vs "surge" clearly?
-- [ ] Explains composite metric motivation (volume alone misses agitation)?
-- [ ] Forward ref to Section 3.3 — đúng?
-- [ ] HTML comments nếu còn → xóa cuối cùng
+- [x] Distinguishes "trend" vs "surge" clearly?
+- [x] Explains composite metric motivation (volume alone misses agitation)?
+- [x] Forward ref to Section 3.3 — đúng?
+- [x] HTML comments nếu còn → xóa cuối cùng
 
 #### §1.4 Scope
-- [ ] In/out scope concise?
-- [ ] Numbers (80,212 / 1,293,981) khớp Table 4?
-- [ ] AUC summary (0.892 / 0.753) khớp Section 5? ✓ (đã fix)
+- [x] In/out scope concise?
+- [x] Numbers (80,212 / 1,293,981) khớp Table 4?
 
-#### §1.5 Project Timeline
-- [ ] Gantt chart figure referenced properly?
-- [ ] Figure numbering sequential?
-
-#### §1.6 Report Structure
-- [ ] Preview mỗi section → matches actual content?
+#### §1.5 Report Structure
+- [x] Preview mỗi section → matches actual content?
 
 ---
 
