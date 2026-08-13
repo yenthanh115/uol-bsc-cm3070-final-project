@@ -92,16 +92,16 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 - [x] Mermaid diagram: Figure 1 — labelled? Referenced trước khi xuất hiện?
 
 #### §2.2 Shift Toward Pre-Engagement Prediction
-- [ ] Para 1: Bandari → prediction before engagement
-- [ ] Para 2: Cheng → rate of early spread
-- [ ] Para 3: Second consensus + identifies remaining gap (eventual vs onset)?
-- [ ] Table 1: Headers clear? Data accurate? Adds value vs prose?
+- [x] Para 1: Bandari → prediction before engagement
+- [x] Para 2: Cheng → rate of early spread
+- [x] Para 3: Second consensus + identifies remaining gap (eventual vs onset)?
+- [x] Table 1: Headers clear? Data accurate? Adds value vs prose?
 
 #### §2.3 Sentiment as Predictive Signal
-- [ ] Para 1: Bollen — mood predicts Dow Jones
-- [ ] Para 2: Tool evolution (OpinionFinder → VADER → FinBERT)
-- [ ] Para 3: Takeaway for this project (sentiment *change* as leading indicator)
-- [ ] Table 2: Adds value? Column headers clear?
+- [x] Para 1: Bollen — mood predicts Dow Jones
+- [x] Para 2: Tool evolution (OpinionFinder → VADER → FinBERT)
+- [x] Para 3: Takeaway for this project (sentiment *change* as leading indicator)
+- [x] Table 2: Adds value? Column headers clear?
 
 #### §2.4 Financial Discussion on Reddit
 - [ ] Para 1: Why penny stocks are special (low liquidity, high social influence)
