@@ -85,11 +85,11 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 **Đọc từng paragraph:**
 
 #### §2.1 Predictability of Online Attention
-- [ ] Para 1: Scoping — giải thích tại sao chỉ review 17 sources, không review time-series / graph methods?
-- [ ] Para 2: Szabo & Huberman — nêu contribution + limitation?
-- [ ] Para 3: Lerman & Hogg, Wang & Huberman, Kong et al. — builds chronologically?
-- [ ] Para 4: Consensus summary + tension (predictability plateaus) → positions this project?
-- [ ] Mermaid diagram: Figure 1 — labelled? Referenced trước khi xuất hiện?
+- [x] Para 1: Scoping — giải thích tại sao chỉ review 17 sources, không review time-series / graph methods?
+- [x] Para 2: Szabo & Huberman — nêu contribution + limitation?
+- [x] Para 3: Lerman & Hogg, Wang & Huberman, Kong et al. — builds chronologically?
+- [x] Para 4: Consensus summary + tension (predictability plateaus) → positions this project?
+- [x] Mermaid diagram: Figure 1 — labelled? Referenced trước khi xuất hiện?
 
 #### §2.2 Shift Toward Pre-Engagement Prediction
 - [ ] Para 1: Bandari → prediction before engagement
