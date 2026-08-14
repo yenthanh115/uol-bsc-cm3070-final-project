@@ -104,26 +104,26 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 - [x] Table 2: Adds value? Column headers clear?
 
 #### §2.4 Financial Discussion on Reddit
-- [ ] Para 1: Why penny stocks are special (low liquidity, high social influence)
-- [ ] Para 2: Long et al. — Reddit → trading volume
-- [ ] Para 3: Costola et al. — consensus formation
-- [ ] Para 4: Mancini et al. — pump-and-dump
-- [ ] Para 5: Synthesis — connects back to earlier work + identifies gap?
+- [x] Para 1: Why penny stocks are special (low liquidity, high social influence)
+- [x] Para 2: Long et al. — Reddit → trading volume
+- [x] Para 3: Costola et al. — consensus formation
+- [x] Para 4: Mancini et al. — pump-and-dump
+- [x] Para 5: Synthesis — connects back to earlier work + identifies gap?
 
 #### §2.5 Methodological Weaknesses
-- [ ] Para 1: Pattern identified (no temporal evaluation)
-- [ ] Para 2: Specific evidence per study
-- [ ] Para 3: Tashman + Bergmeir → solution exists but unadopted
-- [ ] Table 3: Clear? Accurate? Referenced?
+- [x] Para 1: Pattern identified (no temporal evaluation)
+- [x] Para 2: Specific evidence per study
+- [x] Para 3: Tashman + Bergmeir → solution exists but unadopted
+- [x] Table 3: Clear? Accurate? Referenced?
 
 #### §2.6 Research Gap and Project Position
-- [ ] 4 cumulative findings — each maps to prior subsections?
-- [ ] 4 gaps — each clearly distinct?
-- [ ] Final paragraph: project addresses each gap → maps to later sections?
-- [ ] Transition to Section 3 smooth?
+- [x] 4 cumulative findings — each maps to prior subsections?
+- [x] 4 gaps — each clearly distinct?
+- [x] Final paragraph: project addresses each gap → maps to later sections?
+- [x] Transition to Section 3 smooth?
 
 #### Cuối Section 2:
-- [ ] **XÓA block comment lớn** (lines 62–100): "How to write a lit review" scaffolding
+- [x] **XÓA block comment lớn** (lines 62–100): "How to write a lit review" scaffolding
 
 ---
 

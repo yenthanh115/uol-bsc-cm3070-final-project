@@ -52,48 +52,6 @@ The remainder of this report is organised as follows. Section 2 reviews the lite
 
 ## 2. Literature Review
 
-<!--
-## 1. Establish the Current State of Knowledge
-Goal: Demonstrate a deep understanding of the key concepts, theories, and historical timeline of your research topic. 
-
-* What are the foundational theories or models governing this field?
-* Who are the seminal authors and leading researchers on this topic?
-* How has the academic consensus on this topic evolved over time?
-* What are the standardized definitions and terms used by experts?
-
-## 2. Identify Gaps and Weaknesses in Extant Research
-Goal: Pinpoint what previous research has missed, ignored, or failed to resolve to justify why your own study is necessary. 
-
-* What blind spots or unexamined variables exist in the current literature?
-* What are the persistent flaws, limitations, or biases in past studies?
-* Where do different studies conflict, disagree, or present contradictory results?
-* Is the existing research outdated or lacking application to a new population/context?
-
-## 3. Evaluate Methodologies and Research Designs
-Goal: Analyze how previous scientists gathered data so you can adopt effective methods and avoid common technical pitfalls.  
-
-* What data collection methods (qualitative, quantitative, or mixed) are most prevalent?
-* What sampling techniques, tools, or data metrics did prior researchers use?
-* What structural constraints or ethical obstacles did previous authors face?
-* How will your chosen methodological approach address the limitations of prior setups? 
-
-## 4. Synthesize and Connect Prior Findings
-Goal: Move beyond mere summary by grouping separate papers into thematic clusters to show the bigger picture. 
-
-* What overarching themes, trends, or sub-topics connect these separate sources?
-* How does study A support, extend, or directly refute the findings of study B?
-* What major conceptual frameworks emerge when these papers are viewed collectively?
-* How do local or niche findings translate to a broader global environment? 
-
-## 5. Provide a Rationale for Your Own Study
-Goal: Explicitly link your reading to your own research hypotheses, questions, or project goals.
-
-* How does the existing literature directly inform your current research questions?
-* In what explicit ways will your study fill the literature gaps you discovered?
-* How will you use past findings as a benchmark to validate your final results? 
-
--->
-
 ### 2.1. The Predictability of Online Attention
 
 Predicting trends broadly involves analyzing time-series data, applying deep learning sequence models, tracking how information spreads through networks, and detecting unscheduled events automatically. This review focuses specifically on supervised tabular classification using hand-crafted features to predict binary outcomes, distinguishing it from sequence modeling, graph methods, learned representations, and continuous trajectory forecasting. The seventeen sources reviewed here (Section 7) were selected because they directly inform the three decisions this project makes: *what to predict* (popularity and surge onset literature), *what signals to use* (sentiment and content features), and *how to evaluate rigorously* (temporal validation methods). A fourth strand, Reddit-specific financial research, confirms that this platform contains distinct, predictable signals.
@@ -172,11 +130,11 @@ These studies confirm that Reddit financial communities produce predictive signa
 
 Beyond the substantive gaps identified above, a critical methodological pattern cuts across the literature: a recurring absence of rigorous temporal evaluation protocols.
 
-Szabo and Huberman [1] evaluate on data drawn from the same time period as training. Bandari et al. [3] use random train-test splits rather than temporal partitions, meaning models may be tested on articles published *before* some training data, a form of information leakage. Cheng et al. [5] randomly sample cascades for evaluation without preserving temporal ordering. Long et al. [9] and Costola et al. [10] analyse correlations across their full datasets without testing whether patterns discovered in earlier periods generalise to later ones.
+Szabo and Huberman [1] evaluate on data drawn from the same time period as training. Bandari et al. [3] use random train-test splits rather than temporal partitions, allowing models to be tested on articles published before some training data, a form of information leakage. Cheng et al. [5] randomly sample cascades for evaluation without preserving temporal ordering. Long et al. [9] and Costola et al. [10] analyse correlations across their full datasets without testing whether historical patterns generalise to later periods.
 
-This matters because Tashman [14] demonstrated that rolling-origin evaluation, where the forecasting origin advances forward through time, produces more reliable accuracy estimates for temporal prediction tasks than fixed or random splits. Bergmeir and Benítez [15] showed empirically that random cross-validation *overestimates* predictive accuracy for time-dependent data, recommending blocked or expanding-window schemes that preserve temporal ordering. Despite these methodological advances being well-established in the forecasting literature, they remain largely unadopted in social media prediction research.vvb
+This methodological oversight is significant because Tashman [14] demonstrated that rolling-origin evaluation, where the forecasting origin advances forward through time, produces far more reliable accuracy estimates for temporal prediction tasks than fixed or random splits. Furthermore, Bergmeir and Benítez [15] showed empirically that random cross-validation overestimates predictive accuracy on time-dependent data, and recommended blocked or expanding-window schemes that preserve temporal ordering. Despite established best practices in time-series forecasting, they remain largely unadopted in social media prediction research.
 
-The consequence is that reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains unresolved whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. Fernández-Delgado et al. [16], in their large-scale classifier comparison, similarly noted that evaluation methodology substantially affects reported performance rankings, reinforcing that *how* a model is evaluated matters as much as *which* model is selected.
+Consequently, reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains uncertain whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. As Fernández-Delgado et al. [16] noted in their large-scale classifier benchmark, evaluation methodology substantially affects reported performance rankings, reinforcing that how a model is evaluated matters as much as which model is selected.
 
 *Table 3: Temporal evaluation practices across reviewed studies.*
 
@@ -199,17 +157,17 @@ The literature reviewed above establishes four cumulative findings:
 - Sentiment extracted from social media carries predictive value in financial contexts [4][12]
 - Reddit financial communities generate measurable signals that precede market activity [9][10][11]
 
-Four gaps remain unaddressed:
+Four key gaps remain unaddressed:
 
-1. **Prediction target:** All reviewed studies predict *eventual outcomes* (final popularity, cascade size, market returns) rather than detecting the *onset* of rapid growth within a bounded time window. No study was found that defines or predicts a composite volume-and-sentiment surge within a fixed short-term window for individual entities.
+1. **Prediction target:** All reviewed studies predict *eventual outcomes* (e.g., total popularity, cascade size, or market returns) rather than detecting the *onset* of rapid growth within a bounded time frame. Existing literature lacks a formulation for defining or predicting a composite volume-and-sentiment surge within a fixed short-term window for individual entities.
 
-2. **Signal integration:** Each research strand demonstrates one feature category's value in isolation (temporal [1], content [3], sentiment [4], structural [5]), but empirical integration of multiple signal types into a unified predictive framework remains limited, despite evidence that they interact during trend formation [2][7].
+2. **Signal integration:** Each research strand demonstrates one feature category's value in isolation such as temporal [1], content [3], sentiment [4], or structural [5], but empirical integration of multiple signal types into a unified predictive framework remains limited, despite evidence that they interact during trend formation [2][7].
 
-3. **Domain specificity:** General social media prediction research [1][3][5] does not account for the distinctive characteristics of financial discussion (event-driven reactions, domain-specific language, speculative behaviour). Conversely, Reddit financial research [9][10][11] predicts *market* consequences of surges rather than predicting whether surges *will occur*.
+3. **Domain specificity:** General social media prediction research [1][3][5] neglects the distinct dynamics of financial discussions such as event-driven reactions, domain-specific language, and speculative behaviour. Conversely, Reddit financial research [9][10][11] predicts market consequences of surges rather than predicting whether surges *will occur*.
 
 4. **Temporal validity:** The use of random or unspecified evaluation splits across the literature [1][3][5][9] means reported results may not reflect real-world predictive performance. Rigorous temporal evaluation methods exist [14][15] but remain unadopted in this domain.
 
-This project addresses these gaps directly. The composite surge metric (Section 3.3) defines a binary onset target within a 24-hour window (gap 1). The feature set (Section 3.4) combines temporal, activity-frequency, sentiment, and textual signals (gap 2). The pipeline is applied to Reddit financial communities using two subreddits at opposite ends of the data density spectrum (gap 3). Expanding-window temporal cross-validation ensures that no future information leaks into training (gap 4). Whether this integration yields meaningful predictive performance is the empirical question examined in Section 5.
+This project addresses these gaps directly. First, the composite surge metric (Section 3.3) defines a binary onset target evaluated within a strict 24-hour window (Gap 1). Second, the feature set (Section 3.4) combines temporal, activity-frequency, sentiment, and textual signals (Gap 2). The pipeline is applied to Reddit financial communities using two subreddits at opposite ends of the data density spectrum (Gap 3) to evaluate domain-specific applicability. Finally, model evaluation strictly utilizes expanding-window temporal cross-validation ensures that no future information leaks into training (Gap 4). Whether this integration yields meaningful predictive performance is the empirical question examined in Section 5.
 
 ---
 
