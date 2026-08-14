@@ -132,63 +132,63 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 **Critical: Cần cắt ~350 words. Target: Section 3.5**
 
 #### §3.1 System Architecture
-- [ ] 6-stage pipeline clear?
-- [ ] Mermaid diagram matches text?
-- [ ] Overarching constraint (no future info) stated?
+- [x] 6-stage pipeline clear?
+- [x] Mermaid diagram matches text?
+- [x] Overarching constraint (no future info) stated?
 
 #### §3.2 Data Selection and Characteristics
-- [ ] Why Reddit? (subreddit structure, public archive, timestamps)
-- [ ] Why these 2 subreddits? (density spectrum)
-- [ ] Table 4 numbers match elsewhere?
-- [ ] Ethical considerations addressed?
-- [ ] Known limitations acknowledged?
+- [x] Why Reddit? (subreddit structure, public archive, timestamps)
+- [x] Why these 2 subreddits? (density spectrum)
+- [x] Table 4 numbers match elsewhere?
+- [x] Ethical considerations addressed?
+- [x] Known limitations acknowledged?
 
 #### §3.3 Surge Definition (Target Variable)
-- [ ] Formula clear? (composite = w₁×z_vol + w₂×z_sent)
-- [ ] 5 computation steps logical?
-- [ ] Why 24-hour window? (trading cycle argument)
-- [ ] Why include sentiment? (empirical evidence cited)
-- [ ] Table 5: threshold sensitivity — clear?
-- [ ] Two-phase validation explained?
+- [x] Formula clear? (composite = w₁×z_vol + w₂×z_sent)
+- [x] 5 computation steps logical?
+- [x] Why 24-hour window? (trading cycle argument)
+- [x] Why include sentiment? (empirical evidence cited)
+- [x] Table 5: threshold sensitivity — clear?
+- [x] Two-phase validation explained?
 
 #### §3.4 Feature Engineering
-- [ ] 11 features listed — Table 6 clear?
-- [ ] Backward-looking constraint explicit?
-- [ ] Why exclude `score` and `num_comments`?
-- [ ] Category rationale (content, temporal, activity, interaction)?
+- [x] 11 features listed — Table 6 clear?
+- [x] Backward-looking constraint explicit?
+- [x] Why exclude `score` and `num_comments`?
+- [x] Category rationale (content, temporal, activity, interaction)?
 
 #### §3.5 Methodological Scope ← **CẮT Ở ĐÂY**
-- [ ] "Adopted techniques" — concise?
-- [ ] "Excluded techniques" — **quá dài**. Target:
+- [x] "Adopted techniques" — concise?
+- [x] "Excluded techniques" — **quá dài**. Target:
   - ARIMA/LSTM: cắt từ ~120 words → 50 words
   - Network analysis: cắt từ ~100 words → 40 words
   - Topic modelling: cắt từ ~80 words → 30 words
-- [ ] Guiding principle paragraph — keep
+- [x] Guiding principle paragraph — keep
 
 #### §3.6 Model Selection
-- [ ] Why binary classification? (brief, effective justification)
-- [ ] 3 models span complexity spectrum?
-- [ ] Primary metric (AUC-ROC) justified?
-- [ ] Imbalance handling (cost-sensitive, no SMOTE) justified?
+- [x] Why binary classification? (brief, effective justification)
+- [x] 3 models span complexity spectrum?
+- [x] Primary metric (AUC-ROC) justified?
+- [x] Imbalance handling (cost-sensitive, no SMOTE) justified?
 
 #### §3.7 Temporal Validation Design
-- [ ] 2-level strategy clear?
-- [ ] Mermaid diagram (expanding window) correct?
-- [ ] Why k=4 explained?
-- [ ] Threshold tuning never touches test data — stated?
+- [x] 2-level strategy clear?
+- [x] Mermaid diagram (expanding window) correct?
+- [x] Why k=4 explained?
+- [x] Threshold tuning never touches test data — stated?
 
 #### §3.8 Evaluation Framework
-- [ ] 4 questions listed?
-- [ ] Table 7a (tiers) clear?
-- [ ] Baselines specified?
-- [ ] Statistical tests specified?
-- [ ] Table 7b (metrics) clear?
-- [ ] Cross-dataset transfer protocol?
-- [ ] Sensitivity analysis specified?
+- [x] 4 questions listed?
+- [x] Table 7a (tiers) clear?
+- [x] Baselines specified?
+- [x] Statistical tests specified?
+- [x] Table 7b (metrics) clear?
+- [x] Cross-dataset transfer protocol?
+- [x] Sensitivity analysis specified?
 
 #### Cuối Section 3:
-- [ ] **XÓA "SIDE NOTE (DELETE LATER)" block** (lines 227–240)
-- [ ] **XÓA "How to write methodology" block** (lines 241–278)
+- [x] **XÓA "SIDE NOTE (DELETE LATER)" block** (lines 227–240)
+- [x] **XÓA "How to write methodology" block** (lines 241–278)
 
 ---
 

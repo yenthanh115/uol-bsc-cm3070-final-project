@@ -36,7 +36,7 @@ This project examines whether upcoming surges can be predicted from early discus
 
 The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively within a fixed time window. This project specifically focuses on surges, defined as statistically significant, short-term spikes in both **posting volume** and **sentiment intensity** for a ticker **within a 24-hour window**. These events are identified using a composite metric that combines normalized volume growth with the magnitude of sentiment shift. Tracking volume metrics alone miss moments when discussion sentiment intensifies without a matching spike in post count. Blending both signals reveals a richer, more structured event (see Section 5.2.5). Because surges are discrete and quantifiable, they can be framed as a binary classification problem, providing a more practical way to model the concept of a 'trend'. Since surges mark the beginning of a trend, predicting a surge effectively means catching a trend right as it emerges.
 
-We base our target on timestamped post volume rather than engagement metrics like upvotes, as post-hoc scores introduce look-ahead bias. To measure volume spikes consistently, features are standardized using Z-scores are calculated using training-set statistics alone to prevent data leakage. Section 3.3 outlines the formal definitions, weighting, and threshold choices.
+The target is based on timestamped post volume rather than engagement metrics like upvotes, as post-hoc scores introduce look-ahead bias. To measure volume spikes consistently, features are standardized using Z-scores are calculated using training-set statistics alone to prevent data leakage. Section 3.3 outlines the formal definitions, weighting, and threshold choices.
 
 ### 1.4 Scope
 
@@ -173,120 +173,37 @@ This project addresses these gaps directly. First, the composite surge metric (S
 
 ## 3. Design
 
-<!-- 
-SIDE NOTE (DELETE LATER)
-- why use Reddit not X or other platform
-- why not use API
-- why use 2 datasets, why pick pennystocks and wsb
-- why use combined/composite metric
-- why pick 3 model: LR, RF, XGB
-- why use validation-fold
-- why not k=5 or k=10 but k=4?
-- what are stretch tier vs target tier
-- have we set goal for this project (musthave tier, target tier, and stretch tier)
-- discuss about data drift ? aware of it and provide solution 
--->
-
-<!--
-## 1. Establish Methodological Rationalization
-Goal: Justify why your chosen approach is the most effective vehicle for your specific research.
-
-* Why did you choose this specific paradigm (quantitative, qualitative, or mixed-methods)?
-* How does this structural design directly answer your primary research questions?
-* What alternative designs did you reject, and why were they less suitable?
-* How does this design align with the theoretical framework built in your literature review?
-
-## 2. Define Boundaries and the Sampling Strategy
-Goal: Clearly outline who or what you are studying, and how you selected your subjects.
-
-* What is your exact target population or unit of analysis (e.g., individuals, texts, organizations)?
-* What specific sampling method did you use (e.g., random, purposive, snowball sampling)?
-* What were your explicit inclusion and exclusion criteria for participants or data?
-* What is your final sample size, and why is it statistically or conceptually sufficient?
-
-## 3. Detail the Operational Procedures
-Goal: Provide a step-by-step chronological recipe so another researcher can replicate your study exactly.
-
-* What exact materials, hardware, software, or standardized instruments did you utilize?
-* What were the chronological steps taken to set up and execute the study?
-* How did you control for extraneous variables or potential sources of bias?
-* If you conducted a pilot study, what adjustments did you make based on those trial runs?
-
-## 4. Outline Data Collection Metrics
-Goal: Explain exactly how information was gathered and measured during the execution phase.
-
-* What specific types of data were collected (e.g., test scores, interview transcripts, digital logs)?
-* How did you ensure the validity (accuracy) and reliability (consistency) of your measurement tools?
-* What specific roles did the researchers play during the data gathering process?
-* When, where, and over what exact timeframe was the data collected?
-
-## 5. Formulate the Data Analysis Plan
-Goal: Explain how you will transform raw data into meaningful answers before you actually present findings.
-
-* What specific statistical tests (quantitative) or coding frameworks (qualitative) will you apply?
-* Which software packages (e.g., SPSS, R, NVivo) will be used to process the data?
-* How will you handle missing, corrupted, or incomplete data points?
-* How do these specific analysis techniques map back to your original hypotheses?
-
-## 6. Address Ethical and Quality Controls
-Goal: Prove that your study protects participants and adheres to strict professional standards.
-
-* What institutional review boards (IRB) or ethical committees approved this project?
-* How did you secure informed consent and protect participant anonymity or data privacy?
-* What steps were taken to minimize physical, psychological, or social risks to subjects?
-* How did you address potential researcher bias or conflicts of interest?
-
-------------------------------
-## Quick Framework: The 4 D’s of Research Design
-When writing or reviewing your design section, ensure it satisfies these four criteria:
-
-* Define: Clearly state the parameters, variables, and populations involved.
-* Do: Detail the precise actions taken during the experiment or fieldwork.
-* Defend: Explain the logical reasons behind every technical choice you made.
-* Disclose: Report all limitations, ethical steps, and structural constraints openly.
-
--->
-
 ### 3.1 System Architecture
 
-The prediction system is a six-stage linear pipeline. Each stage consumes the previous stage's output and writes a well-defined intermediate artefact to disk, which means downstream stages can be re-executed independently without recomputing expensive upstream operations.
+The prediction system is structured as a six-stage linear processing pipeline. Each stage consumes the previous stage's output and writes a well-defined intermediate artefact to disk, enabling downstream components to be re-executed independently without recomputing expensive upstream operations.
 
-1. **Data Loading and Preprocessing** — CSV ingestion, text cleaning, regex-based ticker extraction, record explosion (one row per record-ticker pair)
-2. **Temporal Windowing** — Per-ticker forward/backward 24-hour posting counts via vectorised binary search
-3. **Sentiment Computation** — VADER compound scoring per record, with title-fallback for missing selftext
-4. **Target Labelling** — Temporal 80/20 split, z-score normalisation from training-partition statistics only, composite metric computation, binary thresholding
-5. **Feature Engineering** — Eleven backward-only features (Section 3.4)
-6. **Model Training and Evaluation** — Expanding-window temporal cross-validation, hyperparameter tuning, test-set evaluation, statistical comparison
+1. **Data Loading and Preprocessing**: Ingests raw CSV data, perform text cleaning, executes regex-based ticker extraction, and explodes multi-entity records into unique record–ticker pairs
+2. **Temporal Windowing**: Computes per-ticker forward and backward 24-hour posting volume using vectorized binary search operations over chronological index boundaries.
+3. **Sentiment Computation**: Calculates VADER compound sentiment scores per record, implementing a title-fallback mechanism when selftext is absent.
+4. **Target Labelling**: Establishes a temporal train/test split (80/20), calculates z-score normalization parameters strictly from training-partition statistics, and derives binary classification targets via composite metric thresholding.
+5. **Feature Engineering**: Extracts eleven backward-looking temporal, text, and sentiment features (Section 3.4) over historical observation windows.
+6. **Model Training and Evaluation**: Performs expanding-window temporal cross-validation, hyperparameter tuning, holdout test-set evaluation, and statistical hypothesis testing across model baselines.
 
-```mermaid
-graph TD
-    A[Raw CSV<br/><i>Reddit submissions</i>] --> B[Preprocessing<br/><i>Clean, extract tickers, explode</i>]
-    B --> C[Temporal Windowing<br/><i>Forward/backward 24h counts</i>]
-    C --> D[Sentiment<br/><i>VADER compound scores</i>]
-    D --> E[Target Labelling<br/><i>Z-score → composite → binary</i>]
-    E --> F[Feature Engineering<br/><i>11 backward-only features</i>]
-    F --> G[Model Training<br/><i>Expanding-window CV</i>]
-    G --> H[Evaluation<br/><i>Test set + statistical tests</i>]
+<figure align="center">
+  <img src="figures/02-data-pipeline-v0.1.png" alt="Data pipeline architecture" width="1000">
+  <figcaption>Figure 2: Data pipeline architecture.</figcaption>
+</figure>
 
-    style A fill:#f5f5f5,stroke:#9e9e9e
-    style E fill:#e1f5fe,stroke:#0288d1
-    style G fill:#c8e6c9,stroke:#2e7d32
-    style H fill:#fff9c4,stroke:#f9a825
-```
 *Figure 2: Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).*
 
-The overarching architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. Sentiment uses only the record's own text, features use backward-looking windows exclusively, z-scores are frozen from training-partition statistics, and validation folds are strictly time-ordered.
+The foundational architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. Sentiment uses only the record's own text, features use backward-looking windows exclusively, z-scores are frozen from training-partition statistics, and validation folds are strictly time-ordered.
 
 ### 3.2 Data Selection and Characteristics
 
-Reddit was selected because its subreddit structure concentrates stock discussion into retrievable, topically focused communities; posts are publicly archived for reproducible research; and its threaded format yields timestamped submissions with text suitable for temporal and sentiment feature extraction.
+Reddit was selected as the primary data source because its subreddit structure concentrates stock discussion into retrievable, topically focused communities; its posts are publicly archived for reproducible research; and its threaded format yields timestamped submissions with text suitable for temporal and sentiment feature extraction.
 
 Two subreddits were chosen to represent opposite ends of the data density spectrum:
 
-- **r/pennystocks** is a sparse niche community (80,212 exploded records) focused on low-capitalisation equities. It tests whether the methodology degrades gracefully under data scarcity.
-- **r/wallstreetbets** is a high-volume mainstream forum (577,872 exploded records). It tests whether the pipeline scales and whether signal can be extracted from noise.
+- **r/pennystocks** is a sparse niche community (80,212 exploded records) focused on low-capitalisation equities. This dataset evaluates whether the proposed methodology degrades gracefully under data scarcity.
 
-This dual-dataset design addresses literature gap 3 (domain specificity) and enables cross-dataset transfer evaluation.
+- **r/wallstreetbets** is a high-volume mainstream forum (577,872 exploded records). This dataset evaluates whether the pipeline scales effectively and isolates predictive signals within high-noise environments.
+
+This dual-dataset strategy directly addresses Gap 3 (domain specificity) by testing model robustness across varying signal-to-noise ratios and enables subsequent cross-dataset transfer evaluation.
 
 *Table 4: Dataset characteristics.*
 
@@ -300,108 +217,113 @@ This dual-dataset design addresses literature gap 3 (domain specificity) and ena
 | Test surges | 31 | 2,582 |
 | Test imbalance ratio | 105:1 | 26:1 |
 
-Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full calendar year 2021 (spanning the January GameStop episode through subsequent normalisation). Static archival CSVs ensure exact reproducibility; live API scraping would introduce temporal variability between runs and complicate replication. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (`score`, `num_comments`) that are retained for transparency but *not* used as features.
+Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full 2021 calendar year. It spans the January GameStop episode through subsequent normalisation. Utilizing static archival CSVs ensure exact reproducibility, whereas live API scraping would introduce temporal variability between runs and complicate replication. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (score, num_comments) that are retained for transparency but not used as features.
 
-**Ethical considerations.** All data consists of publicly posted submissions; analysis is aggregated at the ticker level with no attempt to identify individual users. The project is academic research only; no trading decisions were made from model outputs.
+**Ethical considerations:** All underlying data consists of publicly posted, non-sensitive forum submissions; analysis is aggregated at the ticker level with no attempt to identify individual users. This project is academic research only; no trading decisions were made from model outputs.
 
-**Known limitations.** The archival dataset exhibits survivorship bias (deleted/moderated posts are absent), engagement metrics are frozen at collection time, and results are bound to the 2021 period.
+**Known limitations:** The archival dataset exhibits survivorship bias (deleted/moderated posts are absent), engagement metrics are frozen at collection time, and results are bound to the 2021 period.
 
 ### 3.3 Surge Definition (Target Variable)
 
 A fixed posting-count threshold fails because tickers have different baselines. What matters is whether current activity is *statistically unusual* for that ticker's history. The solution is a composite metric that normalises volume growth relative to the training distribution and combines it with sentiment change:
 
-> *composite = (w₁ × z_volume) + (w₂ × z_sentiment)*
-
 For each record mentioning ticker *X* at time *t*, the pipeline:
 
-1. Counts *X*-mentioning posts in a forward window (*t*, *t*+24h] and a backward window (*t*−24h, *t*]
-2. Computes volume growth: (forward_count / max(backward_count, 1)) − 1
-3. Computes sentiment shift: |mean(forward_sentiments) − current_sentiment|
-4. Z-score normalises both using training-partition statistics only (μ and σ frozen from the 80% temporal split)
-5. Combines weighted z-scores into the composite; labels surge=1 if composite > τ. Records with too few posts in their forward window are excluded as unlabellable.
+1. Extract volume: counts posts mentioning ticker $X$ within a backward window $[t - 24\text{h}, t)$ and a forward window $(t, t+24h]$
+2. Computes volume growth: computes relative growth rate $$\Delta V = \frac{C_{\text{fwd}}}{\max(C_{\text{bwd}}, 1)} - 1$$where $C_{\text{fwd}}$ and $C_{\text{bwd}}$ represent the post counts mentioning ticker $X$ in the forward $(t, t + 24\text{h}]$ and backward $(t - 24\text{h}, t]$ observation windows, respectively.
+3. Sentiment Shift: Computes the magnitude of sentiment change between the forward window mean and current post sentiment: $$\Delta S = \vert{}\bar{S}_{\text{fwd}} - s_t\vert{}$$where $\bar{S}_{\text{fwd}}$ is the mean VADER compound sentiment score across all posts in the forward window, and $s_t$ is the compound sentiment score of the current post at timestamp $t$.
+4. Z-Score Normalization: Standardizes $\Delta V$ and $\Delta S$ using training-partition parameters exclusively: $$Z(\Delta V) = \frac{\Delta V - \mu_{\Delta V,\text{train}}}{\sigma_{\Delta V,\text{train}}}, \quad Z(\Delta S) = \frac{\Delta S - \mu_{\Delta S,\text{train}}}{\sigma_{\Delta S,\text{train}}}$$where $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ denote the sample mean and standard deviation estimated strictly from the training partition.
+5. Composite Thresholding: Combines normalized metrics into a unified composite score:$$\text{Composite} = w_1 \cdot Z(\Delta V) + w_2 \cdot Z(\Delta S)$$where $w_1$ and $w_2$ are weighting parameters controlling the relative importance of volume growth and sentiment shift, respectively. A binary target $y \in \{0, 1\}$ is assigned if $\text{Composite} > \tau$, where $\tau$ is the decision threshold.
 
-Z-scoring identifies growth that is statistically unusual regardless of a ticker's typical volume. The parameters are computed exclusively from the training partition to prevent leakage into the target variable.
+By standardizing volume and sentiment shifts into $z$-scores, this composite metric identifies activity bursts that are statistically unusual regardless of an individual ticker's typical volume. Calculating $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly within the training partition guarantees that information about test-set distributions does not leak into the ground-truth target labels.
 
-The 24-hour window aligns with the daily trading cycle and captures overnight-to-open discussion patterns that drive next-day attention. Shorter windows (6h) risk insufficient post counts per ticker for stable statistics, particularly on sparser communities. Longer windows (72h) blur the distinction between surge onset and sustained activity, making the label less useful as an early-warning signal. The sensitivity analysis in Section 5.4.2 revisits this choice and identifies multi-scale windows as a priority improvement.
+Two key architectural choices govern this formulation: the length of the observation window and the inclusion of the sentiment component. 
 
-Including sentiment captures cases where a community becomes markedly more agitated without necessarily posting more frequently [4][10]. A volume-only definition produces noisier, less structured surges that are harder to predict, as confirmed empirically: Phase 1 (w₂=0) yields AUC 0.710 vs Phase 2's 0.892 on WSB (Section 5.2.5). Setting w₂=0 reduces the definition to volume-only, enabling that direct comparison.
+**Observation window duration:** The 24-hour observation window was selected to align with daily trading cycles, capturing overnight-to-open discussion dynamics that precede next-day attention shifts. Shorter windows (e.g., 6 hours) yield sparse post counts per ticker, leading to unstable statistics in lower-density subreddits. Conversely, longer windows (e.g., 72 hours) obscure the onset of a surge by blending initial acceleration with sustained activity, diminishing the label's utility as an early-warning indicator. Section 5.4.2 will explore these trade-offs via sensitivity analysis and identifies multi-scale windows as a candidate for future research. 
 
-*Table 5: Threshold sensitivity on r/wallstreetbets (457,072 usable records).*
+**Sentiment weighting:** Incorporating sentiment shift ($\Delta S$) accounts for scenarios where community discussion grows distinctly polarized or agitated without an immediate spike in posting frequency [4, 10]. Defining surges solely by volume yields noisier target labels that prove harder to predict: setting $w_2 = 0$ reduces the metric to a volume-only definition, which degrades classification performance on r/wallstreetbets from $\text{AUC} = 0.892$ (Phase 2) down to $\text{AUC} = 0.710$ (Phase 1; Section 5.2.5).
 
-| τ | Surge Count | Surge Rate | Imbalance Ratio |
+*Table 5: Threshold sensitivity on r/wallstreetbets*
+
+| $\tau$ | Surge Count | Surge Rate | Imbalance Ratio |
 |---|-------------|------------|-----------------|
-| 0.5 | 80,455 | 17.6% | 4.7:1 |
-| **1.0** | **22,384** | **4.9%** | **19.4:1** |
-| 1.5 | 6,602 | 1.4% | 68.2:1 |
-| 2.0 | 2,873 | 0.6% | 158:1 |
-| 2.5 | 1,348 | 0.3% | 338:1 |
+| $0.5$ | 80,455 | 17.6% | 4.7:1 |
+| $\mathbf{1.0}$ | **22,384** | **4.9%** | **19.4:1** |
+| $1.5$ | 6,602 | 1.4% | 68.2:1 |
+| $2.0$ | 2,873 | 0.6% | 158:1 |
+| $2.5$ | 1,348 | 0.3% | 338:1 |
 
-τ=1.0 was selected for primary evaluation: rare enough to be meaningful, common enough (2,582 test surges on WSB) for statistically reliable evaluation. A secondary run at τ=1.5 on r/pennystocks tests behaviour under more extreme imbalance.
+**Threshold selection ($\tau$):** A decision threshold of $\tau = 1.0$ standard deviations was selected for primary model evaluation. This threshold isolates instances rare enough to represent true statistical anomalies while maintaining sufficient sample density (e.g., $2,582$ test-set surge instances on r/wallstreetbets) for statistically reliable performance estimation. A secondary evaluation run at $\tau = 1.5$ on r/pennystocks tests model resilience and performance under conditions of severe class imbalance. 
 
-**Two-phase validation.** Phase 1 uses w₂=0 (volume-only labels); Phase 2 uses w₁=w₂=0.5 (equal composite). Comparing them determines whether sentiment genuinely improves prediction. A full weight sweep (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) is reported as supplementary sensitivity analysis in Section 3.8.
+**Two-phase metric validation:** To isolate the empirical contribution of sentiment, target labeling is evaluated in two phases: Phase 1 ($w_1 = 1.0, w_2 = 0.0$): Evaluates a baseline volume-only target. Phase 2 ($w_1 = 0.5, w_2 = 0.5$): Evaluates an equal-weight composite target incorporating both volume growth and sentiment shift. Comparing model performance across these phases determines whether incorporating sentiment shift yields a measurably more predictable and meaningful surge target. Additionally, a full weight hyperparameter sweep ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$) is reported in Section 3.8 as supplementary sensitivity analysis.
 
 ### 3.4 Feature Engineering
 
-All features satisfy the backward-looking constraint: only information available at or before time *t* is used. Reddit `score` and `num_comments` are excluded because they accumulate *after* posting and reflect the very engagement dynamics the model is trying to predict.
+To maintain strict temporal validity, all eleven engineered features satisfy a backward-looking constraint: each feature is derived strictly from information available at or prior to observation timestamp $t$. Post-hoc engagement metrics—specifically Reddit post score (upvotes) and num_comments—are explicitly excluded from the feature space. Because these metrics accumulate dynamically after publication, their inclusion would introduce lookahead bias by incorporating the very engagement trajectories the system aims to predict.
+
 
 *Table 6: Feature definitions. All features use backward-looking or concurrent information only.*
 
-| Feature | Category | Definition |
-|---------|----------|------------|
-| `sentiment_score` | Content | VADER compound sentiment of the post text |
-| `word_count` | Content | Words in selftext (0 if absent) |
-| `title_length` | Content | Character count of title |
-| `num_tickers_mentioned` | Content | Distinct tickers extracted from the post |
-| `hour_of_day` | Temporal | Hour of post creation (UTC) |
-| `day_of_week` | Temporal | Day of post creation (Monday=0) |
-| `time_since_previous` | Activity | Seconds since previous same-ticker post |
-| `ticker_post_rate_24h` | Activity | Same-ticker posts in preceding 24 hours |
-| `ticker_post_acceleration` | Activity | Rate ratio: count in preceding 12h ÷ count in 12h before that |
-| `word_count_x_hour` | Interaction | word_count × hour_of_day |
-| `accel_x_time_since_prev` | Interaction | ticker_post_acceleration × time_since_previous |
+| | Feature | Category | Definition |
+|-|---------|----------|------------|
+|1| `sentiment_score` | Content | VADER compound sentiment of the post text |
+|2| `word_count` | Content | Words in selftext (0 if absent) |
+|3| `title_length` | Content | Character count of title |
+|4| `num_tickers_mentioned` | Content | Distinct tickers extracted from the post |
+|5| `hour_of_day` | Temporal | Hour of post creation (UTC) |
+|6| `day_of_week` | Temporal | Day of post creation (Monday=0) |
+|7| `time_since_previous` | Activity | Seconds since previous same-ticker post |
+|8| `ticker_post_rate_24h` | Activity | Same-ticker posts in preceding 24 hours |
+|9| `ticker_post_acceleration` | Activity | Rate ratio: count in preceding 12h ÷ count | in 12h before that |
+|10| `word_count_x_hour` | Interaction | word_count × hour_of_day |
+|11| `accel_x_time_since_prev` | Interaction | ticker_post_acceleration × time_since_previous |
 
-Content features capture what is said (emotional intensity, post effort, discussion focus). Temporal features encode cyclical patterns tied to market hours. Activity features draw on the popularity prediction literature [1][5], since accelerating posting rates signal that a surge may be forming. Interaction features were added after experiment B2 showed that manually constructed combinations improved Random Forest AUC by +1.4pp on pennystocks.
+The feature set is structured into four functional categories:
+- **Content features:** Encode textual characteristics, emotional valence, and post effort (e.g., emotional intensity, character length, selftext presence).
+- **Temporal features:** Capture cyclical and market-aligned posting patterns tied to financial trading hours (e.g., hour of day, day of week, market-session flags).
+- **Activity features:** Draw upon established popularity prediction literature [1, 5] to measure discussion momentum, where accelerating posting rates serve as early indicators of surge formation.
+- **Interaction features:** Combine multimodal signals to capture cross-feature dynamics. These were introduced following ablation experiment, where manually engineered interaction terms yielded a $+1.4$ percentage point increase in Random Forest AUC on r/pennystocks.
 
 ### 3.5 Methodological Scope: Techniques Adopted and Excluded
 
-The project template identifies several technique families as relevant to social media trend prediction: time-series forecasting (ARIMA, LSTM), network analysis (centrality measures, community detection), natural language processing (sentiment analysis, topic modelling, word embeddings), machine learning (classification, regression), and data visualisation. This project adopts a subset of these and excludes others based on the specific operationalisation of the problem.
+The project template identifies several core technique families as relevant to social media trend prediction: time-series forecasting (ARIMA, LSTM), network analysis (centrality measures, community detection), natural language processing (sentiment analysis, topic modelling, word embeddings), machine learning (classification, regression), and data visualisation. Based on the operational definition of the surge prediction task, this project adopts a subset of these technique families.
 
 **Adopted techniques:**
 
-- *Sentiment analysis* (NLP): VADER compound scoring extracts emotional intensity from post text, contributing both to the composite surge metric and as a predictive feature. This is the NLP technique most directly relevant to detecting shifts in community tone before surges.
-- *Machine learning classification*: Three classifier families (Logistic Regression, Random Forest, XGBoost) predict the binary surge target using engineered features. Classification is the natural fit for the "will it surge or not?" question.
-- *Temporal feature engineering*: Activity rates, acceleration ratios, and time-since-previous features capture the temporal dynamics that the time-series literature identifies as predictive of future attention [1][5], implemented as per-record features rather than as a separate forecasting model.
-- *Data visualisation*: ROC curves, confusion matrices, feature importance plots, and threshold sensitivity charts communicate model behaviour and results.
+- *Sentiment analysis* (NLP): Employs VADER compound scoring to extract emotional intensity from post titles and body text. Sentiment scores contribute directly to both the composite target variable ($\Delta S$) and the predictive feature set, providing the primary mechanism for detecting shifts in community valence prior to surge onset.
+- *Machine learning classification*: Deploys three distinct model families: Logistic Regression, Random Forest, and XGBoost, to predict the binary surge target ($y \in \{0, 1\}$). Supervised classification represents the most natural framework for answering the operational decision question: will a ticker experience a surge within the next 24 hours?
+- *Temporal feature engineering*: Adapts principles from time-series forecasting [1, 5] by constructing per-record activity rates, acceleration ratios, and inter-arrival time metrics. Converting sequential temporal dynamics into tabular feature representations captures time-dependent momentum without requiring a computationally heavy forecasting architecture.
+- *Data visualisation*: Utilizes Receiver Operating Characteristic (ROC) curves, confusion matrices, feature importance rankings, and threshold sensitivity charts to evaluate model performance, interpret feature contributions, and assess stability under class imbalance.
 
 **Excluded techniques and rationale:**
 
-- *Time-series forecasting (ARIMA, LSTM)*: These model a continuous trajectory over time (e.g., "how many posts will ticker X receive tomorrow?"). The present project asks a binary question ("will a surge occur?") at the per-record level rather than forecasting a time series. The temporal signal is captured through engineered features (posting rate, acceleration) that feed directly into classifiers, which is more appropriate for a binary onset-detection task than fitting a separate forecasting model per ticker. Additionally, LSTM would require sequence-formatted input per ticker with sufficient history, which is infeasible for the long tail of tickers with sparse posting histories.
-- *Network analysis (centrality, community detection)*: Network methods require a graph structure — user interaction networks, reply trees, or cross-posting links. The archival dataset contains only top-level submissions with no reply-graph or user-interaction metadata. Constructing a meaningful network would require either comment-level data (unavailable in this dataset) or cross-referencing user posting histories (which would introduce user-level analysis outside the project's ticker-level scope). The template's suggestion of network analysis applies more naturally to diffusion studies tracking *how* trends spread through a social graph; this project instead asks *whether* a surge will occur, which is answerable from aggregate temporal and textual signals without network structure.
-- *Topic modelling and word embeddings*: Topic models (LDA, BERTopic) extract latent thematic structure across a corpus, which is useful for characterising *what* is being discussed but less directly useful for predicting *when* discussion will intensify. Word embeddings (Word2Vec, GloVe) would require either pre-training on domain text or using general-purpose vectors that miss financial semantics. Both techniques add substantial computational cost (particularly over 1.3M records) for uncertain marginal gain over the simpler sentiment signal that already dominates feature importance. These remain viable future extensions (Section 5.4.2) but were deprioritised in favour of depth in temporal validation and statistical evaluation.
+- *Time-series forecasting (ARIMA, LSTM)*: Time-series models predict continuous sequential trajectories over time (e.g., forecasting absolute post volume for ticker $X$ over $t+1$). In contrast, this study addresses a per-record binary classification task (will a surge occur within the next 24 hours?). Temporal dynamics are successfully captured via engineered features—such as historical posting rates and volume acceleration ratios—fed directly into supervised classifiers. This feature-based approach is better suited for binary onset detection than fitting separate time-series models per ticker, particularly given that LSTMs require dense, uninterrupted sequence inputs that are infeasible for long-tail tickers with sparse posting histories.
+- *Network analysis (centrality, community detection)*: Graph-based techniques require explicit interaction structures, such as user reply trees, mention networks, or cross-posting links. The archival dataset consists exclusively of top-level submissions without comment-level reply graphs or user interaction metadata. Constructing a valid network would require either comment-level data (absent from the dataset) or cross-referencing user submission histories, which would introduce user-level tracking outside this project's ticker-level scope. While network analysis is well-suited for tracking how information diffuses through a social graph, surge onset prediction (whether a surge will occur) is effectively captured through aggregate temporal and sentiment signals.
+- *Topic modelling and word embeddings*: Topic models extract latent thematic clusters across a corpus, characterizing what is discussed rather than predicting when volume will intensify. Furthermore, dense vector representations or transformer embeddings (e.g., FinBERT) introduce heavy computational overhead when scaled across more than 1.3 million records, with uncertain marginal gains over lightweight sentiment features that already dominate feature importance rankings. These techniques remain promising future extensions (Section 5.4.2), but were deprioritized in favor of depth in temporal validation, rigorous statistical testing, and multi-experiment sensitivity analysis.
 
-The guiding principle was depth over breadth: rather than applying five techniques superficially, the project applies classification with rigorous temporal validation, comprehensive statistical testing, and multi-experiment sensitivity analysis. The excluded techniques remain relevant to the broader problem space and are acknowledged as future directions where they would add value (Section 5.4.2).
+The overarching design principle prioritizing depth over breadth: rather than applying multiple techniques superficially, this project pairs supervised classification with rigorous temporal evaluation protocols, robust hypothesis testing, and multi-experiment sensitivity analysis. The excluded methods remain valuable to the broader problem domain and are contextualized as future research directions in Section 5.4.2.
 
 ### 3.6 Model Selection
 
-**Why binary classification?** A ticker either surges within the next 24 hours or it doesn't, with no meaningful in-between. That makes binary classification the natural fit. Regression would ask "how big?" when the real question is "did it happen?" Multi-class buckets (small/medium/large) would require arbitrary cut-points and make the class-imbalance problem worse. Anomaly detection is unsupervised, so it can't use the labelled surge history; it would also flag every rare surge as anomalous regardless of whether it has any distinguishing structure.
+**Why binary classification?** The prediction objective is framed as a supervised binary classification task ($y \in \{0, 1\}$), where the target indicates whether a given ticker experiences a composite surge within the subsequent 24-hour window. Regression formulations (predicting continuous surge magnitude) introduce unnecessary target variance when the primary operational decision is binary onset detection. Multi-class discretization scheme (e.g., low/medium/high surge buckets) requires arbitrary threshold boundaries and exacerbates class imbalance. Unsupervised anomaly detection is likewise rejected because it ignores historical labeled training data and flags all low-frequency events regardless of whether they exhibit predictive structure.
 
-Three classifier families span the complexity spectrum, testing whether model complexity actually helps for surge prediction:
+Three classifier families, spanning the model complexity spectrum, are deployed to evaluate whether model complexity actually helps improve predictive performance:
 
-- **Logistic Regression (LR)** is the interpretable baseline. It fits a linear decision boundary with elastic net regularisation. If LR performs well, the surge signal is approximately linearly separable.
-- **Random Forest (RF)** represents bagged ensembles. It captures non-linear relationships through tree splits and handles noisy features gracefully. Fernández-Delgado et al. [16] found that random forests achieved the highest overall accuracy across 121 benchmark datasets.
-- **XGBoost** represents sequential boosting. Each tree corrects the mistakes of the previous ensemble, with L1/L2 regularisation on leaf weights to prevent overfitting. Gradient boosting dominates recent tabular data competitions and consistently ranks among the top performers on structured problems.
+- **Logistic Regression (LR)** serves as an interpretable linear baseline, fitted with Elastic Net regularisation ($L_1 + L_2$). Strong baseline performance would indicate that the underlying surge feature space is approximately linearly separable.
+- **Random Forest (RF)** represents bagged decision tree ensembles. It captures non-linear relationships through tree splits and handles noisy features gracefully. Fernández-Delgado et al. [16] demonstrated that random forests consistently achieve top-tier performance across extensive tabular benchmark comparisons.
+- **XGBoost** represents gradient-boosted decision trees. Each tree corrects the mistakes of the previous ensemble, with leaf-weight regularisers ($L_1 / L_2$) to control overfitting. Gradient boosting dominates recent tabular data competitions and consistently achieves state-of-the-art results on structured tabular datasets.
 
-**Primary metric: AUC-ROC.** With surge rates of 1–5%, accuracy is uninformative (a model predicting "no surge" for every record achieves 95–99% accuracy while being useless). AUC measures how well the model *ranks* surge-likely records above non-surge records, independent of threshold. Precision, recall, and F1 are reported as secondary metrics at both the default (0.5) and validation-tuned thresholds.
+**Primary metric: AUC-ROC:** Due to severe class imbalance (surge rates ranging between $1\text{--}5\%$), raw classification accuracy is uninformative, as a naive model predicting "no surge" achieves $95\text{--}99\%$ accuracy while offering zero decision utility. AUC-ROC serves as the primary evaluation metric because it measures a model's ability to rank surge-bound instances above non-surge instances across all decision thresholds. Precision, Recall, $F_1$-score, and Precision-Recall AUC (PR-AUC) are reported as secondary metrics evaluated at both the default threshold ($0.5$) and validation-optimized decision thresholds.
 
-**Handling class imbalance.** SMOTE is inappropriate for temporally ordered data because synthetic records lack meaningful timestamps. Instead, the pipeline uses cost-sensitive learning: `class_weight='balanced'` for LR and RF; `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
+**Handling class imbalance:** Synthetic oversampling techniques such as SMOTE are fundamentally unsuitable for time-dependent data, as synthetic instances lack meaningful chronological timestamps and risk introducing local data leakage. Instead, class imbalance is addressed directly via cost-sensitive learning within the loss function: utilizing `class_weight='balanced'` for Logistic Regression and Random Forest, and setting `scale_pos_weight` (the negative-to-positive class ratio) for XGBoost.
 
 ### 3.7 Temporal Validation Design
 
-Standard k-fold cross-validation violates temporal ordering, since a model might train on October posts and validate on March posts. Bergmeir and Benítez [15] showed this inflates accuracy estimates. The pipeline uses a two-level temporal strategy instead:
+Standard $k$-fold cross-validation fundamentally violates chronological sequence integrity, as it permits models to train on future observations (e.g., October) while validating on past observations (e.g., March). As Bergmeir and Benítez [15] demonstrated empirically, this introduces temporal lookahead bias and systematically overestimates predictive performance. To guarantee strict temporal validity, the evaluation pipeline employs a hierarchical two-level temporal partitioning scheme:
 
-**Level 1: Train/test split (80/20 by timestamp).** The first 80% of chronologically sorted records form the training partition; the final 20% form the held-out test set, used exactly once for final metrics.
+**Level 1: Train/test split (80/20 by timestamp):** Raw records are sorted strictly by observation timestamp ($t$). The earliest $80\%$ of records constitute the training partition used for feature scaling, parameter estimation, and hyperparameter tuning. The final $20\%$ of records form the held-out test set, which remains strictly isolated and is evaluated exactly once to generate final performance figures.
 
-**Level 2: Expanding-window CV within training (k=4).**
+**Level 2: Expanding-window CV within training ($k=4$):** Model selection and hyperparameter optimization are conducted exclusively within the $80\%$ training partition using a $4$-fold expanding-window cross-validation scheme.
 
 ```mermaid
 gantt
@@ -423,13 +345,17 @@ gantt
 ```
 *Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
 
-The key guarantee is that every validation record comes strictly after all training records in time. The model never sees the future during selection. Splitting the training data into four temporal blocks gives roughly 2.5-month validation windows, each containing enough surge events for stable AUC estimates while keeping the minimum training set large enough for meaningful model fitting. Higher k would thin the validation folds below reliable evaluation. Once the best hyperparameters are chosen, the threshold that maximises F1 on these validation folds is locked in and applied unchanged to the test set, so threshold tuning never touches test data either.
+The core design guarantee of this scheme is that every validation instance occurs strictly downstream in time from all corresponding training instances. Across the four evaluation folds, the training origin expands forward in time, incorporating historical data from prior blocks while validating on the immediate subsequent chronological block (yielding approximately $2.5$-month validation windows). A fold count of $k = 4$ was selected to ensure that each validation window contains a sufficient density of positive surge instances for stable AUC-ROC estimation while maintaining a large enough initial training block ($t_1$) for meaningful model fitting.
 
-Temporal non-stationarity (shifting surge dynamics across the year) is a known risk; the expanding-window design partially mitigates it by always training on the longest available history, though it cannot adapt to regime changes within the test period. Section 5.3.4 examines empirical evidence for this concern.
+Following hyperparameter optimization, decision thresholds optimizing the $F_1$-score are derived and locked on these inner validation folds. These frozen hyperparameter configurations and decision thresholds are then applied directly to the held-out test set without modification, ensuring that test evaluation remains entirely uncontaminated.Temporal non-stationarity—such as shifting community behavior and market regimes across 2021—represents a known structural risk in social media forecasting. The expanding-window design mitigates this by maximizing historical training depth at each fold, though it remains bounded by regime shifts occurring within the test window. Empirical evidence regarding temporal stability and concept drift is detailed in Section 5.3.4.
 
 ### 3.8 Evaluation Framework
 
-The evaluation answers four questions: Do models predict surges better than trivial strategies? Do they differ meaningfully from each other? How confident are the reported metrics? Does the methodology transfer across communities?
+The empirical evaluation is designed to answer four primary research questions: 
+1. Do the proposed models predict surge onset significantly better than trivial baselines?
+2. Do non-linear ensemble methods (RF, XGBoost) yield statistically significant performance gains over linear baselines (Logistic Regression)?
+3. How confident are the reported metric point estimates?
+4. Does the learned surge representation generalize across social media communities with different data densities and posting dynamics?
 
 *Table 7a: Success tiers.*
 
@@ -439,11 +365,9 @@ The evaluation answers four questions: Do models predict surges better than triv
 | Target | > 0.70 | Moderate; practically useful for ranking |
 | Stretch | > 0.80 | Strong; reliably separates surges from non-surges |
 
-These are conservative relative to the cascade prediction literature (e.g., Cheng et al. [5] achieved 0.877), which used engagement-based features and non-temporal evaluation that likely inflate results.
+**Baselines and Literature Context:** Performance is evaluated against two baseline tiers: a uniform random baseline ($\text{AUC} = 0.50$) and eleven univariate Logistic Regression models trained on each feature in isolation. Evaluating single-feature baselines determines whether multi-feature signal integration (Gap 2) outperforms the single best predictor. Notably, reported performance targets in this study are conservative relative to prior cascade prediction literature (e.g., Cheng et al. [5], who reported $\text{AUC} = 0.877$), as earlier works relied on post-hoc engagement features and non-temporal evaluation protocols that systematically inflate performance estimates.
 
-**Baselines.** A random baseline (AUC=0.5) tests whether models beat chance. Single-feature Logistic Regressions for each of the eleven features test whether multi-feature combination adds value over the best individual predictor.
-
-**Statistical robustness.** Bootstrap confidence intervals (1,000 resamples of the test set, 95% CI from 2.5th/97.5th percentiles) quantify metric uncertainty without distributional assumptions. McNemar's test with Bonferroni correction (α=0.017 for the three pairwise comparisons: LR vs RF, LR vs XGB, RF vs XGB) determines whether model differences are statistically significant.
+**Statistical robustness:** Metric uncertainty is quantified using non-parametric bootstrapping: 1,000 resamples are drawn from the held-out test set to construct $95\%$ confidence intervals via the $2.5^{\text{th}}$ and $97.5^{\text{th}}$ percentiles. To determine whether performance differences between model families are statistically significant, McNemar's test for paired binary classification outcomes is conducted on test-set predictions. A Bonferroni-corrected significance threshold of $\alpha = 0.017$ ($\alpha_{\text{global}} = 0.05 / 3$) is enforced across the three pairwise comparisons (LR vs. RF, LR vs. XGBoost, and RF vs. XGBoost). Primary evaluation centers on AUC-ROC, with Precision, Recall, and $F_1$-scores reported at both the default threshold ($0.5$) and the validation-optimized decision threshold.
 
 *Table 7b: Evaluation metrics.*
 
@@ -454,11 +378,9 @@ These are conservative relative to the cascade prediction literature (e.g., Chen
 | Recall | Proportion of actual surges detected |
 | F1-Score | Harmonic mean of precision and recall |
 
-Precision, recall, and F1 are reported at both the default threshold (0.5) and the validation-tuned threshold.
+**Cross-dataset transfer:** To evaluate domain generalization (Gap 3), models trained on one subreddit are deployed directly onto the held-out test set of the other without fine-tuning or retraining. Because baseline surge rates differ substantially between communities ($3.75\%$ on r/wallstreetbets vs. $0.95\%$ on r/pennystocks), AUC-ROC serves as the primary transfer metric, as it remains invariant to operating point shifts. A transfer $\text{AUC-ROC} > 0.60$ is established as the benchmark for identifying shared, cross-community surge structures.
 
-**Cross-dataset transfer.** Models trained on one subreddit are evaluated directly on the other without retraining. AUC-ROC is the primary transfer metric since the optimal operating point differs between communities (WSB 3.75% vs pennystocks 0.95% surge rate). Transfer AUC exceeding 0.60 indicates that surge patterns share cross-community structure.
-
-**Sensitivity analysis.** Two sweeps characterise robustness: threshold sensitivity (τ ∈ {0.5, 1.0, 1.5, 2.0, 2.5}) tests whether results degrade gracefully with different surge definitions; weight sensitivity (w₂ ∈ {0, 0.25, 0.5, 0.75, 1.0}) tests whether sentiment improves prediction over volume-only labels.
+**Sensitivity analysis:** Model robustness is systematically stress-tested via two hyperparameter sweeps. Threshold Sensitivity ($\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$): Evaluates how performance degrades as the surge definition moves from common bursts to extreme, high-magnitude anomalies. Sentiment Weight Sensitivity ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$): Measures the incremental predictive utility of sentiment shift relative to pure volume-based target definitions.
 
 ---
 
