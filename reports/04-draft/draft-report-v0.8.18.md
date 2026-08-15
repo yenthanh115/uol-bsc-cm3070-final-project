@@ -412,6 +412,7 @@ src/
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
 └── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ```
+*Figure 5: Source code organisation. The `surge_pipeline/` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves.*
 
 Each pipeline stage maps  directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
@@ -432,11 +433,86 @@ Pipeline behavior is controlled centrally via a `PipelineConfig` dataclass, whic
 
 The data loader module  (`loader.py`) ingest raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
 
-1. **Text Cleaning:** Moderation placeholders (such as `[deleted]`, `[removed]`) and `null` are replaced with empty strings. Because each row in the raw archival dataset maps to a unique Reddit submission ID, so no deduplication is needed.
+**Step 1: Text Cleaning**
 
-2. **Ticker Extraction:** Tickers are extracted from submission text using two prioritized regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers becayse penny stocks and emergin tickers rotate frequently; The worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks.
-3. **Timestamp normalisation:** Raw timestamps (Unix epoch integers or ISO datetime strings) are normalised to standard `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. 
-4. **Ticker Explosion & Filtering:** Multi-ticker posts (e.g., "comparing `$AMC` vs `$GME`") are exploded into separate record–ticker rows using pandas.explode(). Records that yield zero valid tickers after filtering are dropped from the pipeline.
+Moderation placeholders (such as `[deleted]`, `[removed]`) and `null` are replaced with empty strings. Each row in the raw archival dataset maps to a unique Reddit submission ID, so no deduplication is needed. Figure 6a shows the implementation:
+
+```python
+# Clean selftext: replace [deleted], [removed], NaN with empty string
+df["selftext"] = df["selftext"].fillna("")
+df["selftext"] = df["selftext"].replace({"[deleted]": "", "[removed]": ""})
+
+# Clean title: fill NaN with empty string
+df["title"] = df["title"].fillna("")
+```
+*Figure 6a: Text cleaning (from `loader.py`). Moderation-redacted content and null values are normalised to empty strings before downstream extraction, ensuring regex patterns operate on consistent input without raising exceptions on missing data.*
+
+**Step 2: Ticker Extraction** 
+
+Tickers are extracted from submission text using two prioritized regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers because penny stocks and emerging tickers rotate frequently; the worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks. Figure 6b shows the extraction logic:
+
+```python
+# Extract tickers from combined title + selftext
+combined_text = f"{title} {selftext}"
+
+# 1. Dollar-sign pattern (highest priority — always included)
+dollar_matches = _DOLLAR_SIGN_PATTERN.findall(combined_text)
+for match in dollar_matches:
+    ticker = match.upper()
+    if ticker not in TICKER_STOPWORDS:
+        tickers.add(ticker)
+
+# 2. Uppercase word pattern (filtered against stopwords)
+word_matches = _UPPERCASE_WORD_PATTERN.findall(combined_text)
+for match in word_matches:
+    ticker = match.upper()
+    if ticker not in TICKER_STOPWORDS:
+        tickers.add(ticker)
+```
+*Figure 6b: Ticker extraction with dual regex priority cascade and stopword filtering (from `loader.py`). The dollar-sign pattern (`\$([A-Z]{1,5})`) captures explicit financial references with high precision; the uppercase pattern (`\b[A-Z]{2,5}\b`) broadens recall at the cost of precision, mitigated by a 297-term stopword lexicon spanning eight categories.*
+
+**Step 3: Timestamp Normalisation**
+
+Raw timestamps (Unix epoch integers or ISO datetime strings) are normalised to standard `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. Figure 6c shows the implementation:
+
+```python
+# Parse timestamps: handle both epoch-second and datetime-string formats
+if "created_utc" in df.columns:
+    df["created_utc"] = pd.to_datetime(df["created_utc"], unit="s", utc=True)
+elif "created" in df.columns:
+    df["created_utc"] = pd.to_datetime(df["created"], utc=True)
+    df = df.drop(columns=["created"])
+else:
+    raise ValueError(
+        "Dataset must contain either 'created_utc' (epoch) or "
+        "'created' (datetime string) column."
+    )
+
+df = df.sort_values("created_utc").reset_index(drop=True)
+```
+*Figure 6c: Timestamp normalisation and chronological sorting (from `loader.py`). The loader accepts two timestamp formats — Unix epoch integers (common in Reddit API exports) and ISO datetime strings (common in Kaggle archives) — unifying both into timezone-aware `datetime64[ns, UTC]`. The sort establishes the chronological invariant required by all downstream stages.*
+
+**Step 4: Ticker Explosion & Filtering** 
+
+Multi-ticker posts (e.g., "comparing `$AMC` vs `$GME`") are exploded into separate record–ticker rows using pandas.explode(). Records that yield zero valid tickers after filtering are dropped from the pipeline. Figure 6d shows the implementation:
+
+```python
+# Exclude records with missing/empty tickers
+df["tickers"] = df["tickers"].astype(str).str.strip()
+df["tickers"] = df["tickers"].replace({"": np.nan, "nan": np.nan, "None": np.nan})
+mask_has_tickers = df["tickers"].notna()
+df = df[mask_has_tickers].reset_index(drop=True)
+
+# Explode multi-ticker records: one row per (record_id, ticker) pair
+df["tickers"] = df["tickers"].str.split(",")
+df = df.explode("tickers", ignore_index=True)
+
+# Clean individual ticker values
+df["tickers"] = df["tickers"].str.strip().str.upper()
+df = df[df["tickers"].str.len() > 0].reset_index(drop=True)
+df = df.rename(columns={"tickers": "ticker"})
+```
+*Figure 6d: Ticker explosion and filtering (from `loader.py`). The comma-separated ticker string is split into a list and exploded via `pandas.explode()`, converting one multi-ticker post into multiple rows — one per (record, ticker) pair. This transforms the unit of analysis from "post" to "post-about-a-specific-ticker", enabling per-ticker temporal windowing in subsequent stages.*
 
 *Table 9: Loader-stage attrition.*
 
@@ -450,21 +526,20 @@ The data loader module  (`loader.py`) ingest raw Reddit submission exports and t
 
 Eleven features feed the classifiers. The governing constraint is that every feature must be computable from data *at or before* the current record's timestamp. Nothing may peek into the future.
 
-*Table 11: Feature summary.*
-
-| Feature | Source | Description |
-|---------|--------|-------------|
-| `ticker_post_rate_24h` | Windowing | Same-ticker posts in preceding 24 h |
-| `time_since_previous_post` | Loader | Hours since last same-ticker post (−1 if first) |
-| `ticker_post_acceleration` | Computed | Ratio of recent-half to older-half 24 h activity |
-| `sentiment_score` | VADER | Compound polarity (−1 to +1) |
-| `word_count` | Text | Whitespace tokens in title + body |
-| `title_length` | Text | Whitespace tokens in title only |
-| `num_tickers_mentioned` | Loader | Distinct tickers in original post |
-| `hour_of_day` | Timestamp | UTC hour (0–23) |
-| `day_of_week` | Timestamp | Day index (0=Mon, 6=Sun) |
-| `word_count_x_hour` | Interaction | word_count × hour_of_day |
-| `accel_x_time_since_prev` | Interaction | acceleration × time_since_previous |
+*Table 11: Feature engineering detail. Each row specifies what the feature captures and how it is computed, including the responsible function.*
+| # | Feature | Category | Computation Method |
+|---|---------|----------|--------------------|
+| 1 | `ticker_post`<br>`_rate_24h` | Activity | Reuses `backward_count` produced by `windowing.compute_windowed_counts()`. For each record mentioning ticker $X$ at time $t$, counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group. The self-post is excluded by using `side='left'` at the right boundary. |
+| 2 | `time_since_`<br>`previous_post` | Activity | Computed by `features._compute_time_`<br>`since_previous()`. For each record at time $t$, identifies the immediately preceding post mentioning the same ticker by iterating through the chronologically sorted per-ticker group (`groupby('ticker')`). Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
+| 3 | `ticker_post_`<br>`acceleration` | Activity | Computed by `features._compute_ticker_`<br>`post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t]$ and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` for inclusive-left boundaries, `side='left'` for exclusive-right. |
+| 4 | `sentiment_`<br>`score` | Content | Reuses `sentiment_polarity` produced by `sentiment.compute_sentiment()` via `_compute_polarity_vader()`. VADER's `polarity_scores()` is applied to the post's selftext; if selftext is empty or absent, the title is used as fallback. The compound score ranges from $-1$ (most negative) to $+1$ (most positive). Computed strictly from the record's own text at creation time — no forward window information. |
+| 5 | `word_count` | Content | Computed inline in `features.compute_features()`. Concatenates `title + " " + selftext`, splits on whitespace (`str.split().str.len()`), counts resulting tokens. Empty/null selftext is replaced with empty string before concatenation. Measures post effort/depth as a proxy for informational content. |
+| 6 | `title_length` | Content | Computed inline in `features.compute_features()`. Splits title on whitespace (`str.split().str.len()`) and counts tokens. Captures headline effort independently of body length. Null titles treated as empty string (0 tokens). |
+| 7 | `num_tickers_`<br>`mentioned` | Content | Computed by `features._compute_num_`<br>`tickers_mentioned()`. Groups the exploded DataFrame by original post `id` and counts distinct ticker values per group using `groupby('id')['ticker'].transform('nunique')`. A post mentioning 3 tickers will have value 3 in all its exploded rows. Captures whether a post is ticker-specific or broad market commentary. |
+| 8 | `hour_of_`<br>`day` | Temporal | Computed inline in `features.compute_features()`. Extracts UTC hour (0–23) from `created_utc` via `pd.to_datetime(..., utc=True)`<br>`.dt.hour`. Captures intraday cyclicality aligned with US market hours (pre-market activity typically spikes 13:00–14:00 UTC). |
+| 9 | `day_of_week` | Temporal | Computed inline in `features.compute_`<br>`features()`. Extracts day-of-week index (Monday=0, Sunday=6) from `created_utc` via `.dt.dayofweek`. Captures weekly periodicity: weekday posts cluster near market sessions; weekend posts are predominantly speculative. |
+| 10 | `word_count_`<br>`x_hour` | Interaction | Computed inline in `features.compute_`<br>`features()` via element-wise multiplication: `word_count × hour_of_`<br>`day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
+| 11 | `accel_x_time_`<br>`since_prev` | Interaction | Computed inline in `features.compute_`<br>`features()`. Multiplicative interaction: `ticker_post_acceleration × time_`<br>`since_previous`. Captures the pattern of sudden acceleration after prolonged silence — a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. Ablation (Experiment B2) confirmed +1.4 pp AUC lift from including both interaction terms. |
 
 The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering (t−12 h, t] and an older half covering (t−24 h, t−12 h]) and then computes the ratio `count_recent / max(count_older, 1)`. Values above 1.0 indicate accelerating discussion. The core of the implementation uses NumPy's `searchsorted` for O(n log n) counting within each per-ticker group:
 
@@ -516,17 +591,17 @@ For each configuration, a `StandardScaler` is fit fresh on the training fold alo
 
 McNemar's pairwise test checks whether model differences are statistically significant (Bonferroni-corrected α = 0.017). Single-feature Logistic Regression baselines establish the floor each full model must beat. Finally, AUC is checked against predefined success tiers (minimum > 0.60, target > 0.70, stretch > 0.80).
 
-Figure 4 shows the combined ROC curves for all three models on the r/wallstreetbets test set. The random baseline (dashed diagonal) represents an AUC of 0.5; all three trained models sit well above it, confirming that the feature set carries genuine predictive signal for surge events.
+Figure 9 shows the combined ROC curves for all three models on the r/wallstreetbets test set. The random baseline (dashed diagonal) represents an AUC of 0.5; all three trained models sit well above it, confirming that the feature set carries genuine predictive signal for surge events.
 
 ![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the r/wallstreetbets held-out test set. The diagonal represents a random classifier (AUC = 0.5).](../figures/11_roc_curves_combined.png)
 
-*Figure 4: ROC curves, model comparison on r/wallstreetbets test partition.*
+*Figure 9: ROC curves, model comparison on r/wallstreetbets test partition.*
 
-Figure 5 shows permutation-based feature importance (mean decrease in AUC when each feature is shuffled). Temporal activity features, particularly `ticker_post_acceleration` and `time_since_previous_post`, dominate across all three models, validating the design emphasis on discussion-velocity signals.
+Figure 10 shows permutation-based feature importance (mean decrease in AUC when each feature is shuffled). Temporal activity features, particularly `ticker_post_acceleration` and `time_since_previous_post`, dominate across all three models, validating the design emphasis on discussion-velocity signals.
 
 ![Grouped horizontal bar chart showing permutation importance (mean decrease in AUC-ROC) for all eleven features across the three models.](../figures/13_feature_importance_comparison.png)
 
-*Figure 5: Feature importance comparison (permutation importance, test set).*
+*Figure 10: Feature importance comparison (permutation importance, test set).*
 
 ### 4.6 Implementation Decisions Driven by Empirical Findings
 
@@ -775,7 +850,7 @@ Second, a **composite surge metric** integrating normalised volume growth with s
 
 Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse→dense at 0.871; dense→sparse at 0.684) demonstrate this clearly. Model complexity is secondary; data availability comes first.
 
-Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. For context, the AUC range achieved here (0.753–0.892) sits alongside Cheng et al.'s 0.877 for cascade prediction [5] and Bandari et al.'s ~84% classification accuracy [3], but protocol differences (random splits, engagement-based features, different targets) make any direct ranking invalid. The methodology itself is the contribution: demonstrating that rigorous evaluation (bootstrap CIs, McNemar's tests, sensitivity sweeps) is both feasible and necessary for social media prediction tasks. These are incremental contributions, combining established techniques into a coherent framework for a problem prior work has not directly addressed, with each claim grounded in quantified evidence rather than isolated numbers. See Figure 3 (ROC curves) and Figure 4 (feature importance) for visual summaries of the key results.
+Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. For context, the AUC range achieved here (0.753–0.892) sits alongside Cheng et al.'s 0.877 for cascade prediction [5] and Bandari et al.'s ~84% classification accuracy [3], but protocol differences (random splits, engagement-based features, different targets) make any direct ranking invalid. The methodology itself is the contribution: demonstrating that rigorous evaluation (bootstrap CIs, McNemar's tests, sensitivity sweeps) is both feasible and necessary for social media prediction tasks. These are incremental contributions, combining established techniques into a coherent framework for a problem prior work has not directly addressed, with each claim grounded in quantified evidence rather than isolated numbers. See Figure 9 (ROC curves) and Figure 10 (feature importance) for visual summaries of the key results.
 
 ---
 
