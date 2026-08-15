@@ -541,7 +541,9 @@ Eleven features feed the classifiers. The governing constraint is that every fea
 | 10 | `word_count_`<br>`x_hour` | Interaction | Computed inline in `features.compute_`<br>`features()` via element-wise multiplication: `word_count × hour_of_`<br>`day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
 | 11 | `accel_x_time_`<br>`since_prev` | Interaction | Computed inline in `features.compute_`<br>`features()`. Multiplicative interaction: `ticker_post_acceleration × time_`<br>`since_previous`. Captures the pattern of sudden acceleration after prolonged silence — a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. Ablation (Experiment B2) confirmed +1.4 pp AUC lift from including both interaction terms. |
 
-The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering (t−12 h, t] and an older half covering (t−24 h, t−12 h]) and then computes the ratio `count_recent / max(count_older, 1)`. Values above 1.0 indicate accelerating discussion. The core of the implementation uses NumPy's `searchsorted` for O(n log n) counting within each per-ticker group:
+The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering $(t - 12\text{h}, t]$ and an older half covering $(t - 24\text{h}, t - 12\text{h}]$ and then computes the ratio: $$\text{ticker\_post\_acceleration} = \frac{\text{count}_{\text{recent}}}{\max(\text{count}_{\text{older}}, 1)}$$
+
+Values above 1.0 indicate accelerating discussion volume. By leveraging pre-sorted timestamp arrays per ticker group, the implementation uses NumPy's searchsorted to perform interval counting in $O(n \log n)$ time:
 
 ```python
 # Count posts in recent half (t-12h, t] excluding self
@@ -556,8 +558,9 @@ count_older = older_right - older_left
 
 acceleration = count_recent / np.maximum(count_older, 1)
 ```
+*Figure 7a: Ticker post acceleration via split-window binary search (from `features.py`). The backward 24-hour window is bisected into recent and older halves. Four `searchsorted` calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The `max(..., 1)` guard prevents division by zero when the older half is empty.*
 
-The two interaction features (`word_count_x_hour`, `accel_x_time_since_prev`) give models an explicit signal for combined effects, such as sudden acceleration after a period of silence, without requiring multi-level splits to discover the interaction. An ablation (Experiment B2) confirmed a consistent +1.4pp AUC lift from these terms.
+The two interaction terms (`word_count_x_hour` and `accel_x_time_since_prev`) provide models with an explicit signal for combined dynamics—such as a sudden surge in post volume following a period of silence—without requiring multi-level decision tree splits to discover the interaction. An ablation study confirmed a consistent +1.4pp AUC lift from including these terms.
 
 ### 4.4 Surge Labelling
 
