@@ -388,7 +388,9 @@ The empirical evaluation is designed to answer four primary research questions:
 
 ### 4.1 Code Organisation
 
-The pipeline is packaged as a standard Python library (`surge-pipeline`, built with setuptools) depending on pandas (≥2.0), scikit-learn (≥1.3), XGBoost (≥2.0), vaderSentiment (≥3.3.2), and NumPy (≥1.24). Exact pinned versions are recorded in `requirements.txt` and in each experiment log entry for full reproducibility. All source code sits under `src/`, split into a core library and CLI scripts:
+The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, built with setuptools) depending on `pandas` (≥2.0), `scikit-learn` (≥1.3), `XGBoost` (≥2.0), `vaderSentiment` (≥3.3.2), and `NumPy` (≥1.24). Exact pinned versions are recorded in `requirements.txt` and logged with each experiment run for full reproducibility. 
+
+All source code resides under `src/`, split into a core library modules and executable CLI scripts:
 
 ```
 src/
@@ -411,7 +413,9 @@ src/
 └── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ```
 
-Each pipeline stage maps to one or two library modules. This means that changes to one stage (for example, swapping the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
+Each pipeline stage maps  directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
+
+Executable commands are exposed via entry-point CLI scripts to streamline individual stages and end-to-end runs.
 
 *Table 8: CLI entry points.*
 
@@ -422,17 +426,17 @@ Each pipeline stage maps to one or two library modules. This means that changes 
 | `surge-cross-val` | Test whether a model trained on one subreddit transfers to the other |
 | `surge-figures` | Regenerate publication figures from saved evaluation artefacts |
 
-A single `PipelineConfig` dataclass holds every tuneable parameter, and a fixed seed (default 42) is applied to Python's `random`, NumPy, and all scikit-learn estimators.
+Pipeline behavior is controlled centrally via a `PipelineConfig` dataclass, which holds every tuneable parameter and can be overridden via configuration files. To guarantee determinism across runs, a fixed global seed (default 42) is systematically set across Python's native random module, NumPy, and all scikit-learn estimators.
 
 ### 4.2 Data Loading and Preprocessing
 
-The loader (`loader.py`) transforms a raw Reddit CSV into the unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps.
+The data loader module  (`loader.py`) ingest raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
 
-**Text cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) are replaced with empty strings, and null fields are filled likewise. Each row in the archival dataset corresponds to a unique Reddit submission ID, so no deduplication is needed.
+1. **Text Cleaning:** Moderation placeholders (such as `[deleted]`, `[removed]`) and `null` are replaced with empty strings. Because each row in the raw archival dataset maps to a unique Reddit submission ID, so no deduplication is needed.
 
-**Ticker extraction.** Two regex patterns run in priority order: (1) dollar-sign tickers (`$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; and (2) standalone 2–5 character uppercase words, which cast a broader net. Both are filtered against a curated stopword set of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, and others), built through iterative false-positive analysis on early pipeline runs and manually reviewed for completeness. A stopword approach was chosen over a known-ticker list because penny stock tickers change frequently. The worst-case failure mode is a false-positive adding noise to one record, whereas a stale ticker list would silently drop posts about unknown stocks.
-
-**Timestamp normalisation and explosion.** Raw timestamps (Unix epoch or datetime strings) are normalised to `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. Multi-ticker posts (for example, "comparing $AMC vs $GME") are exploded into separate rows via `pandas.explode()`. Records yielding zero tickers are dropped.
+2. **Ticker Extraction:** Tickers are extracted from submission text using two prioritized regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers becayse penny stocks and emergin tickers rotate frequently; The worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks.
+3. **Timestamp normalisation:** Raw timestamps (Unix epoch integers or ISO datetime strings) are normalised to standard `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. 
+4. **Ticker Explosion & Filtering:** Multi-ticker posts (e.g., "comparing `$AMC` vs `$GME`") are exploded into separate record–ticker rows using pandas.explode(). Records that yield zero valid tickers after filtering are dropped from the pipeline.
 
 *Table 9: Loader-stage attrition.*
 

@@ -195,14 +195,14 @@ Khi đọc mỗi đoạn văn, tự hỏi 5 câu:
 ### A5. Section 4 — Implementation (~1297 words, limit 2000)
 
 #### §4.1 Code Organisation
-- [ ] Directory tree clear?
-- [ ] Module → stage mapping explained?
-- [ ] Table 8 (CLI) useful?
+- [x] Directory tree clear?
+- [x] Module → stage mapping explained?
+- [x] Table 8 (CLI) useful?
 
 #### §4.2 Data Loading and Preprocessing
-- [ ] 4 steps (clean, extract, normalise, explode) clear?
-- [ ] Ticker extraction logic explained (2 regex patterns, stopword set)?
-- [ ] Table 9 (attrition) numbers match Table 4?
+- [x] 4 steps (clean, extract, normalise, explode) clear?
+- [x] Ticker extraction logic explained (2 regex patterns, stopword set)?
+- [x] Table 9 (attrition) numbers match Table 4?
 
 #### §4.3 Feature Engineering
 - [ ] Table 11 matches Table 6 in Section 3.4?
