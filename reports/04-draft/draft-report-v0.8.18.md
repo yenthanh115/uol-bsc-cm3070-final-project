@@ -996,9 +996,9 @@ A pennystocks-trained model transfers upward at 0.871 (2.1 points below native),
 | WSB | 0.710 | 0.892 | +0.182 |
 | Pennystocks | 0.685 | 0.734 | +0.049 |
 
-Changing the weight also changes surge rate (0.53% → 1.44% on WSB), so the improvement reflects both richer signal and a slightly easier target. The weight sweep shows this granularly:
+Changing the weight also changes surge rate (0.53% → 1.44% on WSB), so the improvement reflects both richer signal and a slightly easier target. To isolate the sentiment weight effect more precisely, Table 22 presents a full weight sweep at a stricter threshold ($\tau = 1.5$), where surge events are rarer and the signal-to-noise challenge is greater:
 
-*Table 22: Weight sensitivity, XGBoost AUC-ROC on r/wallstreetbets (τ=1.5).*
+*Table 22: Weight sensitivity, XGBoost AUC-ROC on r/wallstreetbets ($\tau = 1.5$, stricter than the primary $\tau = 1.0$ used in Table 21).*
 
 | w₂ | w₁ | AUC-ROC | Surge Rate | Tier |
 |----|-----|---------|------------|------|
