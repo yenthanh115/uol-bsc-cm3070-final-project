@@ -875,7 +875,7 @@ On r/wallstreetbets, XGBoost achieved the highest AUC-ROC at 0.892 [0.881–0.90
 | | XGB | 0.892 [0.881–0.902] | 0.043 | 0.819 | 0.081 | Stretch |
 | Pennystocks (3,278 records, 31 surges, 0.95% rate) | LR | 0.680 [0.588–0.778] | 0.013 | 0.645 | 0.025 | Minimum |
 | | RF | 0.753 [0.673–0.824] | 0.068 | 0.194 | 0.101 | Target |
-| | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target† |
+| | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target |
 
 Two observations require explanation. First, the AUC scores are strong but precision is near zero everywhere. With sub-1% surge rates, the models' probability outputs cluster far below the default 0.5 decision boundary — they rank surges correctly but the threshold is too conservative to produce positive predictions. This is a calibration problem, not a discrimination failure. Second, on pennystocks the confidence intervals for RF [0.673, 0.824] and XGB [0.641, 0.821] overlap substantially; model rankings on this dataset are not statistically distinguishable by CI alone, though McNemar's test (Section 5.2.2) confirms they make different predictions. The † on XGBoost's tier indicates that it achieves Target-level ranking ability but produces zero positive predictions at the 0.5 threshold.
 
@@ -901,13 +901,14 @@ After tuning, XGBoost on WSB achieves the best overall $F_1 = 0.226$ at threshol
 | WSB | XGBoost | 0.85 | 157 | 565 | 511 | 67,690 |
 | Pennystocks | Random Forest | 0.79 | 3 | 12 | 28 | 3,235 |
 
-At the best operating point on WSB, XGBoost correctly identifies 157 of 668 surges while generating 565 false alarms — roughly one true positive for every four flags. In a screening context (monitoring hundreds of tickers daily), this translates to a manageable review load for a human analyst but remains unsuitable for fully automated action. Section 5.3.4 discusses the operational implications further.
+At the best operating point on WSB, XGBoost correctly identifies 157 of 668 surges while generating 565 false alarms, roughly one true positive for every five flags. In a screening context (monitoring hundreds of tickers daily), this translates to a manageable review load for a human analyst but remains unsuitable for fully automated action. Section 5.3.4 discusses the operational implications further.
 
 Figure 10 shows the ROC curves for all three models on the WSB test set. All models clearly exceed the random baseline (AUC = 0.50), visually confirming that the feature set carries genuine discriminative signal for surge events.
 
-![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the r/wallstreetbets held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/roc_curves_combined.png)
-
-*Figure 10: ROC curves, model comparison on r/wallstreetbets test partition.*
+<figure align="center">
+  <img src="figures/fig9-roc_curves_combined.png" alt="Project Timeline" width="1000">
+  <figcaption>Figure 9: Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the r/wallstreetbets held-out test set. The diagonal represents a random classifier (AUC = 0.5).</figcaption>
+</figure>
 
 #### 5.2.2 Statistical Validation
 
@@ -926,7 +927,7 @@ All pairwise comparisons show statistically significant differences ($p < 0.001$
 
 The large $\chi^2$ values on the r/wallstreetbets test partition reflect both the substantial sample size ($N = 68,923$) and distinct error profiles across models—such as XGBoost predicting strictly negative instances at the 0.5 threshold while Random Forest makes selective positive predictions.
 
-To evaluate the utility of combining multiple signals, model performance was benchmarked against the single strongest predictive feature (Section X.X). On `r/wallstreetbets`, the top single-feature heuristic achieves an AUC of 0.805; combining features in the full models yields a 0.087 gain in AUC, demonstrating that multi-feature integration successfully captures complex signal interactions.
+To evaluate the utility of combining multiple signals, model performance was benchmarked against the single strongest predictive feature (Section 3.8). On `r/wallstreetbets`, the top single-feature heuristic achieves an AUC of 0.805; combining features in the full models yields a 0.087 gain in AUC, demonstrating that multi-feature integration successfully captures complex signal interactions.
 
 *Table 18: Multi-feature models vs. baselines (AUC-ROC).*
 
@@ -1056,10 +1057,9 @@ Smaller concerns: **survivorship bias** (deleted posts absent from archive); **f
 
 ### 6.1 Current Achievements
 
-The core question driving this project was one the existing literature had not directly tackled: can posting-volume surges in Reddit financial communities be predicted from information that is genuinely available at the moment a post is made, and nothing more? That framing ruled out the shortcut most prior work had taken, whether deliberately or not, of letting future engagement data bleed into training. Answering it properly meant building a pipeline that treats temporal ordering not as a convenience but as a hard constraint, one that runs from how surges are defined all the way through to how model comparisons are reported.
+The core question driving this project addresses a critical gap in the existing literature: can posting-volume surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To prevent the future-engagement feature leakage common in prior work—such as reliance on post-hoc upvote or comment counts—the proposed pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
 
-What came out of that effort is a system that goes from raw Reddit data to evaluated, statistically-tested classifiers without ever peeking ahead. Two communities, three models, and more than thirty experimental runs later, the question turned out to have a real answer, and the methodology makes that answer worth trusting. In summary, the project contributes a leakage-free methodology, a composite surge metric, and empirical evidence that data density is the binding constraint on prediction quality.
-
+The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs. Ultimately, this work provides three core contributions: a rigorous leakage-free forecasting methodology, a composite surge metric, and empirical evidence identifying data density as the primary constraint on predictive performance.
 
 ### 5.5 Originality and Contribution
 
