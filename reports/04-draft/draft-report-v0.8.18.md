@@ -213,8 +213,8 @@ This dual-dataset strategy directly addresses Gap 3 (domain specificity) by test
 | After ticker extraction (exploded) | 80,212 | 577,872 |
 | Usable records (post-exclusion) | 24,827 | 457,072 |
 | Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
-| Test surges | 31 | 2,582 |
-| Test imbalance ratio | 105:1 | 26:1 |
+| Test surges | 31 | 668 |
+| Test imbalance ratio | 105:1 | 102:1 |
 
 Both datasets are static CSV exports from the Reddit Finance Data collection on Kaggle [17], covering the full 2021 calendar year. It spans the January GameStop episode through subsequent normalisation. Utilizing static archival CSVs ensure exact reproducibility, whereas live API scraping would introduce temporal variability between runs and complicate replication. Each record contains a Unix timestamp, post title, optional selftext, and engagement fields (score, num_comments) that are retained for transparency but not used as features.
 
@@ -247,12 +247,12 @@ Two key architectural choices govern this formulation: the length of the observa
 | $\tau$ | Surge Count | Surge Rate | Imbalance Ratio |
 |---|-------------|------------|-----------------|
 | $0.5$ | 80,455 | 17.6% | 4.7:1 |
-| $\mathbf{1.0}$ | **22,384** | **4.9%** | **19.4:1** |
-| $1.5$ | 6,602 | 1.4% | 68.2:1 |
+| $1.0$ | 22,384 | 4.9% | 19.4:1 |
+| $\mathbf{1.5}$ | **6,602** | **1.4%** | **68.2:1** |
 | $2.0$ | 2,873 | 0.6% | 158:1 |
 | $2.5$ | 1,348 | 0.3% | 338:1 |
 
-**Threshold selection ($\tau$):** A decision threshold of $\tau = 1.0$ standard deviations was selected for primary model evaluation. This threshold isolates instances rare enough to represent true statistical anomalies while maintaining sufficient sample density (e.g., $2,582$ test-set surge instances on r/wallstreetbets) for statistically reliable performance estimation. A secondary evaluation run at $\tau = 1.5$ on r/pennystocks tests model resilience and performance under conditions of severe class imbalance. 
+**Threshold selection ($\tau$):** A decision threshold of $\tau = 1.5$ standard deviations was selected for primary model evaluation. This threshold isolates instances rare enough to represent true statistical anomalies (1.4% surge rate on `r/wallstreetbets`, 1.3% on r/pennystocks) while maintaining sufficient sample density ($668$ test-set surge instances on `r/wallstreetbets`) for statistically reliable performance estimation. A secondary evaluation at $\tau = 1.0$ serves as sensitivity analysis, testing whether results hold under a more permissive surge definition with higher positive counts but weaker class separation. 
 
 **Two-phase metric validation:** To isolate the empirical contribution of sentiment, target labeling is evaluated in two phases: Phase 1 ($w_1 = 1.0, w_2 = 0.0$): Evaluates a baseline volume-only target. Phase 2 ($w_1 = 0.5, w_2 = 0.5$): Evaluates an equal-weight composite target incorporating both volume growth and sentiment shift. Comparing model performance across these phases determines whether incorporating sentiment shift yields a measurably more predictable and meaningful surge target. Additionally, a full weight hyperparameter sweep ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$) is reported in Section 3.8 as supplementary sensitivity analysis.
 
@@ -377,7 +377,7 @@ The empirical evaluation is designed to answer four primary research questions:
 | Recall | Proportion of actual surges detected |
 | F1-Score | Harmonic mean of precision and recall |
 
-**Cross-dataset transfer:** To evaluate domain generalization (Gap 3), models trained on one subreddit are deployed directly onto the held-out test set of the other without fine-tuning or retraining. Because baseline surge rates differ substantially between communities ($3.75\%$ on r/wallstreetbets vs. $0.95\%$ on r/pennystocks), AUC-ROC serves as the primary transfer metric, as it remains invariant to operating point shifts. A transfer $\text{AUC-ROC} > 0.60$ is established as the benchmark for identifying shared, cross-community surge structures.
+**Cross-dataset transfer:** To evaluate domain generalization (Gap 3), models trained on one subreddit are deployed directly onto the held-out test set of the other without fine-tuning or retraining. Because baseline surge rates differ substantially between communities ($3.75\%$ on `r/wallstreetbets` vs. $0.95\%$ on r/pennystocks), AUC-ROC serves as the primary transfer metric, as it remains invariant to operating point shifts. A transfer $\text{AUC-ROC} > 0.60$ is established as the benchmark for identifying shared, cross-community surge structures.
 
 **Sensitivity analysis:** Model robustness is systematically stress-tested via two hyperparameter sweeps. Threshold Sensitivity ($\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$): Evaluates how performance degrades as the surge definition moves from common bursts to extreme, high-magnitude anomalies. Sentiment Weight Sensitivity ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$): Measures the incremental predictive utility of sentiment shift relative to pure volume-based target definitions.
 
@@ -754,7 +754,7 @@ An early timestamp conversion error during temporal splitting caused an unintend
 
 **Data Sparsity and Dataset Scaling** 
 
-Initial experiments on `r/pennystocks` (~80,000 records) produced as few as 7 positive test examples at higher threshold settings ($\tau \ge 1.5$), rendering AUC estimates highly sensitive to noise. Scaling up data ingestion to `r/wallstreetbets` (577,872 records produced 2,582 test surges) provided stable metric estimation and enabled robust cross-dataset transfer experiments.
+Initial experiments on `r/pennystocks` (~80,000 records) produced as few as 7 positive test examples at higher threshold settings ($\tau \ge 2.0$), rendering AUC estimates highly sensitive to noise. Scaling up data ingestion to `r/wallstreetbets` (577,872 records produced 668 test surges at $\tau = 1.5$) provided stable metric estimation and enabled robust cross-dataset transfer experiments.
 
 **Class Imbalance and Decision Boundary Calibration** 
 
@@ -889,9 +889,11 @@ No future information leaked at any stage: z-score parameters are frozen from tr
 
 ### 5.2 Results
 
-All metrics come from the held-out test partition (final 20% chronologically), never seen during training or threshold selection.
+All performance metrics are reported on the chronologically held-out test partition (the final 20% of data), which was isolated from training and threshold selection.
 
 #### 5.2.1 Model Performance
+
+On r/wallstreetbets, XGBoost achieved the highest AUC-ROC at 0.892 [0.881–0.902], followed by Random Forest at 0.880 [0.869–0.890] — both clearing the stretch tier. On the sparser r/pennystocks, Random Forest led at 0.753 [0.673–0.824], meeting the target tier. Table 14 presents the full results.
 
 *Table 14: Test-set performance at default threshold (0.5). 95% bootstrap CIs from 1,000 resamples.*
 
@@ -904,9 +906,9 @@ All metrics come from the held-out test partition (final 20% chronologically), n
 | | RF | 0.753 [0.673–0.824] | 0.068 | 0.194 | 0.101 | Target |
 | | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target† |
 
-XGBoost achieves Target-tier AUC (ranking ability) but produces no positive predictions at the 0.5 threshold due to extreme class imbalance saturating its logistic output near zero. Threshold tuning (Table 15) recovers predictions. Note that the pennystocks confidence intervals for RF [0.673, 0.824] and XGB [0.641, 0.821] overlap substantially, so model rankings on this dataset are not statistically distinguishable by CI overlap alone, though McNemar's test confirms they differ in prediction pattern (Section 5.2.2).
+Two observations require explanation. First, the AUC scores are strong but precision is near zero everywhere. With sub-1% surge rates, the models' probability outputs cluster far below the default 0.5 decision boundary — they rank surges correctly but the threshold is too conservative to produce positive predictions. This is a calibration problem, not a discrimination failure. Second, on pennystocks the confidence intervals for RF [0.673, 0.824] and XGB [0.641, 0.821] overlap substantially; model rankings on this dataset are not statistically distinguishable by CI alone, though McNemar's test (Section 5.2.2) confirms they make different predictions. The † on XGBoost's tier indicates that it achieves Target-level ranking ability but produces zero positive predictions at the 0.5 threshold.
 
-With sub-1% surge rates, the default 0.5 threshold produces near-zero precision. The models rank surges correctly, but their probability outputs sit far below 0.5 because the learned prior is overwhelmingly "not a surge." Threshold tuning selects the threshold that maximises F1 on the validation fold. Note that the tuned thresholds in Table 15 represent the *predicted probability of being the positive class*. Values above 0.5 mean the tuner found that only very high-confidence predictions should be flagged as surges, reflecting the extreme imbalance:
+**Threshold tuning.** To recover usable predictions, decision thresholds were optimized to maximize $F_1$ on the last validation fold — selecting the predicted probability cutoff that best balances precision and recall for each model independently.
 
 *Table 15: Metrics at validation-tuned thresholds.*
 
@@ -919,7 +921,7 @@ With sub-1% surge rates, the default 0.5 threshold produces near-zero precision.
 | | RF | 0.79 | 0.200 | 0.097 | 0.130 | +0.030 |
 | | XGB | 0.16 | 0.114 | 0.129 | 0.121 | +0.121 |
 
-After tuning, XGBoost on WSB reaches F1 = 0.226. XGBoost on pennystocks needs threshold 0.16 to predict any surges at all. Random Forest on WSB shows a negative F1 Δ (−0.066) because its validation-optimal threshold (0.88) is highly conservative: it gains precision but sacrifices so much recall that the net F1 drops below the default-threshold value.
+After tuning, XGBoost on WSB achieves the best overall $F_1 = 0.226$ at threshold 0.85. Two cases reveal how imbalance distorts threshold selection: XGBoost on pennystocks requires a threshold as low as 0.16 to produce any positive predictions at all, while Random Forest on WSB selects a highly conservative 0.88 that improves precision but sacrifices so much recall that net $F_1$ drops below the default ($\Delta F_1 = -0.066$).
 
 *Table 16: Confusion matrix for the best model at tuned threshold.*
 
@@ -928,13 +930,17 @@ After tuning, XGBoost on WSB reaches F1 = 0.226. XGBoost on pennystocks needs th
 | WSB | XGBoost | 0.85 | 157 | 565 | 511 | 67,690 |
 | Pennystocks | Random Forest | 0.79 | 3 | 12 | 28 | 3,235 |
 
-Figure 10 shows the combined ROC curves for all three models on the r/wallstreetbets test set. The random baseline (dashed diagonal) represents AUC = 0.5; all three trained models sit well above it, confirming that the feature set carries genuine predictive signal for surge events.
+At the best operating point on WSB, XGBoost correctly identifies 157 of 668 surges while generating 565 false alarms — roughly one true positive for every four flags. In a screening context (monitoring hundreds of tickers daily), this translates to a manageable review load for a human analyst but remains unsuitable for fully automated action. Section 5.3.4 discusses the operational implications further.
+
+Figure 10 shows the ROC curves for all three models on the WSB test set. All models clearly exceed the random baseline (AUC = 0.50), visually confirming that the feature set carries genuine discriminative signal for surge events.
 
 ![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the r/wallstreetbets held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/roc_curves_combined.png)
 
 *Figure 10: ROC curves, model comparison on r/wallstreetbets test partition.*
 
 #### 5.2.2 Statistical Validation
+
+All pairwise comparisons show statistically significant differences ($p < 0.001$). 
 
 *Table 17: McNemar's pairwise significance tests (default 0.5 threshold, Bonferroni-adjusted α = 0.017).*
 
@@ -947,7 +953,9 @@ Figure 10 shows the combined ROC curves for all three models on the r/wallstreet
 | Pennystocks | LR vs XGB | 1,486 | < 0.001 | Yes |
 | Pennystocks | RF vs XGB | 66 | < 0.001 | Yes |
 
-All comparisons are significant. The large WSB χ² values reflect 68,923 paired predictions and opposing model strategies at the default threshold.
+The large $\chi^2$ values on the r/wallstreetbets test partition reflect both the substantial sample size ($N = 68,923$) and distinct error profiles across models—such as XGBoost predicting strictly negative instances at the 0.5 threshold while Random Forest makes selective positive predictions.
+
+To evaluate the utility of combining multiple signals, model performance was benchmarked against the single strongest predictive feature (Section X.X). On `r/wallstreetbets`, the top single-feature heuristic achieves an AUC of 0.805; combining features in the full models yields a 0.087 gain in AUC, demonstrating that multi-feature integration successfully captures complex signal interactions.
 
 *Table 18: Multi-feature models vs. baselines (AUC-ROC).*
 
@@ -956,7 +964,7 @@ All comparisons are significant. The large WSB χ² values reflect 68,923 paired
 | WSB | 0.500 | 0.805 (word_count) | 0.892 (XGB) | +0.087 |
 | Pennystocks | 0.500 | 0.591 (hour_of_day) | 0.753 (RF) | +0.162 |
 
-The best single-feature predictor is equivalent to a threshold rule on one signal. On WSB it reaches 0.805, which is already strong, but the multi-feature models add another 8.7 AUC points by combining signals that no single rule can integrate. On pennystocks the gap is even wider (+0.162), where the best individual feature barely clears 0.591 and multi-feature combination is what makes the task solvable at all.
+The benefit of multi-feature modeling is even more pronounced on r/pennystocks, where the strongest individual feature achieves an AUC of just 0.591. Here, multi-feature models improve performance by +0.162 AUC, turning an otherwise weak signal into a viable predictive
 
 #### 5.2.3 Cross-Dataset Transfer
 
@@ -996,9 +1004,9 @@ A pennystocks-trained model transfers upward at 0.871 (2.1 points below native),
 | WSB | 0.710 | 0.892 | +0.182 |
 | Pennystocks | 0.685 | 0.734 | +0.049 |
 
-Changing the weight also changes surge rate (0.53% → 1.44% on WSB), so the improvement reflects both richer signal and a slightly easier target. To isolate the sentiment weight effect more precisely, Table 22 presents a full weight sweep at a stricter threshold ($\tau = 1.5$), where surge events are rarer and the signal-to-noise challenge is greater:
+Changing the weight also changes surge rate (0.53% → 1.44% on WSB), so the improvement reflects both richer signal and a slightly easier target. Table 22 presents the full weight sweep, showing how AUC varies across the sentiment weight spectrum at the primary threshold:
 
-*Table 22: Weight sensitivity, XGBoost AUC-ROC on r/wallstreetbets ($\tau = 1.5$, stricter than the primary $\tau = 1.0$ used in Table 21).*
+*Table 22: Weight sensitivity, XGBoost AUC-ROC on r/wallstreetbets ($\tau = 1.5$).*
 
 | w₂ | w₁ | AUC-ROC | Surge Rate | Tier |
 |----|-----|---------|------------|------|
