@@ -64,23 +64,10 @@ Lerman and Hogg [2] extended this understanding by modelling the interaction bet
 
 The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth. Furthermore, a key tension exists within these findings: Szabo and Huberman [1] show that early popularity strongly predicts final outcome, yet Cheng et al. [5] later found that cascade prediction accuracy plateaus after the initial phase. This suggests that predictability diminishes once content leaves the emergence stage, which is precisely the window this project targets.
 
-```mermaid
-graph LR
-    A[Emergence<br/><i>Few posts, low signal</i>] --> B[Growth<br/><i>Accelerating activity</i>]
-    B --> C[Peak<br/><i>Maximum attention</i>]
-    C --> D[Decline<br/><i>Activity fading</i>]
-
-    A -.- E[/"🎯 This project's<br/>prediction point"/]
-    B -.- F[/"Traditional models<br/>require data here"/]
-
-    style A fill:#e1f5fe,stroke:#0288d1
-    style B fill:#fff9c4,stroke:#f9a825
-    style C fill:#ffcdd2,stroke:#c62828
-    style D fill:#f5f5f5,stroke:#9e9e9e
-    style E fill:#c8e6c9,stroke:#2e7d32
-    style F fill:#fff3e0,stroke:#e65100
-```
-*Figure 1: Online attention lifecycle model [6][7]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.*
+<figure align="center">
+  <img src="figures/fig1-online-attention-lifecycle-model.png" alt="Online attention lifecycle model" width="1000">
+  <figcaption>Figure 1: Online attention lifecycle model [6][7]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.</figcaption>
+</figure>
 
 ### 2.2. The Shift Toward Pre-Engagement Prediction
 
@@ -185,10 +172,9 @@ The prediction system is structured as a six-stage linear processing pipeline. E
 6. **Model Training and Evaluation**: Performs expanding-window temporal cross-validation, hyperparameter tuning, holdout test-set evaluation, and statistical hypothesis testing across model baselines.
 
 <figure align="center">
-  <img src="figures/02-data-pipeline-v0.1.png" alt="Data pipeline architecture" width="1000">
-  <figcaption>Figure 2: Data pipeline architecture.</figcaption>
+  <img src="figures/fig2-data-pipeline-v0.1.png" alt="Data pipeline architecture" width="1000">
+  <figcaption>Figure 2: Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).</figcaption>
 </figure>
-*Figure 2: Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).*
 
 The foundational architectural constraint is that **no stage may access information from the future relative to the observation time of any record**. Sentiment uses only the record's own text, features use backward-looking windows exclusively, z-scores are frozen from training-partition statistics, and validation folds are strictly time-ordered.
 
@@ -324,25 +310,10 @@ Standard $k$-fold cross-validation fundamentally violates chronological sequence
 
 **Level 2: Expanding-window CV within training ($k=4$):** Model selection and hyperparameter optimization are conducted exclusively within the $80\%$ training partition using a $4$-fold expanding-window cross-validation scheme.
 
-```mermaid
-gantt
-    title Expanding-Window Temporal CV (k=4)
-    dateFormat X
-    axisFormat %s
-
-    section Fold 1
-    Train     :done, 0, 25
-    Val       :active, 25, 50
-
-    section Fold 2
-    Train     :done, 0, 50
-    Val       :active, 50, 75
-
-    section Fold 3
-    Train     :done, 0, 75
-    Val       :active, 75, 100
-```
-*Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.*
+<figure align="center">
+  <img src="figures/fig3-expanding-window-cv.png" alt="Expanding-window CV" width="1000">
+  <figcaption>Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.</figcaption>
+</figure>
 
 The core design guarantee of this scheme is that every validation instance occurs strictly downstream in time from all corresponding training instances. Across the four evaluation folds, the training origin expands forward in time, incorporating historical data from prior blocks while validating on the immediate subsequent chronological block (yielding approximately $2.5$-month validation windows). A fold count of $k = 4$ was selected to ensure that each validation window contains a sufficient density of positive surge instances for stable AUC-ROC estimation while maintaining a large enough initial training block ($t_1$) for meaningful model fitting.
 
@@ -411,7 +382,7 @@ src/
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
 └── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ```
-*Figure 5: Source code organisation. The `surge_pipeline/` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves.*
+*Figure 4: Source code organisation. The `surge_pipeline/` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves.*
 
 Each pipeline stage maps  directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
@@ -444,7 +415,7 @@ df["selftext"] = df["selftext"].replace({"[deleted]": "", "[removed]": ""})
 # Clean title: fill NaN with empty string
 df["title"] = df["title"].fillna("")
 ```
-*Figure 6a: Text cleaning (from `loader.py`). Moderation-redacted content and null values are normalised to empty strings before downstream extraction, ensuring regex patterns operate on consistent input without raising exceptions on missing data.*
+*Figure 5a: Text cleaning (from `loader.py`). Moderation-redacted content and null values are normalised to empty strings before downstream extraction, ensuring regex patterns operate on consistent input without raising exceptions on missing data.*
 
 **Step 2: Ticker Extraction** 
 
@@ -468,7 +439,7 @@ for match in word_matches:
     if ticker not in TICKER_STOPWORDS:
         tickers.add(ticker)
 ```
-*Figure 6b: Ticker extraction with dual regex priority cascade and stopword filtering (from `loader.py`). The dollar-sign pattern (`\$([A-Z]{1,5})`) captures explicit financial references with high precision; the uppercase pattern (`\b[A-Z]{2,5}\b`) broadens recall at the cost of precision, mitigated by a 297-term stopword lexicon spanning eight categories.*
+*Figure 5b: Ticker extraction with dual regex priority cascade and stopword filtering (from `loader.py`). The dollar-sign pattern (`\$([A-Z]{1,5})`) captures explicit financial references with high precision; the uppercase pattern (`\b[A-Z]{2,5}\b`) broadens recall at the cost of precision, mitigated by a 297-term stopword lexicon spanning eight categories.*
 
 **Step 3: Timestamp Normalisation**
 
@@ -489,7 +460,7 @@ else:
 
 df = df.sort_values("created_utc").reset_index(drop=True)
 ```
-*Figure 6c: Timestamp normalisation and chronological sorting (from `loader.py`). The loader accepts two timestamp formats, Unix epoch integers (common in Reddit API exports) and ISO datetime strings (common in Kaggle archives), unifying both into timezone-aware `datetime64[ns, UTC]`. The sort establishes the chronological invariant required by all downstream stages.*
+*Figure 5c: Timestamp normalisation and chronological sorting (from `loader.py`). The loader accepts two timestamp formats, Unix epoch integers (common in Reddit API exports) and ISO datetime strings (common in Kaggle archives), unifying both into timezone-aware `datetime64[ns, UTC]`. The sort establishes the chronological invariant required by all downstream stages.*
 
 **Step 4: Ticker Explosion & Filtering** 
 
@@ -511,7 +482,7 @@ df["tickers"] = df["tickers"].str.strip().str.upper()
 df = df[df["tickers"].str.len() > 0].reset_index(drop=True)
 df = df.rename(columns={"tickers": "ticker"})
 ```
-*Figure 6d: Ticker explosion and filtering (from `loader.py`). The comma-separated ticker string is split into a list and exploded via `pandas.explode()`, converting one multi-ticker post into multiple rows, one per (record, ticker) pair. This transforms the unit of analysis from "post" to "post-about-a-specific-ticker", enabling per-ticker temporal windowing in subsequent stages.*
+*Figure 5d: Ticker explosion and filtering (from `loader.py`). The comma-separated ticker string is split into a list and exploded via `pandas.explode()`, converting one multi-ticker post into multiple rows, one per (record, ticker) pair. This transforms the unit of analysis from "post" to "post-about-a-specific-ticker", enabling per-ticker temporal windowing in subsequent stages.*
 
 *Table 9: Loader-stage attrition.*
 
@@ -557,7 +528,7 @@ count_older = older_right - older_left
 
 acceleration = count_recent / np.maximum(count_older, 1)
 ```
-*Figure 7a: Ticker post acceleration via split-window binary search (from `features.py`). The backward 24-hour window is bisected into recent and older halves. Four `searchsorted` calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The `max(..., 1)` guard prevents division by zero when the older half is empty.*
+*Figure 6: Ticker post acceleration via split-window binary search (from `features.py`). The backward 24-hour window is bisected into recent and older halves. Four `searchsorted` calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The `max(..., 1)` guard prevents division by zero when the older half is empty.*
 
 The two interaction terms (`word_count_x_hour` and `accel_x_time_since_prev`) provide models with an explicit signal for combined dynamic, such as a sudden surge in post volume following a period of silence, without requiring multi-level decision tree splits to discover the interaction. An ablation study confirmed a consistent +1.4pp AUC lift from including these terms.
 
@@ -607,7 +578,7 @@ z_sentiment = (all_sentiment - mu_sent) / sigma_sent
 composite = (w1 * z_volume) + (w2 * z_sentiment)
 surge_label = np.where(composite > tau, 1.0, 0.0)
 ```
-*Figure 8: Surge labelling pipeline (from `labelling.py`). Steps 1–2 establish the leakage-prevention mechanism: μ and σ are estimated exclusively from the training partition, then applied unchanged to all records including the test set. Steps 3–4 combine the normalised volume growth and sentiment shift into a weighted composite and threshold it into a binary target. Because test-set records are normalised against a distribution they never contributed to, the target labels encode no future information. Note: population standard deviation (`ddof=0`) is used because the training partition constitutes the entire reference population for normalisation, not a sample drawn from a larger one.*
+*Figure 7: Surge labelling pipeline (from `labelling.py`). Steps 1–2 establish the leakage-prevention mechanism: μ and σ are estimated exclusively from the training partition, then applied unchanged to all records including the test set. Steps 3–4 combine the normalised volume growth and sentiment shift into a weighted composite and threshold it into a binary target. Because test-set records are normalised against a distribution they never contributed to, the target labels encode no future information. Note: population standard deviation (`ddof=0`) is used because the training partition constitutes the entire reference population for normalisation, not a sample drawn from a larger one.*
 
 
 Records are excluded as unlabellable under two conditions:
@@ -649,7 +620,7 @@ def _verify_temporal_ordering(df, folds, splits):
                 f"max(train_ts)={max_train} > min(val_ts)={min_val}"
             )
 ```
-*Figure 9a: Expanding-window split construction and temporal verification (from `training.py`). The expanding window concatenates all preceding folds as training data, validating on the immediately subsequent fold. The hard assertion `max_train > min_val` triggers a `ValueError` if any split violates chronological ordering, making lookahead leakage a crash rather than a silent corruption.*
+*Figure 8a: Expanding-window split construction and temporal verification (from `training.py`). The expanding window concatenates all preceding folds as training data, validating on the immediately subsequent fold. The hard assertion `max_train > min_val` triggers a `ValueError` if any split violates chronological ordering, making lookahead leakage a crash rather than a silent corruption.*
 
 Hyperparameters are tuned via grid search across each model class (see Table 11 for complete search spaces).
 
@@ -692,7 +663,7 @@ X_train_scaled = final_scaler.fit_transform(X_train_full)
 final_model = make_model_fn(best_params, random_seed)
 final_model.fit(X_train_scaled, y_train_full)
 ```
-*Figure 9b: Grid search with per-fold scaler isolation (from `training.py`). Each fold fits a fresh `StandardScaler` on training indices only, then transforms the validation fold using those frozen statistics. This prevents mean/variance leakage across the temporal boundary. The best configuration is retrained on the entire training partition before test-set evaluation, maximising the data available to the final model.*
+*Figure 8b: Grid search with per-fold scaler isolation (from `training.py`). Each fold fits a fresh `StandardScaler` on training indices only, then transforms the validation fold using those frozen statistics. This prevents mean/variance leakage across the temporal boundary. The best configuration is retrained on the entire training partition before test-set evaluation, maximising the data available to the final model.*
 
 **Model Instantiation and Class Imbalance Handling**
 
@@ -730,7 +701,7 @@ def _make_xgb(params, random_seed):
         verbosity=0,
     )
 ```
-*Figure 9c: Model factory functions (from `training.py`). All three models handle class imbalance through cost-sensitive learning rather than synthetic oversampling. Logistic Regression and Random Forest use `class_weight='balanced'` (sklearn automatically computes inverse frequency weights). XGBoost uses `scale_pos_weight`, which is grid-searched over {1, ratio/2, ratio} where ratio = n_negative / n_positive (typically 19:1 to 105:1 in this dataset). This approach avoids SMOTE's fundamental incompatibility with temporal data, where synthetic records lack meaningful timestamps.*
+*Figure 8c: Model factory functions (from `training.py`). All three models handle class imbalance through cost-sensitive learning rather than synthetic oversampling. Logistic Regression and Random Forest use `class_weight='balanced'` (sklearn automatically computes inverse frequency weights). XGBoost uses `scale_pos_weight`, which is grid-searched over {1, ratio/2, ratio} where ratio = n_negative / n_positive (typically 19:1 to 105:1 in this dataset). This approach avoids SMOTE's fundamental incompatibility with temporal data, where synthetic records lack meaningful timestamps.*
 
 The base ratio $r$ for `scale_pos_weight` is computed dynamically from the training partition's actual class distribution:$$r = \frac{N_{\text{negative}}}{N_{\text{positive}}}$$
 
@@ -822,7 +793,7 @@ class TestZScoreNormalisation:
         # z(15) would be -1.0, verify this is NOT the case
         assert result.df["z_volume"].iloc[8] != approx(-1.0)
 ```
-*Figure 12: Leakage-prevention test (from `test_labelling.py`). The test constructs data with known training and test distributions, then asserts that test-set z-scores are computed using training parameters (μ=5, σ=5) rather than test-set parameters (μ=17.5, σ=2.5). A negative assertion confirms the wrong computation does not occur.*
+*Figure 8d: Leakage-prevention test (from `test_labelling.py`). The test constructs data with known training and test distributions, then asserts that test-set z-scores are computed using training parameters (μ=5, σ=5) rather than test-set parameters (μ=17.5, σ=2.5). A negative assertion confirms the wrong computation does not occur.*
 
 **Feature Time-Boundary Contracts**
 
@@ -849,7 +820,7 @@ class TestNoFutureLeakage:
         assert "score" not in FEATURE_COLUMNS
         assert "num_comments" not in FEATURE_COLUMNS
 ```
-*Figure 13: Backward-only feature contract tests (from `test_features.py`). The first test verifies that `time_since_previous` computes inter-arrival time using only preceding records. The second test asserts that post-hoc engagement metrics (which accumulate after publication) are structurally excluded from the feature set.*
+*Figure 8e: Backward-only feature contract tests (from `test_features.py`). The first test verifies that `time_since_previous` computes inter-arrival time using only preceding records. The second test asserts that post-hoc engagement metrics (which accumulate after publication) are structurally excluded from the feature set.*
 
 These unit tests execute on synthetic datasets and run automatically prior to every experiment. They provide continuous assurance that refactoring or parameter changes cannot silently introduce temporal leakage.
 
