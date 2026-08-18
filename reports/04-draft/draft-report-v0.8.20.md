@@ -1,70 +1,48 @@
 ﻿```{=typst}
-// FIX: Tells Typst to break the container when the table grows too big
+// Page setup — ACM-style margins and font
+#set page(margin: 2.54cm)
+#set text(font: "Times New Roman", size: 11pt)
+#set par(justify: true, leading: 0.55em, first-line-indent: 1em)
+
+// Heading styles
+#show heading.where(level: 1): it => {
+  set text(size: 14.4pt, weight: "bold")
+  set align(center)
+  v(0.5cm)
+  it
+  v(0.3cm)
+}
+
+#show heading.where(level: 2): set text(size: 12pt, weight: "bold")
+#show heading.where(level: 3): set text(size: 11pt, weight: "bold", style: "italic")
+
+// Table styling
 #show figure.where(kind: table): set block(breakable: true)
 
 #show table: set table(
-  // Adds light gray horizontal rows and even lighter vertical dividers
   stroke: (x, y) => (
     top: if y == 0 { 0.4pt + rgb("#eeeeee") } else { none },
     bottom: if y == 0 { 1pt + rgb("#cccccc") } else { 0.4pt + rgb("#eeeeee") },
     left: if x > 0 { 0.4pt + rgb("#f0f0f0") } else { none },
     right: if x < 1 { 0.4pt + rgb("#f0f0f0") } else { none }
   ),
-  
-  // Keeps the soft off-white header background
   fill: (col, row) => if row == 0 { rgb("#fafafa") } else { none },
-  
-  // Keeps the spacious internal padding
-  inset: 7pt, 
-  
-  // Natively centers table text vertically within cells
-  align: (col, row) => left + horizon  
+  inset: 7pt,
+  align: (col, row) => left + horizon
 )
 
+// Code block styling
 #show raw.where(block: true): it => block(
-  stroke: 0.5pt + rgb("#cccccc"), // Border thickness and light gray color
-  radius: 4pt,                     // Rounded corners
-  inset: 10pt,                     // Internal spacing/padding
-  fill: rgb("#fcfcfc"),            // Very light background fill color
-  width: 100%,                     // Spans across the full page width
+  stroke: 0.5pt + rgb("#cccccc"),
+  radius: 4pt,
+  inset: 10pt,
+  fill: rgb("#fcfcfc"),
+  width: 100%,
   it
 )
 ```
-<style>
-  @page {
-    /* margin: 2cm; */
-  }
-  body {
-    font-family: "Times New Roman", Times, serif;
-    font-size: 11pt;
-    margin: 1.9cm;
-  }
-  p, li, td, th {
-    font-family: "Times New Roman", Times, serif;
-    font-size: 11pt;
-  }
-  h1, h2, h3, h4, h5, h6 {
-    font-family: "Times New Roman", Times, serif;
-  }
-  h1 {
-    font-size: 18pt;
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 0.5cm;
-  }
-  h2 {
-    font-size: 12pt;
-    font-weight: bold;
-  }
-  h3 {
-    font-size: 11pt;
-    font-weight: bold;
-    font-style: italic;
-  }
-</style>
 
 # Predicting Posting-Volume Surges on Reddit Financial Communities Using Machine Learning
-—
 
 ## Abstract
 
@@ -88,11 +66,11 @@ The project has three objectives:
 
 Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
 
-The central research question is: *can a social media surge be predicted before it happens by looking at early discussion patterns?* The answer holds practical value for three user groups: **market surveillance and compliance teams** deciding where to allocate investigative attention among thousands of tickers [1]; **quantitative researchers** seeking early signals to trigger deeper analysis of specific stocks; and **platform moderation teams** needing to pre-allocate resources before discussion spikes. Across all three, the system operates as a *prioritisation tool*—reducing a large surveillance universe to a manageable shortlist for human review—rather than an autonomous decision-maker [2].
+The central research question is: *can a social media surge be predicted before it happens by looking at early discussion patterns?* The answer holds practical value for three user groups: **market surveillance and compliance teams** deciding where to allocate investigative attention among thousands of tickers [1]; **quantitative researchers** seeking early signals to trigger deeper analysis of specific stocks; and **platform moderation teams** needing to pre-allocate resources before discussion spikes. Across all three, the system operates as a *prioritisation tool*, reducing a large surveillance universe to a manageable shortlist for human review, rather than an autonomous decision-maker [2].
 
 These use cases share a common error-cost structure: false negatives (missed surges) carry higher consequential cost than false positives (unnecessary reviews), motivating recall-oriented operating points [4]. The acceptable error profile is: recall $\ge 0.50$ with precision $\ge 0.10$ at the chosen threshold, keeping the false alarm rate within daily analyst review capacity (20–30 flags). Section 3.8 formalises these operational acceptance criteria, and Section 5.3.4 evaluates the best model against them.
 
-Standard rule-based heuristics, such as flagging a ticker when volume exceeds $+2\sigma$, cannot capture non-linear interactions across diverse data streams. This project proposes a learning-based approach that integrates temporal, textual, and sentiment features into a unified predictive framework. Prior research focuses on related but different problems—forecasting eventual content reach or predicting price movements—rather than predicting sudden short-term spikes in discussion volume for specific tickers (see Section 2.6).
+Standard rule-based heuristics, such as flagging a ticker when volume exceeds $+2\sigma$, cannot capture non-linear interactions across diverse data streams. This project proposes a learning-based approach that integrates temporal, textual, and sentiment features into a unified predictive framework. Prior research focuses on related but different problems, forecasting eventual content reach or predicting price movements, rather than predicting sudden short-term spikes in discussion volume for specific tickers (see Section 2.6).
 
 ### 1.3 Prediction Scope and Surge Definition
 
@@ -321,7 +299,7 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 - **Random Forest (RF):** Bagged decision tree ensemble capturing non-linear relationships through tree splits. Fernández-Delgado et al. [20] demonstrated consistent top-tier performance across tabular benchmarks.
 - **XGBoost:** Gradient-boosted decision trees where each tree corrects prior ensemble errors, with $L_1/L_2$ leaf-weight regularisation. Gradient boosting consistently achieves state-of-the-art results on structured tabular data.
 
-**Primary metric (AUC-ROC):** With surge rates of 1–5%, accuracy is uninformative—a naive "no surge" predictor achieves 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, $F_1$, and PR-AUC are reported as secondary metrics at default and validation-optimized thresholds.
+**Primary metric (AUC-ROC):** With surge rates of 1–5%, accuracy is uninformative, a naive "no surge" predictor achieves 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, $F_1$, and PR-AUC are reported as secondary metrics at default and validation-optimized thresholds.
 
 **Handling class imbalance:** SMOTE is unsuitable for temporal data because synthetic instances lack meaningful timestamps and risk local data leakage. Instead, imbalance is addressed via cost-sensitive learning: `class_weight='balanced'` for LR and RF, and `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
@@ -895,11 +873,11 @@ Predictability depends directly on data density. On `WSB` (68,923 test records, 
 
 #### 5.1.2 Objective 2: Compare Multiple ML Approaches
 
-On **WSB**: XGBoost (0.892) > RF (0.880) > LR (0.707). All pairwise differences statistically significant (McNemar's, $p < 0.001$ after Bonferroni correction). On **pennystocks**: RF (0.753) > XGBoost (0.734) > LR (0.680)—the performance inversion where bagging outperforms boosting under scarcity is analysed in Section 5.3.1. Architectural complexity helps when data is abundant but offers no guarantee under scarcity.
+On **WSB**: XGBoost (0.892) > RF (0.880) > LR (0.707). All pairwise differences statistically significant (McNemar's, $p < 0.001$ after Bonferroni correction). On **pennystocks**: RF (0.753) > XGBoost (0.734) > LR (0.680), the performance inversion where bagging outperforms boosting under scarcity is analysed in Section 5.3.1. Architectural complexity helps when data is abundant but offers no guarantee under scarcity.
 
 #### 5.1.3 Objective 3: Demonstrate Temporal Validity
 
-The held-out 20% (final months of 2021, never seen during training) produced AUC 0.892 on `WSB` and 0.753 on pennystocks—genuine unseen-future performance. The temporal protocol reveals how standard validation overstates results: RF's validation-fold F1 was 0.911; on the test set it dropped to 0.145. This gap is the methodology working as intended—without strict temporal holdout, the inflated figure would have been reported. Leakage was prevented at every stage: z-scores frozen from training statistics, features backward-looking only, chronological ordering enforced programmatically.
+The held-out 20% (final months of 2021, never seen during training) produced AUC 0.892 on `WSB` and 0.753 on pennystocks, genuine unseen-future performance. The temporal protocol reveals how standard validation overstates results: RF's validation-fold F1 was 0.911; on the test set it dropped to 0.145. This gap is the methodology working as intended, without strict temporal holdout, the inflated figure would have been reported. Leakage was prevented at every stage: z-scores frozen from training statistics, features backward-looking only, chronological ordering enforced programmatically.
 
 ### 5.2 Results
 
@@ -920,7 +898,7 @@ On `WSB`, XGBoost achieved AUC-ROC 0.892 [0.881–0.902] and Random Forest 0.880
 | | RF | 0.753 [0.673–0.824] | 0.068 | 0.194 | 0.101 | Target |
 | | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target |
 
-AUC scores are strong but precision is near zero everywhere at the default 0.5 threshold. With sub-1% surge rates, probability outputs cluster far below 0.5—models rank surges correctly but the threshold is too conservative. This is a calibration problem, not a discrimination failure. On pennystocks, RF and XGB confidence intervals overlap substantially; McNemar's test (Section 5.2.2) nonetheless confirms significant prediction differences.
+AUC scores are strong but precision is near zero everywhere at the default 0.5 threshold. With sub-1% surge rates, probability outputs cluster far below 0.5, models rank surges correctly but the threshold is too conservative. This is a calibration problem, not a discrimination failure. On pennystocks, RF and XGB confidence intervals overlap substantially; McNemar's test (Section 5.2.2) nonetheless confirms significant prediction differences.
 
 Decision thresholds were optimized on the last validation fold via F1-maximization:
 
@@ -944,7 +922,7 @@ After tuning, XGBoost on `WSB` achieves the best $F_1 = 0.226$ at threshold 0.85
 | WSB | XGBoost | 0.85 | 157 | 565 | 511 | 67,690 |
 | pennystocks | Random Forest | 0.79 | 3 | 12 | 28 | 3,235 |
 
-At the best operating point on WSB, XGBoost identifies 157 of 668 surges with 565 false alarms (~1 true positive per 4.6 flags)—manageable for human review but unsuitable for automation.
+At the best operating point on WSB, XGBoost identifies 157 of 668 surges with 565 false alarms (~1 true positive per 4.6 flags), manageable for human review but unsuitable for automation.
 
 ![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/fig9-roc_curves_combined.png)
 
@@ -1030,7 +1008,7 @@ The +0.184 AUC gain between $w_2 = 0.25$ and $w_2 = 0.50$ is disproportionate to
 
 XGBoost leads on `WSB` (0.892 vs. RF's 0.880), whereas Random Forest leads on `r/pennystocks` (0.753 vs. XGBoost's 0.734). Three factors explain this inversion:
 
-First, XGBoost's sequential boosting requires sufficient positive examples to distinguish signal from noise. `WSB` provides 5,934 training surges versus 667 in pennystocks; with fewer positives, later boosting iterations fit noise—a risk bagging mitigates by averaging independent trees.
+First, XGBoost's sequential boosting requires sufficient positive examples to distinguish signal from noise. `WSB` provides 5,934 training surges versus 667 in pennystocks; with fewer positives, later boosting iterations fit noise, a risk bagging mitigates by averaging independent trees.
 
 Second, Random Forest distributes splits more evenly across features. On pennystocks, Gini importances span six features above 0.06 with none exceeding 0.21, offering robustness when individual signals are unreliable.
 
@@ -1050,7 +1028,7 @@ The performance ceiling is constrained by VADER's limitations: it fails on domai
 
 The pennystocks-trained model (21,549 records) transfers upward to `WSB` at AUC 0.871, whereas the WSB-trained model (388,149 records) achieves only 0.684 downward. This contradicts the assumption that larger datasets yield better transferability.
 
-Distributional mismatch explains the asymmetry. On `WSB`, `word_count` alone achieves AUC 0.805—reflecting community culture where surges are preceded by lengthy "due diligence" posts. On pennystocks, `word_count` yields only 0.573. WSB-trained models heavily leverage this community-specific artifact, causing performance drops when transferred. Conversely, pennystocks-trained models cannot rely on a single dominant feature; they learn broader representations combining sentiment and activity metrics that generalise across domains.
+Distributional mismatch explains the asymmetry. On `WSB`, `word_count` alone achieves AUC 0.805, reflecting community culture where surges are preceded by lengthy "due diligence" posts. On pennystocks, `word_count` yields only 0.573. WSB-trained models heavily leverage this community-specific artifact, causing performance drops when transferred. Conversely, pennystocks-trained models cannot rely on a single dominant feature; they learn broader representations combining sentiment and activity metrics that generalise across domains.
 
 Design guideline: models intended for multi-platform deployment should be trained on the most signal-constrained community to force feature generalisation, or fine-tuned on target-community data.
 
@@ -1069,11 +1047,11 @@ Section 3.8 defined acceptance criteria: AUC-ROC ≥ 0.80, recall ≥ 0.50, prec
 
 \* Computed from 722 total flags (157 TP + 565 FP) over the 68-day test period – 10.6 flags per day.
 
-The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~584 flags/day—operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
+The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~584 flags/day, operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
 
-**Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited—~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
+**Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, ~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
 
-**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold—a mathematical consequence of the base rate, not a model failure [22]. Saito and Rehmsmeier [3] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. PR-AUC of approximately 0.14 (14× above random) confirms this: strong discrimination across the full score range, but false alarms dominate at any threshold permissive enough for reasonable recall.
+**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold, a mathematical consequence of the base rate, not a model failure [22]. Saito and Rehmsmeier [3] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. PR-AUC of approximately 0.14 (14× above random) confirms this: strong discrimination across the full score range, but false alarms dominate at any threshold permissive enough for reasonable recall.
 
 The operationally correct deployment is rank-based: sort tickers by predicted probability, review the top-$k$ daily, and accept that some surges fall outside the review window [2]. A fully automated system would require precision ≥ 0.80 and formal probability calibration [23], neither achieved here (Section 5.4.2).
 
@@ -1089,7 +1067,7 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 **Single calendar year** (2021) including the GameStop episode: models may have learned regime-specific patterns. Running on 2020 or 2022 data would test generality.
 
-**Structural correlation between target and top feature**: `sentiment_score` dominates importance, but sentiment change is part of the composite target. The feature uses *current* sentiment while the target uses *forward-window* shift—not leakage, but a circularity that likely inflates sentiment's apparent importance. Phase 1 provides a partial control: with $w_2 = 0$, XGBoost still achieves AUC 0.710 (Table 21).
+**Structural correlation between target and top feature**: `sentiment_score` dominates importance, but sentiment change is part of the composite target. The feature uses *current* sentiment while the target uses *forward-window* shift, not leakage, but a circularity that likely inflates sentiment's apparent importance. Phase 1 provides a partial control: with $w_2 = 0$, XGBoost still achieves AUC 0.710 (Table 21).
 
 **Smaller concerns**: survivorship bias (deleted posts absent); fixed temporal split (~June 2021) makes test difficulty regime-dependent; training variance only partially characterised (0.019 AUC range across 5 seeds).
 
@@ -1126,7 +1104,7 @@ Second, a **composite surge metric** integrating normalised volume growth with s
 
 Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse→dense at 0.871; dense→sparse at 0.684) demonstrate this clearly.
 
-Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. These are incremental contributions—combining established techniques into a coherent framework for a problem prior work has not directly addressed—with each claim grounded in quantified evidence.
+Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. These are incremental contributions, combining established techniques into a coherent framework for a problem prior work has not directly addressed, with each claim grounded in quantified evidence.
 
 ### 6.2 Key Findings
 
@@ -1140,7 +1118,7 @@ Three findings were not obvious going in:
 
 **Sentiment does more than add a useful feature; it changes what a surge is.** When sentiment is stripped from the target definition, XGBoost's AUC on `WSB` drops 18 points. Sentiment is the most important feature by permutation importance, yet poor alone. The signal is interactive: accelerating discussion combined with rising emotional intensity is a meaningful pattern, but either one alone is not.
 
-Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on `WSB` yields AUC 0.871, nearly matching the native result, but training on `WSB` and testing on pennystocks yields only 0.684. `WSB` models lean heavily on word count—long analytical posts precede surges there—and that pattern does not exist in the other community. Models trained on sparse data spread reliance across weaker signals and learn something closer to universal.
+Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on `WSB` yields AUC 0.871, nearly matching the native result, but training on `WSB` and testing on pennystocks yields only 0.684. `WSB` models lean heavily on word count, long analytical posts precede surges there, and that pattern does not exist in the other community. Models trained on sparse data spread reliance across weaker signals and learn something closer to universal.
 
 For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication.
 
@@ -1160,7 +1138,7 @@ Two directions would extend the methodology:
 
 **Multi-scale temporal windows.** Adding parallel windows at 6h, 12h, and 72h would let the model match its horizon to surge timescale and reveal whether findings are partly an artefact of the 24-hour alignment with daily posting rhythms.
 
-**Live prediction testing.** Everything here is retrospective. Connecting the pipeline to a live stream—where predictions are recorded before outcomes are known—would produce evidence that retrospective evaluation cannot. In deployment, the system would ingest posts in a rolling stream, recompute features hourly, and surface top-$k$ tickers for human review. Building that system is beyond current scope, but nothing in the architecture prevents it.
+**Live prediction testing.** Everything here is retrospective. Connecting the pipeline to a live stream, where predictions are recorded before outcomes are known, would produce evidence that retrospective evaluation cannot. In deployment, the system would ingest posts in a rolling stream, recompute features hourly, and surface top-$k$ tickers for human review. Building that system is beyond current scope, but nothing in the architecture prevents it.
 
 ---
 
@@ -1211,8 +1189,3 @@ Two directions would extend the methodology:
 [22] Haibo He and Edwardo A. Garcia. 2009. Learning from imbalanced data. *IEEE Trans. Knowl. Data Eng.* 21, 9 (September 2009), 1263–1284. https://doi.org/10.1109/TKDE.2008.239
 
 [23] Andrew J. Vickers and Elena B. Elkin. 2006. Decision curve analysis: A novel method for evaluating prediction models. *Medical Decision Making* 26, 6 (November 2006), 565–574. https://doi.org/10.1177/0272989X06295361
-
----
-
-## Appendix A
-## Appendix B
