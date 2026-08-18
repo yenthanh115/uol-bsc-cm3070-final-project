@@ -995,11 +995,11 @@ Ultimately, the performance ceiling of this signal is constrained by the limitat
 
 #### 5.3.3 Cross-Community Transfer and Generalisability
 
-The transfer asymmetry (Table 19) is counterintuitive: the pennystocks-trained model (21,549 records) transfers to `WSB` at 0.871, while the WSB-trained model (388,149 records) manages only 0.684 downward. Conventional wisdom holds that more training data produces more generalisable models, yet here the opposite occurs.
+The transfer asymmetry detailed in Table 19 presents a counterintuitive finding: the pennystocks-trained model (21,549 records) transfers upward to `WSB` with an AUC of 0.871, whereas the WSB-trained model (388,149 records) achieves an AUC of only 0.684 when evaluated downward. While conventional machine learning wisdom holds that larger training datasets inherently yield more generalizable models, these results demonstrate the opposite.
 
-Distributional mismatch explains the result. On WSB, `word_count` alone achieves AUC 0.805, reflecting a community culture of lengthy due-diligence posts before surges. On pennystocks it scores only 0.573. Models trained on `WSB` over-rely on this community-specific pattern, which fails to transfer. By contrast, models trained under pennystocks' scarcity cannot lean on any dominant feature and instead learn more universal patterns (sentiment + activity rate) that generalise well.
+Distributional mismatch and feature overreliance account for this divergence. On `WSB`, word_count alone achieves an AUC of 0.805, reflecting a unique community culture where high-volume surges are often preceded by lengthy, detailed "due diligence" posts. On `r/pennystocks`, however, word_count yields an AUC of only 0.573. Models trained on `WSB` heavily leverage this community-specific artifact, causing performance to drop significantly when transferred to environments where that relationship does not hold. Conversely, models trained on the resource-constrained `r/pennystocks` dataset cannot rely on a single dominant feature; instead, they learn broader, lower-variance representations—primarily combining core sentiment and activity metrics—that generalize robustly across domains.
 
-For cross-community deployment, the implication is to train on the most constrained community or retrain on community-specific data.
+For cross-community deployment, these findings suggest a clear design guideline: models intended for multi-platform application should either be trained on the most signal-constrained community to force feature generalization or fine-tuned directly on target-community data.
 
 #### 5.3.4 Operational Precision and False Alarm Rate
 
