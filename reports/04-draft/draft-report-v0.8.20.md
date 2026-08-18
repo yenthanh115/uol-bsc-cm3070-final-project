@@ -1,4 +1,7 @@
 ﻿```{=typst}
+// FIX: Tells Typst to break the container when the table grows too big
+#show figure.where(kind: table): set block(breakable: true)
+
 #show table: set table(
   // Adds light gray horizontal rows and even lighter vertical dividers
   stroke: (x, y) => (
@@ -16,6 +19,15 @@
   
   // Natively centers table text vertically within cells
   align: (col, row) => left + horizon  
+)
+
+#show raw.where(block: true): it => block(
+  stroke: 0.5pt + rgb("#cccccc"), // Border thickness and light gray color
+  radius: 4pt,                     // Rounded corners
+  inset: 10pt,                     // Internal spacing/padding
+  fill: rgb("#fcfcfc"),            // Very light background fill color
+  width: 100%,                     // Spans across the full page width
+  it
 )
 ```
 <style>
@@ -98,7 +110,7 @@ Excluded from scope: real-time data ingestion and production deployment; individ
 
 ### 1.5 Report Structure
 
-Section 2 reviews the literature on online attention prediction, financial sentiment, and Reddit-specific research. Section 3 details the design: surge definition, feature engineering, model selection, and temporal validation. Section 4 describes implementation. Section 5 presents results, statistical validation, critical analysis, and limitations. Section 6 concludes with key findings and future directions. The project timeline is provided in Appendix A.
+Section 2 reviews the literature on online attention prediction, financial sentiment, and Reddit-specific research. Section 3 details the design: surge definition, feature engineering, model selection, and temporal validation. Section 4 describes implementation. Section 5 presents results, statistical validation, critical analysis, and limitations. Section 6 concludes with key findings and future directions.
 
 ---
 
@@ -116,10 +128,7 @@ Lerman and Hogg [6] extended this understanding by modelling the interaction bet
 
 The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth. Furthermore, a key tension exists within these findings: Szabo and Huberman [5] show that early popularity strongly predicts final outcome, yet Cheng et al. [9] later found that cascade prediction accuracy plateaus after the initial phase. This suggests that predictability diminishes once content leaves the emergence stage, which is precisely the window this project targets.
 
-<figure align="center">
-  <img src="figures/fig1-online-attention-lifecycle-model.png" alt="Online attention lifecycle model" width="1000">
-  <figcaption>Figure 1: Online attention lifecycle model [7][8]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.</figcaption>
-</figure>
+![Online attention lifecycle model [7][8]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.](figures/fig1-online-attention-lifecycle-model.png)
 
 ### 2.2. The Shift Toward Pre-Engagement Prediction
 
@@ -150,7 +159,7 @@ For this project, the key takeaway is that sentiment *change*, rather than absol
 *Table 2: Evolution of sentiment analysis tools relevant to financial social media.*
 
 | Tool | Type | Domain | Strengths | Limitations for This Project |
-|------|------|--------|-----------|------------------------------|
+|----------|----------|--------|---------------|--------------|
 | OpinionFinder as used in [12] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
 | VADER [13] | Rule-based | Social media | Handles capitalisation, emoticons, negation; F1=0.96 | No financial domain tuning ("short," "moon" misscored) |
 | FinBERT [14] | Transformer | Financial text | Context-aware, domain-specific | Computationally expensive for 1M+ records |
@@ -178,7 +187,7 @@ Consequently, reported performance figures across the reviewed studies may be in
 *Table 3: Temporal evaluation practices across reviewed studies.*
 
 | Study | Evaluation Method | Temporal Ordering Preserved? | Leakage Risk |
-|-------|-------------------|------------------------------|--------------|
+|---------------|----------------|-------------|--------------|
 | Szabo & Huberman [5] | Same-period evaluation | No | High |
 | Bandari et al. [10] | Random train-test split | No | High |
 | Bollen et al. [12] | Fixed holdout (1 month) | Partial | Medium |
@@ -223,10 +232,7 @@ The prediction system is a six-stage linear pipeline. Each stage consumes the pr
 5. **Feature Engineering**: Extracts eleven backward-looking features (Section 3.4)
 6. **Model Training and Evaluation**: Expanding-window cross-validation, hyperparameter tuning, holdout evaluation, and statistical testing
 
-<figure align="center">
-  <img src="figures/fig2-data-pipeline-v0.1.png" alt="Data pipeline architecture" width="1000">
-  <figcaption>Figure 2: Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).</figcaption>
-</figure>
+![Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).](figures/fig2-data-pipeline-v0.1.png)
 
 The foundational constraint is that **no stage may access future information relative to any record's observation time**. Features use backward-looking windows exclusively, z-scores are frozen from training statistics, and validation folds are strictly time-ordered.
 
@@ -292,18 +298,18 @@ All eleven features satisfy a strict backward-looking constraint: each is derive
 *Table 6: Feature definitions. All features use backward-looking or concurrent information only.*
 
 | | Feature | Category | Definition |
-|-|---------|----------|------------|
-|1| `sentiment_`<br>`score` | Content | VADER compound sentiment of the post text |
+|-|-------------|--------|----------------|
+|1| `sentiment_score` | Content | VADER compound sentiment of the post text |
 |2| `word_count` | Content | Words in selftext (0 if absent) |
 |3| `title_length` | Content | Character count of title |
-|4| `num_tickers_`<br>`mentioned` | Content | Distinct tickers extracted from the post |
+|4| `num_tickers_mentioned` | Content | Distinct tickers extracted from the post |
 |5| `hour_of_day` | Temporal | Hour of post creation (UTC) |
 |6| `day_of_week` | Temporal | Day of post creation (Monday=0) |
-|7| `time_since_`<br>`previous` | Activity | Seconds since previous same-ticker post |
-|8| `ticker_post_`<br>`rate_24h` | Activity | Same-ticker posts in preceding 24 hours |
-|9| `ticker_post_`<br>`acceleration` | Activity | Rate ratio: count in preceding 12h ÷ count in 12h before that |
-|10| `word_count_`<br>`x_hour` | Interaction | word_count × hour_of_day |
-|11| `accel_x_time`<br>`_since_prev` | Interaction | ticker_post_acceleration × time_since_previous |
+|7| `time_since_previous` | Activity | Seconds since previous same-ticker post |
+|8| `ticker_post_rate_24h` | Activity | Same-ticker posts in preceding 24 hours |
+|9| `ticker_post_acceleration` | Activity | Rate ratio: count in preceding 12h ÷ count in 12h before that |
+|10| `word_count_x_hour` | Interaction | word_count × hour_of_day |
+|11| `accel_x_time_since_prev` | Interaction | ticker_post_acceleration × time_since_previous |
 
 Features are organised into four categories: **content** (textual characteristics and sentiment), **temporal** (cyclical market-aligned patterns), **activity** (discussion momentum drawing on popularity prediction literature [1, 5]), and **interaction** (cross-feature dynamics that yielded +1.4pp AUC lift in ablation on `r/pennystocks`).
 
@@ -327,10 +333,7 @@ Standard $k$-fold cross-validation violates chronological ordering by permitting
 
 **Level 2: Expanding-window CV within training ($k=4$).** The training partition is divided into four chronological blocks producing three validation splits. Each fold trains on all preceding blocks and validates on the next, ensuring every validation instance occurs strictly after all training instances.
 
-<figure align="center">
-  <img src="figures/fig3-expanding-window-cv.png" alt="Expanding-window CV" width="1000">
-  <figcaption>Figure 3: Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.</figcaption>
-</figure>
+![Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.](figures/fig3-expanding-window-cv.png)
 
 A fold count of $k = 4$ ensures sufficient positive surge instances per validation window for stable AUC estimation while maintaining adequate initial training depth. Following hyperparameter optimization, $F_1$-optimized decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in Section 5.3.5.
 
@@ -372,7 +375,7 @@ The system is designed as a daily screening tool, not an autonomous decision-mak
 *Table 7c: Operational acceptance criteria derived from user scenarios (Section 1.2).*
 
 | Criterion | Requirement | Rationale |
-|-----------|-------------|-----------|
+|-----------|-------------|-------------------|
 | Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [2] |
 | Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [22] |
 | Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive [3] |
@@ -384,6 +387,27 @@ The system is designed as a daily screening tool, not an autonomous decision-mak
 
 **Limitations.** These criteria assume human-in-the-loop review. Fully automated action would require precision ≥ 0.80 and formal probability calibration, neither of which the current system achieves. Section 5.3.4 evaluates the best model against these criteria.
 
+### 3.9. Project Timeline
+Table 7d outlines the main project phases, activities, and expected deliverables.
+
+*Table 7d: Project timeline and deliverables.*
+
+| Id | Phase | Key Activities | Deliverables |
+|----|-------|----------------|--------------|
+| Phase 1 | Business Understanding & Scoping | Define problem, users, research question, scope and success criteria | Project definition and requirements |
+| Phase 2 | Literature Review | Review trend prediction, engagement prediction and sentiment analysis research | Literature review and research gap |
+| Phase 3 | Data Understanding | Dataset investigation, exploratory analysis and quality assessment | Dataset profile and EDA results |
+| Phase 4 | System Design | Design prediction pipeline, feature set, surge definition and evaluation strategy | System architecture and design specification |
+| Phase 5 | Prototype Development | Implement baseline pipeline and Logistic Regression model | Feasibility prototype |
+| Phase 6 | Full Pipeline Implementation | Preprocessing, feature engineering and advanced models | Complete predictive system |
+| Phase 7 | Evaluation & Analysis | Model comparison, cross-validation, error analysis and feature importance analysis | Evaluation results |
+| Phase 8 | Refinement | Improve models and address identified weaknesses | Refined prototype |
+| Phase 9 | Final Report & Demonstration | Final documentation and demonstration video | Final report and video |
+
+The project follows an iterative predictive modelling process. Initial phases focus on defining the problem, reviewing related research and understanding the dataset. These activities inform the system design, including the surge definition, feature engineering strategy and evaluation methodology. A feasibility prototype is developed to validate the proposed approach before implementing the complete prediction pipeline. The final stages focus on comparative evaluation, refinement and preparation of the final report and demonstration.
+
+![Project Timeline (Gantt Chart).](figures/fig4-gantt-chart-v0.2.png)
+
 ---
 
 ## 4. Implementation
@@ -394,7 +418,7 @@ The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, b
 
 All source code resides under `src/`, split into a core library modules and executable CLI scripts:
 
-<pre style="font-size: 9pt;">
+```
 src/
 ├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
 │   ├── config.py                # Configuration dataclass + JSON I/O
@@ -413,7 +437,7 @@ src/
 ├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
 └── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
-</pre>
+```
 *Figure 4: Source code organisation. The `surge_pipeline/` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves.*
 
 Each pipeline stage maps  directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
@@ -423,7 +447,7 @@ Executable commands are exposed via entry-point CLI scripts to streamline indivi
 *Table 8: CLI entry points.*
 
 | Command | Purpose |
-|---------|---------|
+|---------|-----------------------------|
 | `surge-label` | Run the labelling pipeline (load -> window -> sentiment -> label -> threshold sweep) |
 | `surge-train` | Train all three models and produce the full evaluation report |
 | `surge-cross-val` | Test whether a model trained on one subreddit transfers to the other |
@@ -531,18 +555,18 @@ Eleven features feed the classifiers. The governing constraint is that every fea
 *Table 10: Feature engineering detail. Each row specifies what the feature captures and how it is computed, including the responsible function.*
 
 | # | Feature | Category | Computation Method |
-|---|---------|----------|--------------------|
-| 1 | `ticker_post`<br>`_rate_24h` | Activity | Reuses `backward_count` produced by `windowing.compute_windowed_counts()`. For each record mentioning ticker $X$ at time $t$, counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group. The self-post is excluded by using `side='left'` at the right boundary. |
-| 2 | `time_since_`<br>`previous_post` | Activity | Computed by `features._compute_time_`<br>`since_previous()`. For each record at time $t$, identifies the immediately preceding post mentioning the same ticker by iterating through the chronologically sorted per-ticker group (`groupby('ticker')`). Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
-| 3 | `ticker_post_`<br>`acceleration` | Activity | Computed by `features._compute_ticker_`<br>`post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t]$ and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` for inclusive-left boundaries, `side='left'` for exclusive-right. |
-| 4 | `sentiment_`<br>`score` | Content | Reuses `sentiment_polarity` produced by `sentiment.compute_sentiment()` via `_compute_polarity_vader()`. VADER's `polarity_scores()` is applied to the post's selftext; if selftext is empty or absent, the title is used as fallback. The compound score ranges from $-1$ (most negative) to $+1$ (most positive). Computed strictly from the record's own text at creation time, no forward window information. |
+|---|---------|------|---------------------------|
+| 1 | `ticker_post` \ `_rate_24h` | Activity | Reuses `backward_count` produced by `windowing.compute_windowed_counts()`. For each record mentioning ticker $X$ at time $t$, counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group. The self-post is excluded by using `side='left'` at the right boundary. |
+| 2 | `time_since_` \ `previous_post` | Activity | Computed by `features._compute_time_` \ `since_previous()`. For each record at time $t$, identifies the immediately preceding post mentioning the same ticker by iterating through the chronologically sorted per-ticker group (`groupby('ticker')`). Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
+| 3 | `ticker_post_` \ `acceleration` | Activity | Computed by `features._compute_ticker_` \ `post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t]$ and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` for inclusive-left boundaries, `side='left'` for exclusive-right. |
+| 4 | `sentiment_` \ `score` | Content | Reuses `sentiment_polarity` produced by `sentiment.compute_sentiment()` via `_compute_polarity_vader()`. VADER's `polarity_scores()` is applied to the post's selftext; if selftext is empty or absent, the title is used as fallback. The compound score ranges from $-1$ (most negative) to $+1$ (most positive). Computed strictly from the record's own text at creation time, no forward window information. |
 | 5 | `word_count` | Content | Computed inline in `features.compute_features()`. Concatenates `title + " " + selftext`, splits on whitespace (`str.split().str.len()`), counts resulting tokens. Empty/null selftext is replaced with empty string before concatenation. Measures post effort/depth as a proxy for informational content. |
 | 6 | `title_length` | Content | Computed inline in `features.compute_features()`. Splits title on whitespace (`str.split().str.len()`) and counts tokens. Captures headline effort independently of body length. Null titles treated as empty string (0 tokens). |
-| 7 | `num_tickers_`<br>`mentioned` | Content | Computed by `features._compute_num_`<br>`tickers_mentioned()`. Groups the exploded DataFrame by original post `id` and counts distinct ticker values per group using `groupby('id')['ticker']`<br>`.transform('nunique')`. A post mentioning 3 tickers will have value 3 in all its exploded rows. Captures whether a post is ticker-specific or broad market commentary. |
-| 8 | `hour_of_`<br>`day` | Temporal | Computed inline in `features.compute_`<br>`features()`. Extracts UTC hour (0–23) from `created_utc` via `pd.to_datetime(..., utc=True)`<br>`.dt.hour`. Captures intraday cyclicality aligned with US market hours (pre-market activity typically spikes 13:00–14:00 UTC). |
-| 9 | `day_of_week` | Temporal | Computed inline in `features.compute_`<br>`features()`. Extracts day-of-week index (Monday=0, Sunday=6) from `created_utc` via `.dt.dayofweek`. Captures weekly periodicity: weekday posts cluster near market sessions; weekend posts are predominantly speculative. |
-| 10 | `word_count_`<br>`x_hour` | Interaction | Computed inline in `features.compute_`<br>`features()` via element-wise multiplication: `word_count × hour_of_`<br>`day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
-| 11 | `accel_x_time_`<br>`since_prev` | Interaction | Computed inline in `features.compute_`<br>`features()`. Multiplicative interaction: `ticker_post_acceleration × time_`<br>`since_previous`. Captures the pattern of sudden acceleration after prolonged silence, a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. Ablation (Experiment B2) confirmed +1.4 pp AUC lift from including both interaction terms. |
+| 7 | `num_tickers_` \ `mentioned` | Content | Computed by `features._compute_num_` \ `tickers_mentioned()`. Groups the exploded DataFrame by original post `id` and counts distinct ticker values per group using `groupby('id')['ticker']` \ `.transform('nunique')`. A post mentioning 3 tickers will have value 3 in all its exploded rows. Captures whether a post is ticker-specific or broad market commentary. |
+| 8 | `hour_of_` \ `day` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts UTC hour (0–23) from `created_utc` via `pd.to_datetime(..., utc=True)` \ `.dt.hour`. Captures intraday cyclicality aligned with US market hours (pre-market activity typically spikes 13:00–14:00 UTC). |
+| 9 | `day_of_week` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts day-of-week index (Monday=0, Sunday=6) from `created_utc` via `.dt.dayofweek`. Captures weekly periodicity: weekday posts cluster near market sessions; weekend posts are predominantly speculative. |
+| 10 | `word_count_` \ `x_hour` | Interaction | Computed inline in `features.compute_` \ `features()` via element-wise multiplication: `word_count × hour_of_` \ `day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
+| 11 | `accel_x_time_` \ `since_prev` | Interaction | Computed inline in `features.compute_` \ `features()`. Multiplicative interaction: `ticker_post_acceleration × time_` \ `since_previous`. Captures the pattern of sudden acceleration after prolonged silence, a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. Ablation (Experiment B2) confirmed +1.4 pp AUC lift from including both interaction terms. |
 
 The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering $(t - 12\text{h}, t]$ and an older half covering $(t - 24\text{h}, t - 12\text{h}]$ and then computes the ratio: $$\text{ticker\_post\_acceleration} = \frac{\text{count}_{\text{recent}}}{\max(\text{count}_{\text{older}}, 1)}$$
 
@@ -660,7 +684,7 @@ Hyperparameters are tuned via grid search across each model class (see Table 11 
 *Table 11: Hyperparameter search spaces.*
 
 | Model | Parameters Searched | Grid Size |
-|-------|--------------------|-----------| 
+|-------------|--------------------|--------| 
 | Logistic Regression | $C \in \{0.01, 0.1, 1, 10, 100\}$, $\text{l1\_ratio} \in \{0, 1\}$ | 10 |
 | Random Forest | $\text{n\_estimators} \in \{50, 100, 200\}, \text{max\_depth} \in \{3, 5, 10, \text{None}\}, \text{min\_samples\_leaf} \in \{1, 2, 5\}$ | 36 |
 | XGBoost | $\text{n\_estimators} \in \{50, 100, 200\}$, $\text{max\_depth} \in \{3, 5, 7\}$, $\text{learning\_rate} \in \{0.01, 0.1, 0.3\}$, $\text{scale\_pos\_weight} \in \{1, \text{ratio}/2$, $\text{ratio}\}$ | $\le50$ |
@@ -801,10 +825,10 @@ Pipeline stability, software health, and correctness claims are maintained throu
 | `test_labelling.py` | Target Labelling | Z-scores use training-only μ/σ; composite formula correctness; threshold labelling at known values |
 | `test_features.py` | Feature Engineering | No feature accesses future data; `score`/`num_comments` excluded; `time_since_previous` is backward-only |
 | `test_training.py` | Model Training | Temporal folds are chronologically ordered; expanding-window splits respect `max(train) < min(val)`; grid sizes $\le50$ |
-| `test_evaluation_`<br>`significance.py` | Evaluation | McNemar's test produces correct $\chi^2$ for known contingency tables; bootstrap CIs have expected coverage |
+| `test_evaluation_significance.py` | Evaluation | McNemar's test produces correct $\chi^2$ for known contingency tables; bootstrap CIs have expected coverage |
 | `test_config.py` | Configuration | JSON serialisation round-trip preserves all parameters |
-| `test_pipeline_`<br>`integration.py` | End-to-end | Full pipeline produces identical output across two runs (determinism) |
-| `test_evaluation_`<br>`figures.py` | Figures | Figure generation completes without error on synthetic data |
+| `test_pipeline_integration.py` | End-to-end | Full pipeline produces identical output across two runs (determinism) |
+| `test_evaluation_figures.py` | Figures | Figure generation completes without error on synthetic data |
 
 **Temporal Leakage Prevention**
 
@@ -922,10 +946,7 @@ After tuning, XGBoost on `WSB` achieves the best $F_1 = 0.226$ at threshold 0.85
 
 At the best operating point on WSB, XGBoost identifies 157 of 668 surges with 565 false alarms (~1 true positive per 4.6 flags)—manageable for human review but unsuitable for automation.
 
-<figure align="center">
-  <img src="figures/fig9-roc_curves_combined.png" alt="Project Timeline" width="1000">
-  <figcaption>Figure 9: Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).</figcaption>
-</figure>
+![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/fig9-roc_curves_combined.png)
 
 #### 5.2.2 Statistical Validation
 
@@ -1193,9 +1214,5 @@ Two directions would extend the methodology:
 
 ---
 
-## Appendix A: Project Timeline
-
-<figure align="center">
-  <img src="figures/01-gantt-chart-v0.2.png" alt="Project Timeline" width="1000">
-  <figcaption>Figure A1: Project Timeline (Gantt Chart).</figcaption>
-</figure>
+## Appendix A
+## Appendix B
