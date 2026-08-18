@@ -748,7 +748,7 @@ imbalance_ratio = float(n_negative) / max(n_positive, 1)
 # Grid searches over: no reweighting, moderate, and full reweighting
 weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
 ```
-*Figure 8d:*
+*Figure 8d: Dynamic imbalance ratio computation (from `training.py`). The negative-to-positive ratio is calculated from the actual training partition class distribution, then used to construct a three-level grid for XGBoost's `scale_pos_weight`: no reweighting (1.0), moderate (ratio/2), and full (ratio). This data-driven approach adapts automatically to different surge thresholds and datasets without manual tuning.*
 
 The hyperparameter configuration yielding the highest mean validation Area Under the ROC Curve (AUC) across all three splits is selected as the winning model. This optimal configuration is then retrained on the entire 80% training partition, using a freshly fitted `StandardScaler`, prior to generating final predictions on the held-out test set.
 
@@ -924,6 +924,8 @@ After tuning, XGBoost on `WSB` achieves the best $F_1 = 0.226$ at threshold 0.85
 
 At the best operating point on WSB, XGBoost identifies 157 of 668 surges with 565 false alarms (~1 true positive per 4.6 flags), manageable for human review but unsuitable for automation.
 
+![Confusion matrix for XGBoost at tuned threshold (0.85) on the WSB held-out test set. The model correctly identifies 157 surges (TP) while generating 565 false alarms (FP), with 511 missed surges (FN). The extreme class imbalance (67,690 TN) visually confirms why precision remains low despite strong ranking ability.](figures/10_confusion_matrix_xgboost.png)
+
 ![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/fig9-roc_curves_combined.png)
 
 #### 5.2.2 Statistical Validation
@@ -978,6 +980,8 @@ Transfer is strongly asymmetric. A pennystocks-trained XGBoost transfers to `WSB
 | 5 | accel_x_time (+0.005) | day_of_week (+0.002) | word_count_x_hour (+0.017) | num_tickers (+0.006) |
 
 `sentiment_score` dominates everywhere (+0.113 to +0.203). On WSB, activity features fill ranks 2–3; on pennystocks, `time_since_previous` rises to second (+0.086), reflecting reliance on temporal gaps when volume is low. Interaction terms remain negligible on WSB (≤+0.005) but `word_count_x_hour` reaches +0.017 on pennystocks RF.
+
+![Permutation feature importance comparison across models and datasets. Sentiment score consistently dominates, while the relative ordering of activity and temporal features shifts between high-density (WSB) and sparse (pennystocks) communities.](figures/feature_importance_comparison.png)
 
 #### 5.2.5 Sentiment Contribution (Phase 1 vs Phase 2)
 
@@ -1048,6 +1052,8 @@ Section 3.8 defined acceptance criteria: AUC-ROC ≥ 0.80, recall ≥ 0.50, prec
 \* Computed from 722 total flags (157 TP + 565 FP) over the 68-day test period – 10.6 flags per day.
 
 The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~584 flags/day, operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
+
+![Classification threshold sensitivity for XGBoost on WSB. As the decision threshold varies, precision and recall trade off sharply. No single threshold simultaneously achieves recall ≥ 0.50 and precision ≥ 0.10, illustrating the fundamental constraint imposed by the 102:1 class imbalance.](figures/12_threshold_sensitivity_xgboost.png)
 
 **Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, ~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
 
