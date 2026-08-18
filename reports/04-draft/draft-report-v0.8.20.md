@@ -1,4 +1,24 @@
-﻿<style>
+﻿```{=typst}
+#show table: set table(
+  // Adds light gray horizontal rows and even lighter vertical dividers
+  stroke: (x, y) => (
+    top: if y == 0 { 0.4pt + rgb("#eeeeee") } else { none },
+    bottom: if y == 0 { 1pt + rgb("#cccccc") } else { 0.4pt + rgb("#eeeeee") },
+    left: if x > 0 { 0.4pt + rgb("#f0f0f0") } else { none },
+    right: if x < 1 { 0.4pt + rgb("#f0f0f0") } else { none }
+  ),
+  
+  // Keeps the soft off-white header background
+  fill: (col, row) => if row == 0 { rgb("#fafafa") } else { none },
+  
+  // Keeps the spacious internal padding
+  inset: 7pt, 
+  
+  // Natively centers table text vertically within cells
+  align: (col, row) => left + horizon  
+)
+```
+<style>
   @page {
     /* margin: 2cm; */
   }
@@ -112,7 +132,7 @@ This body of work established a second consensus: prediction is achievable befor
 *Table 1: Evolution of online attention prediction, from post-engagement to pre-engagement approaches.*
 
 | Study | Year | Platform | Prediction Target | Requires Existing Engagement? | Accuracy |
-|-------|------|----------|-------------------|-------------------------------|----------|
+|-----------|------|----------|------------|------------|----------|
 | Szabo & Huberman [5] | 2010 | YouTube, Digg | Future view count | Yes (needs early views) | $r^{2}$ > 0.9 |
 | Lerman & Hogg [6] | 2010 | Digg | Story popularity | Yes (needs network data) | N/A (model) |
 | Bandari et al. [10] | 2012 | News articles | Popularity bin | **No** (content metadata only) | ~84% |
@@ -509,6 +529,7 @@ df = df.rename(columns={"tickers": "ticker"})
 Eleven features feed the classifiers. The governing constraint is that every feature must be computable from data *at or before* the current record's timestamp. Nothing may peek into the future.
 
 *Table 10: Feature engineering detail. Each row specifies what the feature captures and how it is computed, including the responsible function.*
+
 | # | Feature | Category | Computation Method |
 |---|---------|----------|--------------------|
 | 1 | `ticker_post`<br>`_rate_24h` | Activity | Reuses `backward_count` produced by `windowing.compute_windowed_counts()`. For each record mentioning ticker $X$ at time $t$, counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group. The self-post is excluded by using `side='left'` at the right boundary. |
@@ -1078,51 +1099,47 @@ The resulting framework evaluates raw Reddit data through statistically validate
 
 This project makes three contributions.
 
-First, a **leakage-free methodology applied where neglected**. The literature review (Section 2.5, Table 3) shows temporal leakage is the norm in social media prediction studies. This project applies established temporal evaluation principles [18][19] end-to-end and shows resulting performance (AUC = 0.753–0.892) is both achievable and trustworthy. The framework is reusable for any timestamped prediction problem.
+First, a **leakage-free methodology applied where neglected**. The literature review (Section 2.5, Table 3) shows temporal leakage is the norm in social media prediction studies. This project applies established temporal evaluation principles [18][19] end-to-end, showing that performance of AUC = 0.753–0.892 is both achievable and trustworthy. The framework is reusable for any timestamped prediction problem.
 
 Second, a **composite surge metric** integrating normalised volume growth with sentiment change, fully parameterised by threshold and weights. The Phase 1 vs Phase 2 experiment (Table 21) confirms it captures a richer phenomenon than volume alone (+0.182 AUC on WSB).
 
-Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse->dense at 0.871; dense->sparse at 0.684) demonstrate this clearly. Model complexity is secondary; data availability comes first.
+Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse→dense at 0.871; dense→sparse at 0.684) demonstrate this clearly.
 
-Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. For context, the AUC range achieved here (0.753–0.892) sits alongside Cheng et al.'s 0.877 for cascade prediction [9] and Bandari et al.'s ~84% classification accuracy [10], but protocol differences (random splits, engagement-based features, different targets) make any direct ranking invalid. The methodology itself is the contribution: demonstrating that rigorous evaluation (bootstrap CIs, McNemar's tests, sensitivity sweeps) is both feasible and necessary for social media prediction tasks. These are incremental contributions, combining established techniques into a coherent framework for a problem prior work has not directly addressed, with each claim grounded in quantified evidence rather than isolated numbers. See Figure 10 (ROC curves) and Figure 11 (feature importance) for visual summaries of the key results.
+Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. These are incremental contributions—combining established techniques into a coherent framework for a problem prior work has not directly addressed—with each claim grounded in quantified evidence.
 
 ### 6.2 Key Findings
 
-The short answer to the central research question is yes: surges can be predicted from backward-looking signals alone. How well depends almost entirely on how much data the community generates. On WSB, where surges are relatively frequent, XGBoost and Random Forest both reached the stretch tier (AUC = 0.892 and 0.880). On the sparser r/pennystocks, Random Forest managed 0.753, which clears the target tier but comes with wide confidence intervals. There were only 31 test surges to evaluate against, so the result is real but tentative.
+The short answer to the central research question is yes: surges can be predicted from backward-looking signals alone. How well depends almost entirely on how much data the community generates. On WSB, XGBoost and Random Forest both reached the stretch tier (AUC = 0.892 and 0.880). On sparser r/pennystocks, Random Forest managed 0.753, clearing target but with wide confidence intervals over only 31 test surges.
 
-Three things came out of the experiments that were not obvious going in:
+Three findings were not obvious going in:
 
-**Having more data matters more than having a better model.** The gap between the two datasets (13 to 14 AUC points) is larger than the gap between any two models on the same dataset. For anyone thinking about deploying surge detection on a smaller community, this is the most useful takeaway: spend effort on data collection before spending it on model tuning.
+**Having more data matters more than having a better model.** The gap between datasets (13–14 AUC points) is larger than the gap between any two models on the same dataset. For surge detection on smaller communities, invest in data collection before model tuning.
 
-**The advantage of more complex models is not guaranteed.** On WSB, gradient boosting earns its complexity, with XGBoost leading, then Random Forest, then Logistic Regression. On pennystocks the picture flips: Random Forest beats XGBoost. With only a few hundred positive examples, boosting's sequential correction rounds tend to fit noise, while averaging independent trees is more forgiving.
+**The advantage of more complex models is not guaranteed.** On WSB, gradient boosting earns its complexity. On pennystocks the picture flips: Random Forest beats XGBoost. With only a few hundred positive examples, boosting's sequential corrections fit noise, while averaging independent trees is more forgiving.
 
-**Sentiment does more than add a useful feature; it changes what a surge is.** When sentiment is stripped from the target definition, leaving only volume growth, XGBoost's AUC on `WSB` drops 18 points. Sentiment is consistently the most important feature by permutation importance, yet a poor feature alone. The signal it carries is interactive: accelerating discussion combined with rising emotional intensity is a meaningful pattern, but either one on its own is not.
+**Sentiment does more than add a useful feature; it changes what a surge is.** When sentiment is stripped from the target definition, XGBoost's AUC on `WSB` drops 18 points. Sentiment is the most important feature by permutation importance, yet poor alone. The signal is interactive: accelerating discussion combined with rising emotional intensity is a meaningful pattern, but either one alone is not.
 
-Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on `WSB` yields AUC 0.871, nearly matching the native result, but training on `WSB` and testing on pennystocks yields only 0.684. `WSB` models lean heavily on word count as a feature, because long analytical posts tend to precede surges there, and that pattern simply does not exist in the other community. Models trained on sparse data, despite lower absolute performance on their own community, spread their reliance across weaker signals and end up learning something closer to universal.
+Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on `WSB` yields AUC 0.871, nearly matching the native result, but training on `WSB` and testing on pennystocks yields only 0.684. `WSB` models lean heavily on word count—long analytical posts precede surges there—and that pattern does not exist in the other community. Models trained on sparse data spread reliance across weaker signals and learn something closer to universal.
 
-For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication. A sparse community needs more history, not a better algorithm.
+For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication.
 
 ### 6.3 Limitations and Future Work
 
-Four limitations bound the current conclusions. All three objectives were met (Section 5.1), but the pennystocks results rest on only 31 test surges and should be treated as tentative rather than definitive. Likewise, the methodology has been validated for retrospective prediction but not for deployment under live conditions, which would introduce latency, missing data, and distribution drift that the current evaluation cannot capture.
+All three objectives were met (Section 5.1), but four limitations bound the conclusions.
 
-**The pennystocks evaluation rests on thin ground.** Thirty-one test surges produce confidence intervals wide enough that model rankings could shift with a different test period. Lowering the surge threshold would bring more positive cases into the test set at some cost to definitional precision.
+**The pennystocks evaluation rests on thin ground.** Thirty-one test surges produce confidence intervals wide enough that model rankings could shift with a different test period.
 
-**It is unclear whether 2021 is representative.** The data includes the GameStop episode, one of the most unusual periods of retail speculation in memory. Running the pipeline on 2020 or 2022 data would matter more for credibility than any model improvement.
+**2021 may not be representative.** The GameStop episode makes this one of the most unusual periods of retail speculation in memory. Running on 2020 or 2022 data would matter more for credibility than any model improvement.
 
-**VADER does not speak Reddit finance.** It misreads terms that carry precise meaning in these communities. "Short" is not negative sentiment, "moon" is not geography. FinBERT [14] would handle domain-specific language, though applying it across 1.3 million records would require GPU infrastructure the current pipeline does not use.
+**VADER does not speak Reddit finance.** It misreads domain-specific terms ("short" as negative, "moon" as neutral). FinBERT [14] would handle this, though applying it across 1.3M records requires GPU infrastructure.
 
-**The models rank surges well but flag them poorly.** At extreme class imbalance the probability outputs are so compressed that useful thresholds sit near 0.16. Post-training calibration via Platt scaling or isotonic regression would make the scores directly interpretable without changing their discriminative power.
+**The models rank surges well but flag them poorly.** At extreme imbalance, probability outputs compress so much that useful thresholds sit near 0.16. Post-training calibration (Platt scaling or isotonic regression) would make scores interpretable without changing discriminative power.
 
-Two directions would take the methodology somewhere it has not been:
+Two directions would extend the methodology:
 
-**Multi-scale temporal windows.** The system uses a single 24-hour lookback and 24-hour lookahead. Surges do not all operate on the same timescale. Adding parallel windows at 6h, 12h, and 72h would let the model match its prediction horizon to the type of surge it is trying to catch, and would reveal whether the current findings are partly an artefact of how one window size aligns with daily posting rhythms.
+**Multi-scale temporal windows.** Adding parallel windows at 6h, 12h, and 72h would let the model match its horizon to surge timescale and reveal whether findings are partly an artefact of the 24-hour alignment with daily posting rhythms.
 
-**Testing predictions against live data.** Everything here is retrospective, a simulation of prediction rather than prediction itself. Connecting the pipeline to a live stream, where predictions are recorded before outcomes are known, would produce the kind of evidence that retrospective evaluation, however carefully designed, cannot provide.
-
-In deployment, the pipeline would ingest a rolling stream of posts, recompute features hourly, and flag tickers whose predicted surge probability crosses a tuned threshold, functioning as a screening layer that reduces thousands of tickers to a manageable watchlist for human review. Building that system is beyond the present scope, but nothing in the architecture prevents it.
-
-The question this project set out to answer, whether surges can be predicted without future information, has been answered. What remains is finding out how far that answer extends.
+**Live prediction testing.** Everything here is retrospective. Connecting the pipeline to a live stream—where predictions are recorded before outcomes are known—would produce evidence that retrospective evaluation cannot. In deployment, the system would ingest posts in a rolling stream, recompute features hourly, and surface top-$k$ tickers for human review. Building that system is beyond current scope, but nothing in the architecture prevents it.
 
 ---
 
