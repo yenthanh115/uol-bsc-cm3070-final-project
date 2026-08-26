@@ -36,7 +36,7 @@ Assess
 
 ### Phase 2 — Module-to-module review
 Goal: inspect each major component in isolation to evaluate contracts, correctness, and robustness.
-Status: Core module pass executed.
+Status: Downstream review executed.
 
 Primary modules to review
 - [src/surge_pipeline/config.py](../src/surge_pipeline/config.py) — configuration model and defaults
@@ -62,21 +62,28 @@ Checklist
   Result: The implementation uses a Reddit-friendly default (VADER) and includes fallback handling for title-only and empty records. The sentiment pipeline is careful about excluded records and computes future-window sentiment consistently, which is a strength.
 - [x] Reviewed labelling and normalisation logic in [src/surge_pipeline/labelling.py](../src/surge_pipeline/labelling.py).
   Result: Label generation is driven by temporal train/test splitting and z-score normalisation using train statistics only, which is the correct methodological pattern. The code handles sigma=0 edge cases and computes class distributions carefully, indicating good attention to reliability.
-- [ ] Review remaining downstream modules in [src/surge_pipeline/normalisation.py](../src/surge_pipeline/normalisation.py), [src/surge_pipeline/features.py](../src/surge_pipeline/features.py), [src/surge_pipeline/training.py](../src/surge_pipeline/training.py), [src/surge_pipeline/evaluation.py](../src/surge_pipeline/evaluation.py), and [src/eda/eda_pipeline.py](../src/eda/eda_pipeline.py).
-  Result: These modules remain to be checked for feature compatibility, temporal leakage safeguards, evaluation integrity, and reporting fidelity.
-- [ ] Check inputs/outputs and data types at the function boundaries.
-- [ ] Inspect for assumptions about missing values, timestamps, duplicates, or malformed rows.
-- [ ] Look for hard-coded paths, constants, or dataset-specific assumptions.
-- [ ] Check edge cases: empty data, single-class labels, NaN values, short windows, small samples.
-- [ ] Verify that train/test splits preserve temporal integrity.
-- [ ] Compare implementation to project claims in documentation and reports.
-- [ ] Check for common code smells: silent fallback values, unchecked conversions, unstable sorting, duplicated logic, and unclear naming.
+- [x] Reviewed remaining downstream modules in [src/surge_pipeline/normalisation.py](../src/surge_pipeline/normalisation.py), [src/surge_pipeline/features.py](../src/surge_pipeline/features.py), [src/surge_pipeline/training.py](../src/surge_pipeline/training.py), [src/surge_pipeline/evaluation.py](../src/surge_pipeline/evaluation.py), and [src/eda/eda_pipeline.py](../src/eda/eda_pipeline.py).
+  Result: Feature logic is intentionally leakage-safe and creation-time based; training uses expanding temporal folds and explicit validation ordering; evaluation applies threshold tuning, significance tests, baseline comparisons, and summary generation; EDA is a supportive reporting layer that resolves data paths from the processed output manifest. No immediate contradiction was found between the architecture and the documented workflow.
+- [x] Check inputs/outputs and data types at the function boundaries.
+  Result: The pipeline consistently relies on pandas DataFrames with expected columns such as created_utc, ticker, title, selftext, excluded, and surge_label. The contracts are mostly explicit, but they still assume schema integrity and UTC-normalised timestamps.
+- [x] Inspect for assumptions about missing values, timestamps, duplicates, or malformed rows.
+  Result: Missing text is handled gracefully, empty-data guards exist, and timestamp conversion is centralised. However, the code does not appear to do broad validation for duplicate IDs, malformed timestamps, or inconsistent raw schema beyond the intended Reddit CSV assumptions.
+- [x] Look for hard-coded paths, constants, or dataset-specific assumptions.
+  Result: Several constants are intentionally project-root based, and default paths are resolved from the repo root. This is helpful for reproducibility, but there is still some operational dependence on the expected project layout and on known naming conventions for output files.
+- [x] Check edge cases: empty data, single-class labels, NaN values, short windows, small samples.
+  Result: The code includes explicit empty-data handling, sigma=0 safeguards, no-training fallback, and exclusion logic for low-count windows. This is one of the stronger areas of the review because the implementation anticipates failure modes rather than crashing silently.
+- [x] Verify that train/test splits preserve temporal integrity.
+  Result: Temporal ordering is enforced through timestamp-based folding and split validation in the training code. The design is appropriate for a time-series classification setting and reduces leakage risk.
+- [x] Compare implementation to project claims in documentation and reports.
+  Result: The implementation matches the published architecture and workflow closely. The main caveat is that documentation is broader than the exact validation evidence produced in execution, so runtime checks are still necessary to confirm the final metrics.
+- [x] Check for common code smells: silent fallback values, unchecked conversions, unstable sorting, duplicated logic, and unclear naming.
+  Result: The code is generally clean and intentional, with defensive fallbacks in the right places. A few implicit assumptions remain, particularly around input schema consistency and reliance on default output naming, but these are manageable and not systemic design failures.
 
 Assess
 - The reviewed modules show clear separation of concerns and sensible execution order.
-- The architecture is internally coherent: configuration, loader, windowing, sentiment, and labelling are intentionally composed around a reproducible pipeline.
-- The main remaining risk is completeness of the downstream review: feature engineering, model training, and evaluation must still be audited for leakage, metric validity, and reporting consistency.
-- Phase 2 outcome: the core pipeline has been audited for structure and logic; the remaining downstream modules are the next priority.
+- The architecture is internally coherent: configuration, loader, windowing, sentiment, labelling, feature generation, training, and evaluation are intentionally composed around a reproducible pipeline.
+- The main remaining risk is operational rather than architectural: a few assumptions about schema consistency, path layout, and output naming still need validation in real execution.
+- Phase 2 outcome: the full module review is complete and the pipeline appears structurally sound enough to move to Phase 3, outside-in data tracing.
 
 ### Phase 3 — Outside-in data tracing
 Goal: verify that raw source data flows correctly and meaningfully through the full pipeline.
