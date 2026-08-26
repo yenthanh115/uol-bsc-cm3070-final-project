@@ -10,23 +10,33 @@ TL;DR: Evaluate the codebase in four passes: broad scan first, then module-by-mo
 
 ### Phase 1 — Breadth-first scan
 Goal: understand the architecture and identify the critical execution path.
+Status: Completed.
 
 Checklist
-- [ ] Read the project overview in [README.md](../README.md) and [RUNNING_AND_TESTING.md](../RUNNING_AND_TESTING.md).
-- [ ] Review the package configuration and entry points in [pyproject.toml](../pyproject.toml).
-- [ ] Map the top-level folders: [input](../input), [output](../output), [src](../src), [reports](../reports), and [admin](../admin).
-- [ ] Identify the executable scripts: [src/run_labeling.py](../src/run_labeling.py), [src/run_training.py](../src/run_training.py), [src/run_cross_validation.py](../src/run_cross_validation.py), and [src/generate_figures.py](../src/generate_figures.py).
-- [ ] Confirm the pipeline lifecycle: raw data → feature engineering → label generation → model training → evaluation → reports.
-- [ ] Identify expected outputs and artifacts under [output](../output).
-- [ ] Record any assumptions about data sources, expected schema, and model types.
+- [x] Read the project overview in [README.md](../README.md) and [RUNNING_AND_TESTING.md](../RUNNING_AND_TESTING.md).
+  Result: The repo is positioned as a Reddit surge-prediction pipeline that loads subreddit submissions, aggregates temporal windows, applies sentiment scoring, labels surge events, and trains downstream classifiers. The documentation is consistent with the project intent.
+- [x] Review the package configuration and entry points in [pyproject.toml](../pyproject.toml).
+  Result: The build file defines Python 3.10+, package metadata, required ML/data dependencies, and CLI entry points for labeling, training, cross-validation, and figure generation. Dev tooling for pytest, ruff, and mypy is also configured.
+- [x] Map the top-level folders: [input](../input), [output](../output), [src](../src), [reports](../reports), and [admin](../admin).
+  Result: The structure cleanly separates immutable input data, generated outputs, source code, research reports, and project administration. This matches the intended project architecture.
+- [x] Identify the executable scripts: [src/run_labeling.py](../src/run_labeling.py), [src/run_training.py](../src/run_training.py), [src/run_cross_validation.py](../src/run_cross_validation.py), and [src/generate_figures.py](../src/generate_figures.py).
+  Result: These scripts exist in the codebase and align to the README’s claimed workflows: labelling, model training/evaluation, cross-dataset validation, and figure generation.
+- [x] Confirm the pipeline lifecycle: raw data → feature engineering → label generation → model training → evaluation → reports.
+  Result: The lifecycle is consistent with the implementation. The main orchestration file [src/surge_pipeline/pipeline.py](../src/surge_pipeline/pipeline.py) follows a load → window → sentiment → label flow, while the CLI scripts continue into model training and evaluation.
+- [x] Identify expected outputs and artifacts under [output](../output).
+  Result: The repository contains processed datasets, model files, evaluation summaries, figure folders, logs, and an experiment log. This matches the documentation and indicates a reproducible ML workflow.
+- [x] Record any assumptions about data sources, expected schema, and model types.
+  Result: The codebase assumes Reddit submission CSV inputs with consistent columns, generated feature tables, threshold-based labelling, and supervised classification models such as Logistic Regression, Random Forest, and XGBoost.
 
 Assess
-- Are the intended run paths documented consistently?
-- Are there mismatches between docs and actual scripts or folder structure?
-- Which modules are essential versus optional?
+- The intended run paths are documented consistently with the actual script structure.
+- There is no major mismatch between the documentation and repository layout.
+- The core modules are essential: loader, windowing, sentiment, labelling, features, training, evaluation, and orchestration.
+- Phase 1 outcome: the system architecture is confirmed and the repo is ready for the next phase, module-to-module review.
 
 ### Phase 2 — Module-to-module review
 Goal: inspect each major component in isolation to evaluate contracts, correctness, and robustness.
+Status: Core module pass executed.
 
 Primary modules to review
 - [src/surge_pipeline/config.py](../src/surge_pipeline/config.py) — configuration model and defaults
@@ -42,7 +52,18 @@ Primary modules to review
 - [src/eda/eda_pipeline.py](../src/eda/eda_pipeline.py) — exploratory analysis pathway
 
 Checklist
-- [ ] For each module, confirm its role and public API.
+- [x] Reviewed the configuration and orchestration contracts in [src/surge_pipeline/config.py](../src/surge_pipeline/config.py) and [src/surge_pipeline/pipeline.py](../src/surge_pipeline/pipeline.py).
+  Result: The config is a serialisable dataclass with explicit reproducibility parameters; the orchestration clearly stages load → window → sentiment → label and includes threshold sweep logic. The contracts are coherent and support auditability.
+- [x] Reviewed data loading and ticker extraction in [src/surge_pipeline/loader.py](../src/surge_pipeline/loader.py).
+  Result: The loader is structured around schema cleaning, timestamp conversion, and multi-ticker expansion, with a broad stopword list designed to reduce false positives. This is a robust design for Reddit finance text, but it depends on consistent raw schema assumptions and careful validation of missing fields.
+- [x] Reviewed temporal windowing in [src/surge_pipeline/windowing.py](../src/surge_pipeline/windowing.py).
+  Result: The code uses vectorised binary-search logic to compute forward/backward counts efficiently and supports both forward-growth and backward-only surge modes. The design is computationally efficient and exposes the important decision point of how the surge metric is defined.
+- [x] Reviewed sentiment logic in [src/surge_pipeline/sentiment.py](../src/surge_pipeline/sentiment.py).
+  Result: The implementation uses a Reddit-friendly default (VADER) and includes fallback handling for title-only and empty records. The sentiment pipeline is careful about excluded records and computes future-window sentiment consistently, which is a strength.
+- [x] Reviewed labelling and normalisation logic in [src/surge_pipeline/labelling.py](../src/surge_pipeline/labelling.py).
+  Result: Label generation is driven by temporal train/test splitting and z-score normalisation using train statistics only, which is the correct methodological pattern. The code handles sigma=0 edge cases and computes class distributions carefully, indicating good attention to reliability.
+- [ ] Review remaining downstream modules in [src/surge_pipeline/normalisation.py](../src/surge_pipeline/normalisation.py), [src/surge_pipeline/features.py](../src/surge_pipeline/features.py), [src/surge_pipeline/training.py](../src/surge_pipeline/training.py), [src/surge_pipeline/evaluation.py](../src/surge_pipeline/evaluation.py), and [src/eda/eda_pipeline.py](../src/eda/eda_pipeline.py).
+  Result: These modules remain to be checked for feature compatibility, temporal leakage safeguards, evaluation integrity, and reporting fidelity.
 - [ ] Check inputs/outputs and data types at the function boundaries.
 - [ ] Inspect for assumptions about missing values, timestamps, duplicates, or malformed rows.
 - [ ] Look for hard-coded paths, constants, or dataset-specific assumptions.
@@ -52,9 +73,10 @@ Checklist
 - [ ] Check for common code smells: silent fallback values, unchecked conversions, unstable sorting, duplicated logic, and unclear naming.
 
 Assess
-- Are module contracts coherent and consistent with the rest of the pipeline?
-- Are there hidden dependencies that break reproducibility?
-- Are failure paths explicit and diagnosable?
+- The reviewed modules show clear separation of concerns and sensible execution order.
+- The architecture is internally coherent: configuration, loader, windowing, sentiment, and labelling are intentionally composed around a reproducible pipeline.
+- The main remaining risk is completeness of the downstream review: feature engineering, model training, and evaluation must still be audited for leakage, metric validity, and reporting consistency.
+- Phase 2 outcome: the core pipeline has been audited for structure and logic; the remaining downstream modules are the next priority.
 
 ### Phase 3 — Outside-in data tracing
 Goal: verify that raw source data flows correctly and meaningfully through the full pipeline.
