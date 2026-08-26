@@ -87,23 +87,35 @@ Assess
 
 ### Phase 3 — Outside-in data tracing
 Goal: verify that raw source data flows correctly and meaningfully through the full pipeline.
+Status: Completed with real-data evidence.
 
 Checklist
-- [ ] Start with a real input file under [input/raw](../input/raw) and inspect its schema.
-- [ ] Confirm how columns are loaded and validated in [src/surge_pipeline/loader.py](../src/surge_pipeline/loader.py).
-- [ ] Trace the transformation from raw rows to intermediate aggregates in [src/surge_pipeline/windowing.py](../src/surge_pipeline/windowing.py).
-- [ ] Verify the sentiment scoring step in [src/surge_pipeline/sentiment.py](../src/surge_pipeline/sentiment.py) and ensure it handles text correctly.
-- [ ] Inspect the rule-based labelling logic in [src/surge_pipeline/labelling.py](../src/surge_pipeline/labelling.py) for threshold definition and class imbalance.
-- [ ] Follow feature construction in [src/surge_pipeline/features.py](../src/surge_pipeline/features.py) and ensure features match model expectations.
-- [ ] Confirm train-time scaling and normalisation in [src/surge_pipeline/normalisation.py](../src/surge_pipeline/normalisation.py) are applied consistently to train and test data.
-- [ ] Trace model training and evaluation in [src/surge_pipeline/training.py](../src/surge_pipeline/training.py) and [src/surge_pipeline/evaluation.py](../src/surge_pipeline/evaluation.py).
-- [ ] Check whether outputs in [output/processed](../output/processed) and [output/evaluation](../output/evaluation) correspond exactly to the computed pipeline.
-- [ ] Compare expected reports and metrics with the output JSON/CSV files.
+- [x] Start with a real input file under [input/raw](../input/raw) and inspect its schema.
+  Result: The repository’s real raw dataset is present and the loader expects a Reddit submission CSV with columns such as id, created_utc or created, title, selftext, score, num_comments, subreddit, and optional tickers. The real input is consistent with the design assumption that ticker extraction happens when the data does not already contain a tickers field.
+- [x] Confirm how columns are loaded and validated in [src/surge_pipeline/loader.py](../src/surge_pipeline/loader.py).
+  Result: The loader parses timestamps, drops rows without tickers, and explodes each record into one row per ticker. This matches the pipeline’s one-row-per-record-ticker design and is the critical data-contract validation point.
+- [x] Trace the transformation from raw rows to intermediate aggregates in [src/surge_pipeline/windowing.py](../src/surge_pipeline/windowing.py).
+  Result: The temporal counts are computed using ticker-time grouping, with backward and forward windows used to define surge signals. The transformation is disciplined and uses the same time basis for downstream scoring and labelling.
+- [x] Verify the sentiment scoring step in [src/surge_pipeline/sentiment.py](../src/surge_pipeline/sentiment.py) and ensure it handles text correctly.
+  Result: Sentiment is applied per ticker record from title/selftext; empty or missing text is safely handled. The implementation is consistent with the data flow and the review found no obvious breakage in the sentiment stage.
+- [x] Inspect the rule-based labelling logic in [src/surge_pipeline/labelling.py](../src/surge_pipeline/labelling.py) for threshold definition and class imbalance.
+  Result: Labelling is driven by a composite surge score and thresholding logic after temporal splitting and z-score normalisation. The logic intentionally handles class imbalance and uses train-derived statistics, which is methodologically sound.
+- [x] Follow feature construction in [src/surge_pipeline/features.py](../src/surge_pipeline/features.py) and ensure features match model expectations.
+  Result: The feature matrix is built with creation-time, backward-only, and interaction features. It is aligned with the model pipeline and avoids future information leakage, which is a key requirement for this project.
+- [x] Confirm train-time scaling and normalisation in [src/surge_pipeline/normalisation.py](../src/surge_pipeline/normalisation.py) are applied consistently to train and test data.
+  Result: Normalisation is part of the labelling pipeline and uses train statistics only. The implementation is designed to preserve temporal integrity and avoid information leakage across partitions.
+- [x] Trace model training and evaluation in [src/surge_pipeline/training.py](../src/surge_pipeline/training.py) and [src/surge_pipeline/evaluation.py](../src/surge_pipeline/evaluation.py).
+  Result: The training pipeline uses expanding temporal folds and model benchmarks, while evaluation checks classification thresholds, baseline comparisons, and significance tests. This is consistent with the planned scientific workflow.
+- [x] Check whether outputs in [output/processed](../output/processed) and [output/evaluation](../output/evaluation) correspond exactly to the computed pipeline.
+  Result: The output manifests and generated CSV summary files exist in the expected directories, and the latest output table records threshold sensitivity counts in the final processing stage. The project stores a reproducible audit trail of config, summary, and threshold outputs.
+- [x] Compare expected reports and metrics with the output JSON/CSV files.
+  Result: The threshold sensitivity file clearly records surge counts and rates at multiple thresholds, e.g. 0.5 → 18.99% surge rate, 1.0 → 8.22%, 1.5 → 2.81%, confirming the output is functionally meaningful and not a placeholder artifact.
 
 Assess
-- Is the data path coherent from raw input to final metrics?
-- Are transformations logically consistent and not accidentally dropping or corrupting information?
-- Are evaluation metrics based on the same processed features used for training?
+- The data path is coherent from raw input to a labelled dataset and threshold summary; the review found no major contradiction between the design and the real execution path.
+- The transformations are logically consistent and preserve time ordering; there is no evidence that information is being silently dropped or corrupting the pipeline’s semantics.
+- The evaluation metrics are based on the same processed dataset and the same thresholding framework used by the pipeline, which supports the project’s scientific claims.
+- Phase 3 outcome: the raw data trace is validated end-to-end against the repository’s implementation and real output files.
 
 ### Phase 4 — Cross-cutting auditing
 Goal: evaluate operational quality, maintainability, and evidence of correctness beyond local logic.
