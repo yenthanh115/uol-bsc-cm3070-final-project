@@ -13,3 +13,5 @@ pytest>=7.0
 mypy>=1.10
 ruff>=0.4
 pandas-stubs>=2.0
+kaggle>=1.6
+huggingface_hub>=0.20
