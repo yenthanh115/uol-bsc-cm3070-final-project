@@ -1,0 +1,5 @@
+dataset,path,sample_rows,n_columns,date_col,date_span,text_col,engagement_cols,sentiment_col,avg_missing_pct,unique_tickers_sampled,bullish_bearish_ratio,has_engagement,has_text,has_date,surge_label_ready
+leukipp_pennystocks/submissions_reddit,leukipp_pennystocks\submissions_reddit.csv,20000,24,created,2021-01-01 → 2021-02-16,title,"score,num_comments",,0.74,422,2.73,True,True,True,True
+leukipp_wallstreetbets/submissions_reddit,leukipp_wallstreetbets\submissions_reddit.csv,20000,24,created,2021-01-01 → 2021-01-19,title,"score,num_comments",,1.53,166,2.01,True,True,True,True
+davidwallach_financial-tweets/stockerbot-export,davidwallach_financial-tweets\stockerbot-export.csv,20000,8,timestamp,2018-02-23 → 2018-07-19,text,,,2.38,2385,2.69,False,True,True,False
+vivekrathi055_sentiment-analysis-on-financial-tweets/stockerbot-export1,vivekrathi055_sentiment-analysis-on-financial-tweets\stockerbot-export1.csv,20000,8,timestamp,2018-02-23 → 2018-07-19,text,,,2.38,2385,2.69,False,True,True,False
