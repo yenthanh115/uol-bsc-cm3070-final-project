@@ -118,6 +118,7 @@ The project's conclusions hold under the explicit assumptions in [@tbl:assumptio
 | 5 | Backward-looking signal is sufficient, and performance scales with data density over model complexity | The core hypothesis, tested directly in [@sec:eval-objectives] |
 | 6 | The 2021 archive is informative beyond its window | Weakest assumption; treated as a limitation ([@sec:proposed-improvements]) and in the conclusion |
 | 7 | Public forum text is usable in aggregate | Records are public submissions, analysed at ticker level with no individual user identification |
+| 8 | Static, complete, well-ordered input data | Features and frozen statistics assume gap-free, chronologically ordered input with a stable schema, as in the archival dataset; a production stream (missing or late posts, schema drift, vocabulary shift) would require re-ingestion safeguards and periodic recalibration ([@sec:temporal-stability]) |
 
 : Explicit project assumptions and where each is addressed. {#tbl:assumptions}
 
