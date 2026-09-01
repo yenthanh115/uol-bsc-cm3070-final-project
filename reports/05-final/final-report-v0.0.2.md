@@ -91,7 +91,37 @@ These use cases do not share an identical error tolerance. For surveillance and 
 
 Standard rule-based heuristics, such as flagging a ticker when volume exceeds $+2\sigma$, cannot capture non-linear interactions across diverse data streams. This project proposes a learning-based approach that integrates temporal, textual, and sentiment features into a unified predictive framework. Prior research focuses on related but different problems, forecasting eventual content reach or predicting price movements, rather than predicting sudden short-term spikes in discussion volume for specific tickers (see [@sec:research-gap]).
 
-## Prediction Scope and Surge Definition
+## End-User Pain Points {#sec:pain-points}
+
+The three user groups introduced above share a common structural problem: the volume of candidate tickers vastly exceeds the human capacity available to review them, and the surges that matter develop faster than manual monitoring can react. [@tbl:pain-points] summarises the specific pain point each group faces and why current practice falls short. These pain points motivate the design choices in [@sec:surge-definition] (defining a discrete, rankable target) and the operational framing in [@sec:operational-criteria] (deriving acceptance thresholds from analyst throughput).
+
+| User group | Pain point | Current workaround and its limit |
+|------------|--------------------|--------------------------|
+| Market surveillance / compliance | Thousands of tickers are discussed daily; potentially coordinated or unusual activity must be triaged, but surges develop too fast for manual review [1] | Rule-based volume alerts (e.g. $+2\sigma$) miss non-linear, multi-signal precursors and cannot rank candidates by likelihood |
+| Quantitative researchers | A small set of tickers must be selected for deeper analysis from a large, noisy universe | Manual scanning is slow, subjective, and tends to surface tickers only after they have already become prominent |
+| Platform moderators | Monitoring and moderation capacity must be positioned *before* discussion spikes, not after | Reactive moderation begins once a spike is already underway, when intervention is hardest |
+
+: End-user pain points and the shortcomings of current practice. {#tbl:pain-points}
+
+Across all three groups, the underlying need is the same: an *early, ranked shortlist* that compresses a large candidate universe into a reviewable queue. This is the value the project targets, a prioritisation layer that surfaces likely surges before they peak, leaving causal judgement and action to the human reviewer ([@sec:operational-criteria]).
+
+## Assumptions {#sec:assumptions}
+
+The project's conclusions hold under the explicit assumptions in [@tbl:assumptions], ordered from strongest to weakest. Stating them clarifies the boundary conditions for interpreting the results and signals where the analysis is most exposed.
+
+| # | Assumption | Basis and where addressed |
+|---|--------------------|-------------------|
+| 1 | Human-in-the-loop deployment: the system prioritises candidates for a reviewer, not autonomous action | Underpins the acceptance criteria ([@sec:operational-criteria]); automation would need far higher precision and calibration |
+| 2 | Bounded analyst throughput of ~20–30 flagged tickers per day | Anchors the daily-alert-volume criterion; a different capacity shifts the operating point, not the model |
+| 3 | Ticker mentions proxy genuine discussion of a stock | Stopword-filtered regex extraction ([@sec:feature-engineering]) trades precision for recall, accepting minor mention noise |
+| 4 | A 24-hour horizon is operationally relevant | Design choice aligned to the daily cycle, not an optimised horizon; multi-scale alternatives are future work ([@sec:proposed-improvements]) |
+| 5 | Backward-looking signal is sufficient, and performance scales with data density over model complexity | The core hypothesis, tested directly in [@sec:eval-objectives] |
+| 6 | The 2021 archive is informative beyond its window | Weakest assumption; treated as a limitation ([@sec:proposed-improvements]) and in the conclusion |
+| 7 | Public forum text is usable in aggregate | Records are public submissions, analysed at ticker level with no individual user identification |
+
+: Explicit project assumptions and where each is addressed. {#tbl:assumptions}
+
+## Prediction Target {#sec:prediction-target}
 
 The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively. This project focuses on surges: statistically significant, short-term spikes in both **posting volume** and **sentiment intensity** for a ticker **within a 24-hour window**, identified using a composite metric combining normalised volume growth with sentiment shift magnitude (see [@sec:sentiment-contribution]). Because surges are discrete and quantifiable, they can be framed as a binary classification problem.
 
@@ -99,7 +129,7 @@ The target is based on timestamped post volume rather than engagement metrics li
 
 The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, and that predictive performance scales with data density rather than model complexity.
 
-## Scope
+## Study Scope and Exclusions
 
 This study evaluates binary surge classification across two archival 2021 Reddit datasets: `r/pennystocks` and `r/wallstreetbets` (hereafter **WSB**). Using strictly backward-looking features, three classifier families: Logistic Regression (**LR**), Random Forest (**RF**), and XGBoost (**XGB**) are trained to predict 24-hour ticker surges. Model performance is assessed using an 80/20 chronological holdout split alongside 4-fold expanding-window cross-validation, supported by bootstrap confidence intervals, McNemar's pairwise tests, and single-feature baselines. Cross-dataset transfer experiments assess model generalisability, using a fully deterministic pipeline with fixed seeds for end-to-end reproducibility.
 
