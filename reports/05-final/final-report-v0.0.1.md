@@ -1,5 +1,5 @@
 ---
-title: "Predicting Posting-Volume Surges on Reddit Financial Communities Using Machine Learning"
+title: "Predicting Volume and Sentiment Surges in Reddit Financial Communities Using Machine Learning"
 # pandoc-crossref configuration (auto-numbering for tables, figures, sections)
 figureTitle: "Figure"
 tableTitle: "Table"
@@ -906,7 +906,7 @@ These unit tests execute on synthetic datasets and run automatically prior to ev
 
 ## Evaluation Against Project Objectives {#sec:eval-objectives}
 
-### Objective 1: Predict Posting-Volume Surges
+### Objective 1: Predict Volume and Sentiment Surges
 
 Predictability depends directly on data density. On `WSB` (68,923 test records, 0.97% surge rate), both tree-based models cleared the stretch tier: XGBoost 0.892 [95% CI: 0.881–0.902], Random Forest 0.880 [0.869–0.890]. Both exceed the best single feature (`word_count` alone: 0.805). On sparser `r/pennystocks` (3,278 test records, 0.95% surge rate), Random Forest achieved 0.753 [0.673–0.824], meeting target; the best single feature (`hour_of_day`) manages only 0.591, confirming multi-feature combination is essential. The binding constraint is data density, not methodology.
 
@@ -1137,7 +1137,7 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 ## Current Achievements
 
-The core question driving this project addresses a critical gap in the existing literature: can posting-volume surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To prevent the future-engagement feature leakage common in prior work, such as reliance on post-hoc upvote or comment counts, the proposed pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
+The core question driving this project addresses a critical gap in the existing literature: can volume and sentiment surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To prevent the future-engagement feature leakage common in prior work, such as reliance on post-hoc upvote or comment counts, the proposed pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
 
 The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs. Ultimately, this work provides three core contributions: a rigorous leakage-free forecasting methodology, a composite surge metric, and empirical evidence identifying data density as the primary constraint on predictive performance.
 
