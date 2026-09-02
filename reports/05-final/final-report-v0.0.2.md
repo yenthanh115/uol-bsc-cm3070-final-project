@@ -249,7 +249,24 @@ This project addresses these gaps directly. First, the composite surge metric ([
 
 # Design
 
-## System Architecture
+## Requirements and Design Goals {#sec:requirements}
+
+Before detailing the pipeline, this subsection translates the user and domain needs from Section 1 into the concrete requirements that shape every subsequent design choice. The three user groups ([@tbl:pain-points]) share one underlying need, an early, ranked shortlist of tickers likely to surge, and the research question ([@sec:problem-motivation]) demands that this prediction be both genuinely predictive and trustworthy. Those needs, together with the project objectives and assumptions ([@tbl:assumptions]), give rise to six design goals. [@tbl:design-goals] states each goal, the need it answers, and where the design satisfies it.
+
+| # | Design goal | Driving need | Where satisfied |
+|---|-------------|--------------|-----------------|
+| G1 | **Early prediction.** Flag a surge before it happens, from signals available at observation time, rather than confirming one after the fact | Moderators must act before spikes; researchers and surveillance need lead time, not hindsight ([@tbl:pain-points]) | Forward-looking target over a 24-hour horizon ([@sec:surge-definition]) |
+| G2 | **No future information.** No feature, label, or statistic may draw on data later than the record being scored | The core methodological weakness in prior work is temporal leakage ([@sec:methodological-weaknesses]); predictions must hold on genuinely unseen future data | Backward-only features ([@sec:feature-engineering]), train-frozen z-scores ([@sec:surge-definition]), time-ordered validation ([@sec:temporal-validation]) |
+| G3 | **Ranked, interpretable outputs.** Produce a probability that ranks tickers for a human reviewer, with a transparent, inspectable feature basis | The system is a prioritisation aid, not an autonomous decision-maker; reviewers must be able to triage and trust a shortlist ([@sec:operational-criteria]) | Probability ranking with top-$k$ review, interpretable baseline model, permutation importance ([@sec:model-selection], [@sec:operational-criteria]) |
+| G4 | **Operational usefulness.** Meet explicit ranking, recall, precision, and alert-volume targets tied to analyst throughput | A shortlist is only useful if it fits a reviewer's daily capacity and catches enough genuine surges to be worth the effort | Acceptance criteria derived from workflow constraints ([@tbl:acceptance-criteria]) |
+| G5 | **Reproducibility.** Any run must reproduce byte-identically from a fixed, publicly available data snapshot and fixed seeds | Third parties must be able to verify the results; a moving data source or hidden randomness would undermine the claims | Static archival dataset ([@sec:eda]), deterministic seeded pipeline (Section 4) |
+| G6 | **Robust evaluation.** Compare models against baselines with quantified uncertainty and significance, on a chronological holdout | Objective 2 requires knowing whether complexity actually helps, not just which number is largest, and by how much it could vary | Expanding-window CV, bootstrap intervals, McNemar's tests, single-feature baselines ([@sec:temporal-validation], [@sec:evaluation-framework]) |
+
+: Design goals traced from user and domain needs to where each is satisfied. {#tbl:design-goals}
+
+These goals are not independent. G2 (no future information) is the strongest constraint and cuts across the whole pipeline: it forbids post-hoc engagement features, forces training-only normalisation, and rules out random cross-validation. G1 and G3 fix *what* is predicted and *how the output is used*, G4 sets the bar for *useful enough*, and G5 and G6 govern *how the result is produced and judged*. The subsections that follow work through the design in the order the pipeline runs, and each returns to the goal or goals it serves.
+
+## Overall Pipeline Architecture
 
 The prediction system is a six-stage linear pipeline. Each stage consumes the previous stage's output and writes intermediate artefacts to disk, enabling independent re-execution without recomputing upstream operations.
 
@@ -264,62 +281,17 @@ The prediction system is a six-stage linear pipeline. Each stage consumes the pr
 
 The foundational constraint is that **no stage may access future information relative to any record's observation time**. Features use backward-looking windows exclusively, z-scores are frozen from training statistics, and validation folds are strictly time-ordered.
 
-## Data Selection and Characteristics
+## Data Selection Plan {#sec:eda}
 
-### Platform Selection
+Before any modelling, the design contains a dedicated exploratory data analysis (EDA) phase (Phase 3 of the development plan, [@tbl:timeline]) to decide what data the project should use. The EDA is a screening step kept separate from the prediction pipeline: it is a decision aid that answers three questions in turn, and records why the rejected options were rejected. Its tooling and results are reported in [@sec:eda-tooling]; this subsection sets out what it must decide and the criteria it will apply.
 
-The prediction task imposes five requirements on the data source: (1) public availability without authentication barriers, enabling third-party reproduction; (2) per-record timestamps at sub-hourly granularity, supporting 24-hour windowing; (3) per-entity (ticker) attribution, allowing surge computation at the stock level rather than the aggregate level; (4) sufficient post volume to construct meaningful per-ticker time series; and (5) archival availability as a static snapshot, ensuring identical data across experimental runs.
+**Which platform.** The data source must meet five requirements: public availability without authentication barriers (for reproducibility), per-record timestamps at sub-hourly granularity (for 24-hour windowing), per-ticker attribution (so surges are computed per stock), enough volume for meaningful per-ticker time series, and a static archival snapshot (so every run sees identical data). The third is decisive: without engagement fields and explicit ticker attribution a source cannot support a surge label at all, whatever its size. The EDA will compare the realistic candidates, Reddit and Twitter/X, against these criteria on the actual data.
 
-| Criterion | Reddit | Twitter/X |
-|-----------|--------|-----------|
-| Public bulk archive | Yes (Kaggle, Pushshift) | No (API restricted post-2023) |
-| Timestamp granularity | Unix-second | Unix-second |
-| Per-ticker attribution | Explicit ($TICKER convention) | Implicit (cashtags, noisy) |
-| Volume (2021, finance) | ~1.3M submissions across 9 subreddits | Higher volume but inaccessible in bulk |
-| Reproducibility | Static CSV, byte-identical across runs | Rate-limited streaming; results vary by collection window |
+**Which communities.** Within the chosen platform, the design calls for two communities at opposite ends of posting density, so the same method can be tested under both abundance and scarcity, a pairing that speaks to domain specificity (Gap 3) and enables the cross-dataset transfer evaluation. The EDA will screen candidate subreddits on three criteria, ticker diversity, post volume surviving ticker extraction, and availability of selftext for sentiment, rejecting communities whose long-form posting defeats per-ticker extraction or whose single-ticker focus makes the design trivial.
 
-: Platform comparison against selection criteria. {#tbl:platform-comparison}
+**Whether a surge signal exists.** A platform and two communities are not enough on their own; the design also needs evidence that a workable surge signal can be defined before the pipeline is built. The EDA therefore ends with a viability gate: a community is usable only if the surge-label fields are present and at least one candidate surge definition yields a positive class large enough to learn from, with data quality, temporal coverage, and sentiment reliability recorded as supporting evidence. This gate uses a deliberately simple surge heuristic on sampled data, distinct from the leakage-free composite target the pipeline uses for actual labelling ([@sec:surge-definition]), so its sample-level statistics are expected to differ from the pipeline's full-run figures.
 
-Twitter/X was the strongest alternative on volume and timestamp granularity but became infeasible after the 2023 API policy changes eliminated affordable bulk access for academic research. Reddit satisfies all five criteria simultaneously: publicly archived with per-second timestamps, explicit ticker conventions in financial subreddits, sufficient volume for statistical learning, and available as static Kaggle exports that guarantee byte-identical reproduction.
-
-Specifically, this project uses the Reddit Finance Data collection on Kaggle [21], a curated static export covering nine financial subreddits. The archive spans the 2021 calendar year, the only period available in this dataset. This period coincidentally includes the January GameStop meme-stock episode, providing genuine high-magnitude surges for the model to learn from alongside months of more typical activity. While the time period was not selected for this reason, the presence of both extreme and steady-state regimes within a single year strengthens evaluation. The trade-off is that engagement fields (score, num_comments) represent final snapshot values rather than point-in-time observations, addressed by excluding them from features entirely ([@sec:feature-engineering]).
-
-### Subreddit Selection
-
-The Reddit Finance Data archive on Kaggle [21] was selected over alternative acquisition routes (direct Reddit API, Pushshift dumps) because it uniquely combines completeness, accessibility, and reproducibility. The direct API enforces rate limits that make historical bulk collection impractical and non-reproducible across researchers. Pushshift provides comprehensive archives but access became unreliable after mid-2023 policy changes and requires multi-terabyte processing infrastructure. The Kaggle archive offers a single downloadable, version-controlled CSV export covering nine financial subreddits for the full 2021 calendar year (~1.38M submissions), with per-second timestamps, post text, and engagement fields producing byte-identical data across runs.
-
-From the nine available subreddits, two were selected to represent opposite extremes of posting density. Three criteria guided the choice: (a) sufficient ticker diversity for per-ticker windowing, (b) adequate post volume after ticker extraction to support temporal cross-validation, and (c) availability of selftext for sentiment computation.
-
-| Subreddit | Raw Records | Ticker Diversity | Suitability |
-|-----------|-------------|------------------|-------------|
-| `WSB` | ~1,294,000 | High (multi-ticker) | Dense mainstream community; selected |
-| `r/pennystocks` | ~305,000 | High (2,912 tickers; lowest missing-selftext rate) | Sparse niche community; selected |
-| `r/stocks` | ~200,000 | Low (longer-form, fewer ticker mentions) | Rejected: >90% exclusion after extraction |
-| `r/investing` | ~150,000 | Low (portfolio/strategy focus) | Rejected: same issue as r/stocks |
-| `r/GME` | ~273,000 | Single ticker | Rejected: per-ticker design becomes trivial |
-
-: Candidate subreddit evaluation. {#tbl:subreddit-eval}
-
-`WSB` provides the high-density condition: 577,872 exploded record–ticker pairs with stable per-ticker statistics. `r/pennystocks` provides the low-density condition: 80,212 pairs, testing methodology viability under sparsity. The remaining subreddits were excluded because their posting norms produced extraction-stage exclusion exceeding 90% or because single-ticker focus eliminates the cross-stock dimension. Additional subreddits are acknowledged as future work ([@sec:proposed-improvements]).
-
-- `r/pennystocks`: sparse niche community (80,212 exploded records) focused on low-capitalisation equities, testing methodology under data scarcity.
-- `WSB`: high-volume mainstream forum (577,872 exploded records), testing scalability and signal isolation within high-noise environments.
-
-This dual-dataset strategy addresses Gap 3 (domain specificity) and enables cross-dataset transfer evaluation.
-
-| Property | r/pennystocks | WSB |
-|----------|---------------|------------------|
-| Raw records | 304,524 | 1,293,981 |
-| Date range | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-12-31 |
-| After ticker extraction (exploded) | 80,212 | 577,872 |
-| Usable records (post-exclusion) | 24,827 | 457,072 |
-| Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
-| Test surges | 31 | 668 |
-| Test imbalance ratio | 105:1 | 102:1 |
-
-: Dataset characteristics. {#tbl:dataset-characteristics}
-
-**Ethics:** All data consists of publicly posted forum submissions; analysis is aggregated at ticker level with no individual user identification. **Known limitations:** Survivorship bias (deleted posts absent), frozen engagement metrics, and results bound to 2021.
+**Ethics and known limitations.** All data is publicly posted forum submissions, analysed only at ticker level with no individual user identified. The main limitations are inherited from the source: deleted posts are absent (a survivorship bias), engagement metrics are frozen at their final values, and any findings are tied to the 2021 period the archive covers.
 
 ## Surge Definition (Target Variable) {#sec:surge-definition}
 
@@ -335,19 +307,9 @@ Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the tra
 
 **Observation window:** A 24-hour window aligns with daily trading cycles. Shorter windows (6h) yield sparse per-ticker counts and unstable statistics; longer windows (72h) blur surge onset with sustained activity. [@sec:proposed-improvements] explores multi-scale alternatives.
 
-**Sentiment weighting:** Incorporating $\Delta S$ captures scenarios where discussion grows polarised without immediate volume spikes [4, 10]. A volume-only definition ($w_2 = 0$) degrades AUC on `WSB` from 0.892 to 0.710 ([@sec:sentiment-contribution]).
+**Sentiment weighting:** Incorporating $\Delta S$ is intended to capture scenarios where discussion grows polarised without an immediate volume spike [4, 10], on the hypothesis that a rising emotional charge can precede a surge. Whether it earns its place is tested by comparing a volume-only target against the composite, reported in [@sec:sentiment-contribution]. The EDA phase separately screens the reliability of the VADER signal that underpins $\Delta S$ before it is committed to ([@sec:eda-tooling]).
 
-| $\tau$ | Surge Count | Surge Rate | Imbalance Ratio |
-|---|-------------|------------|-----------------|
-| $0.5$ | 80,455 | 17.6% | 4.7:1 |
-| $1.0$ | 22,384 | 4.9% | 19.4:1 |
-| $\mathbf{1.5}$ | **6,602** | **1.4%** | **68.2:1** |
-| $2.0$ | 2,873 | 0.6% | 158:1 |
-| $2.5$ | 1,348 | 0.3% | 338:1 |
-
-: Threshold sensitivity on WSB. {#tbl:threshold-sensitivity}
-
-**Threshold selection:** $\tau = 1.5$ isolates true statistical anomalies (1.4% surge rate) while retaining sufficient positive instances (668 test surges on `WSB`) for reliable estimation. A secondary evaluation at $\tau = 1.0$ provides sensitivity analysis.
+**Threshold selection:** The threshold $\tau$ trades anomaly purity against class balance: a high $\tau$ isolates rarer, more clearly anomalous surges but leaves fewer positives to learn from, while a low $\tau$ does the reverse. The design fixes $\tau = 1.5$ as the primary operating point, intended to isolate genuine statistical anomalies while retaining enough positive instances for stable estimation, with $\tau = 1.0$ retained as a secondary point for sensitivity analysis. The EDA viability gate ([@sec:eda]) exists precisely to confirm, before this is committed to, that a workable positive class survives at comparably strict definitions; the measured surge counts across $\tau$ are reported with the sensitivity analysis in [@sec:eval-objectives].
 
 **Two-phase validation:** Phase 1 ($w_1 = 1.0, w_2 = 0.0$) evaluates a volume-only target; Phase 2 ($w_1 = 0.5, w_2 = 0.5$) evaluates the composite. Comparing phases isolates sentiment's empirical contribution. A full weight sweep ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$) is reported in [@sec:sentiment-contribution].
 
@@ -371,9 +333,9 @@ All eleven features satisfy a strict backward-looking constraint: each is derive
 
 : Feature definitions. All features use backward-looking or concurrent information only. {#tbl:feature-definitions}
 
-Features are organised into four categories: **content** (textual characteristics and sentiment), **temporal** (cyclical market-aligned patterns), **activity** (discussion momentum drawing on popularity prediction literature [1, 5]), and **interaction** (cross-feature dynamics that yielded +1.4pp AUC lift in ablation on `r/pennystocks`).
+Features are organised into four categories: **content** (textual characteristics and sentiment), **temporal** (cyclical market-aligned patterns), **activity** (discussion momentum drawing on popularity prediction literature [1, 5]), and **interaction** (cross-feature products that give the models an explicit signal for combined dynamics, such as long analytical posts arriving at peak trading hours, without relying on deep tree splits to discover them). The empirical value of the interaction terms is assessed by ablation in the evaluation.
 
-## Model Selection
+## Model Selection {#sec:model-selection}
 
 The prediction objective is a supervised binary classification task ($y \in \{0, 1\}$): whether a ticker experiences a composite surge within the subsequent 24 hours. Three classifier families spanning the complexity spectrum evaluate whether architectural sophistication improves prediction:
 
@@ -385,7 +347,7 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 
 **Handling class imbalance:** SMOTE is unsuitable for temporal data because synthetic instances lack meaningful timestamps and risk local data leakage. Instead, imbalance is addressed via cost-sensitive learning: `class_weight='balanced'` for LR and RF, and `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
-## Temporal Validation Design
+## Temporal Validation Design {#sec:temporal-validation}
 
 Standard $k$-fold cross-validation violates chronological ordering by permitting models to train on future observations while validating on past ones, systematically overestimating performance [19]. The evaluation pipeline employs a two-level temporal partitioning scheme:
 
@@ -397,7 +359,7 @@ Standard $k$-fold cross-validation violates chronological ordering by permitting
 
 A fold count of $k = 4$ ensures sufficient positive surge instances per validation window for stable AUC estimation while maintaining adequate initial training depth. Following hyperparameter optimization, $F_1$-optimized decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in [@sec:temporal-stability].
 
-## Evaluation Framework
+## Evaluation Framework {#sec:evaluation-framework}
 
 The empirical evaluation addresses four questions: (1) Do models predict surges significantly better than trivial baselines? (2) Do ensemble methods yield statistically significant gains over linear baselines? (3) How confident are the metric estimates? (4) Does the learned representation generalise across communities?
 
@@ -515,6 +477,65 @@ Executable commands are exposed via entry-point CLI scripts to streamline indivi
 
 Pipeline behavior is controlled centrally via a `PipelineConfig` dataclass, which holds every tuneable parameter and can be overridden via configuration files. To guarantee determinism across runs, a fixed global seed (default 42) is systematically set across Python's native random module, NumPy, and all scikit-learn estimators.
 
+## Exploratory Data Analysis Tooling {#sec:eda-tooling}
+
+The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `src/eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `src/eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
+
+| Notebook | Screening stage | Input | Output artefact |
+|----------|-----------------|-------|-----------------|
+| `01_discovery.ipynb` | Candidate discovery | Kaggle + HuggingFace dataset APIs | `candidates.csv` |
+| `02_highlevel_eval.ipynb` | High-level comparative profiling | Shortlisted CSVs (20k-row sample each) | `highlevel_comparison.csv` |
+| `03_deep_assessment.ipynb` | Deep viability assessment | Selected Reddit datasets (up to 100k rows) | `deep_assessment.csv` + figures |
+
+: EDA notebooks, in run order, with their inputs and outputs. All three are standalone and share no code with the pipeline package. {#tbl:eda-notebooks}
+
+**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 from Kaggle, 10 from HuggingFace). Because these search APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a relevance score that blends that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel whose output is a draft shortlist, not a decision, and it degrades gracefully to an empty result if the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [21] appears in this shortlist alongside several Twitter and tweet-based alternatives.
+
+**Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap-to-compute properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields needed to build a surge label (text, timestamp, engagement) are present. Profiling runs on a 20,000-row sample per dataset for speed and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets have no engagement fields at all and cannot support a surge label regardless of their ticker vocabulary.
+
+| Dataset | Records (sampled) | Date span | Engagement fields | Surge-label ready |
+|---------|-------------------|-----------|-------------------|-------------------|
+| `r/pennystocks` submissions | 20,000 | 2021-01-01 to 2021-02-16 | Yes (`score`, `num_comments`) | Yes |
+| `WSB` submissions | 20,000 | 2021-01-01 to 2021-01-19 | Yes (`score`, `num_comments`) | Yes |
+| `financial-tweets` (stockerbot) | 20,000 | 2018-02-23 to 2018-07-19 | No | No |
+| `sentiment-analysis-financial-tweets` | 20,000 | 2018-02-23 to 2018-07-19 | No | No |
+
+: High-level dataset comparison from the EDA screening. Profiled on a 20,000-row sample per dataset; the Twitter-derived datasets are excluded because they carry no engagement fields and cannot support a surge label. {#tbl:eda-highlevel}
+
+Applying the subreddit criteria from [@sec:eda] across the nine available Reddit subreddits produces [@tbl:subreddit-eval]. Three fall away immediately: `r/stocks` and `r/investing` favour longer-form, strategy-oriented posts that mention few explicit tickers, so more than 90% of their records drop out at the extraction stage, and `r/GME` centres on a single ticker, which collapses the per-ticker design. That leaves `WSB` as the high-density community (577,872 exploded record-ticker pairs) and `r/pennystocks` as the sparse one (80,212 pairs).
+
+| Subreddit | Raw Records | Ticker Diversity | Suitability |
+|-----------|-------------|------------------|-------------|
+| `WSB` | ~1,294,000 | High (multi-ticker) | Dense mainstream community; selected |
+| `r/pennystocks` | ~305,000 | High (2,912 tickers; lowest missing-selftext rate) | Sparse niche community; selected |
+| `r/stocks` | ~200,000 | Low (longer-form, fewer ticker mentions) | Rejected: >90% exclusion after extraction |
+| `r/investing` | ~150,000 | Low (portfolio/strategy focus) | Rejected: same issue as r/stocks |
+| `r/GME` | ~273,000 | Single ticker | Rejected: per-ticker design becomes trivial |
+
+: Candidate subreddit evaluation. {#tbl:subreddit-eval}
+
+**Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement as a reliability check on the sentiment signal, then runs a surge-viability sweep across nine candidate surge definitions formed by crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition yields a positive class above a minimum viable rate. Both datasets pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
+
+| Property | `r/pennystocks` | `WSB` |
+|----------|-----------------|-------|
+| Records assessed | 54,785 | 100,000 |
+| Date range (sampled) | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-01-28 |
+| Coverage / gaps (>7 days) | 364 days / 0 | 27 days / 0 |
+| Sentiment agreement (VADER vs TextBlob) | 0.723 (good) | 0.661 (moderate) |
+| Viable surge definitions | 4 / 9 | 3 / 9 |
+| Best positive-class rate | 5.8% | 5.0% |
+| Recommendation | Suitable | Suitable |
+
+: Deep viability assessment from the EDA screening. Both Reddit datasets clear the viability bar; the sweep and quality metrics confirm a workable positive class exists before any pipeline development. {#tbl:eda-deep}
+
+[@fig:eda-viability] shows the surge-viability sweep for `WSB` and how the positive-class rate shrinks as the definition gets stricter, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties that motivate the sparse-versus-dense framing used throughout the evaluation.
+
+![Surge-viability sweep for `WSB` from the EDA screening. Each cell reports the positive-class rate for a candidate surge definition (a volume percentile crossed with a standard-deviation multiplier). Shaded cells clear the minimum viable positive-class threshold, confirming that a usable surge signal exists before any pipeline development.](figures/fig5-eda-surge-viability-wsb.png){#fig:eda-viability}
+
+![Cross-dataset comparison from the EDA phase, setting `r/pennystocks` and `WSB` side by side on volume, coverage, and signal properties. This exploratory contrast is what motivates the sparse-versus-dense experimental design later formalised in the evaluation.](figures/fig6-eda-cross-dataset-comparison.png){#fig:eda-cross-dataset}
+
+Two boundaries separate this tooling from the pipeline. First, the sampling caps above mean the EDA's record counts and date spans are screening artefacts; they do not match the full-run figures the pipeline produces on the complete data ([@tbl:dataset-characteristics]). Second, the surge-viability sweep is a simple percentile-and-standard-deviation heuristic used only to confirm that some viable positive class exists; it is deliberately distinct from the leakage-free composite z-score target the pipeline uses for actual labelling ([@sec:surge-definition]).
+
 ## Data Loading and Preprocessing
 
 The data loader module  (`loader.py`) ingest raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
@@ -603,6 +624,20 @@ df = df.rename(columns={"tickers": "ticker"})
 | After explosion (record-ticker pairs) | 80,212 | 577,872 |
 
 : Loader-stage attrition. {#tbl:loader-attrition}
+
+Carried through the remaining stages (surge labelling excludes records whose forward window is too sparse or runs past the dataset boundary, as described in [@sec:surge-definition]), these two datasets resolve to the end-to-end characteristics in [@tbl:dataset-characteristics]. These full-run figures, not the capped EDA samples in [@sec:eda-tooling], are the ones used throughout the evaluation.
+
+| Property | r/pennystocks | WSB |
+|----------|---------------|------------------|
+| Raw records | 304,524 | 1,293,981 |
+| Date range | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-12-31 |
+| After ticker extraction (exploded) | 80,212 | 577,872 |
+| Usable records (post-exclusion) | 24,827 | 457,072 |
+| Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
+| Test surges | 31 | 668 |
+| Test imbalance ratio | 105:1 | 102:1 |
+
+: Dataset characteristics. {#tbl:dataset-characteristics}
 
 ## Feature Engineering (Implementation)
 
@@ -1030,8 +1065,8 @@ The benefit of multi-feature modeling is even more pronounced on r/pennystocks, 
 
 | Direction | LR | RF | XGBoost |
 |-----------|------|------|---------|
-| WSB-trained → pennystocks test | 0.652 | 0.676 | 0.684 |
-| pennystocks-trained → WSB test | 0.753 | 0.842 | 0.871 |
+| WSB-trained to pennystocks test | 0.652 | 0.676 | 0.684 |
+| pennystocks-trained to WSB test | 0.753 | 0.842 | 0.871 |
 
 : Cross-dataset transfer AUC-ROC (no retraining). {#tbl:transfer}
 
@@ -1180,7 +1215,7 @@ First, a **leakage-free methodology applied where neglected**. The literature re
 
 Second, a **composite surge metric** integrating normalised volume growth with sentiment change, fully parameterised by threshold and weights. The Phase 1 vs Phase 2 experiment ([@tbl:phase-comparison]) confirms it captures a richer phenomenon than volume alone (+0.182 AUC on WSB).
 
-Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse→dense at 0.871; dense→sparse at 0.684) demonstrate this clearly.
+Third, **empirical evidence that data density is the binding constraint**. Same pipeline, same models, different community size: the gap between datasets (0.753 vs 0.892) and asymmetric transfer (sparse to dense at 0.871; dense to sparse at 0.684) demonstrate this clearly.
 
 Direct comparison with published baselines is not possible, as no reviewed study predicts surges on the same datasets with the same temporal protocol. These are incremental contributions, combining established techniques into a coherent framework for a problem prior work has not directly addressed, with each claim grounded in quantified evidence.
 
