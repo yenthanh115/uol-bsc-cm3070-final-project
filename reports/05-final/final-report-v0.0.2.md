@@ -251,20 +251,36 @@ This project addresses these gaps directly. First, the composite surge metric ([
 
 ## Requirements and Design Goals {#sec:requirements}
 
-Before detailing the pipeline, this subsection translates the user and domain needs from Section 1 into the concrete requirements that shape every subsequent design choice. The three user groups ([@tbl:pain-points]) share one underlying need, an early, ranked shortlist of tickers likely to surge, and the research question ([@sec:problem-motivation]) demands that this prediction be both genuinely predictive and trustworthy. Those needs, together with the project objectives and assumptions ([@tbl:assumptions]), give rise to six design goals. [@tbl:design-goals] states each goal, the need it answers, and where the design satisfies it.
+This subsection answers one question before any design detail: *what must the proposed system achieve?* The three user groups ([@tbl:pain-points]) share one need, an early, ranked shortlist of likely-to-surge tickers, and the research question ([@sec:problem-motivation]) adds that the prediction be genuinely predictive and trustworthy on future data. With the objectives and assumptions ([@tbl:assumptions]), these yield the requirements below.
 
-| # | Design goal | Driving need | Where satisfied |
-|---|-------------|--------------|-----------------|
-| G1 | **Early prediction.** Flag a surge before it happens, from signals available at observation time, rather than confirming one after the fact | Moderators must act before spikes; researchers and surveillance need lead time, not hindsight ([@tbl:pain-points]) | Forward-looking target over a 24-hour horizon ([@sec:surge-definition]) |
-| G2 | **No future information.** No feature, label, or statistic may draw on data later than the record being scored | The core methodological weakness in prior work is temporal leakage ([@sec:methodological-weaknesses]); predictions must hold on genuinely unseen future data | Backward-only features ([@sec:feature-engineering]), train-frozen z-scores ([@sec:surge-definition]), time-ordered validation ([@sec:temporal-validation]) |
-| G3 | **Ranked, interpretable outputs.** Produce a probability that ranks tickers for a human reviewer, with a transparent, inspectable feature basis | The system is a prioritisation aid, not an autonomous decision-maker; reviewers must be able to triage and trust a shortlist ([@sec:operational-criteria]) | Probability ranking with top-$k$ review, interpretable baseline model, permutation importance ([@sec:model-selection], [@sec:operational-criteria]) |
-| G4 | **Operational usefulness.** Meet explicit ranking, recall, precision, and alert-volume targets tied to analyst throughput | A shortlist is only useful if it fits a reviewer's daily capacity and catches enough genuine surges to be worth the effort | Acceptance criteria derived from workflow constraints ([@tbl:acceptance-criteria]) |
-| G5 | **Reproducibility.** Any run must reproduce byte-identically from a fixed, publicly available data snapshot and fixed seeds | Third parties must be able to verify the results; a moving data source or hidden randomness would undermine the claims | Static archival dataset ([@sec:eda]), deterministic seeded pipeline (Section 4) |
-| G6 | **Robust evaluation.** Compare models against baselines with quantified uncertainty and significance, on a chronological holdout | Objective 2 requires knowing whether complexity actually helps, not just which number is largest, and by how much it could vary | Expanding-window CV, bootstrap intervals, McNemar's tests, single-feature baselines ([@sec:temporal-validation], [@sec:evaluation-framework]) |
+**Functional (what the system does).**
 
-: Design goals traced from user and domain needs to where each is satisfied. {#tbl:design-goals}
+- Ingest raw Reddit submissions and identify the ticker each post discusses.
+- Each daily cycle, score every active ticker for a surge in the *next* 24 hours.
+- Emit a per-ticker surge *probability* that ranks candidates for a top-$k$ shortlist, not a binary verdict or autonomous action ([@sec:operational-criteria]).
 
-These goals are not independent. G2 (no future information) is the strongest constraint and cuts across the whole pipeline: it forbids post-hoc engagement features, forces training-only normalisation, and rules out random cross-validation. G1 and G3 fix *what* is predicted and *how the output is used*, G4 sets the bar for *useful enough*, and G5 and G6 govern *how the result is produced and judged*. The subsections that follow work through the design in the order the pipeline runs, and each returns to the goal or goals it serves.
+**Data-science (how it must learn and be judged).**
+02_highlevel_eval.ipynb
+- *Early:* every model input must exist at or before scoring time, so the system forecasts rather than confirms.
+- *No future information* (most important): no feature, label, or statistic may draw on later data. This is the central demand of the problem, since temporal leakage is the recurring flaw in prior work ([@sec:methodological-weaknesses]) and a prediction that peeked ahead is worthless in deployment.
+- *Interpretable and reproducible:* reviewers can inspect what drives a flag, and any run reproduces for a third party.
+
+**Success criteria.** AUC-ROC $\ge 0.80$ stretch, $\ge 0.70$ target ([@tbl:success-tiers]); at the operating point, recall $\ge 0.50$ and precision $\ge 0.10$ within 20–30 flags/day ([@tbl:acceptance-criteria]); model comparisons reported with uncertainty and significance so Objective 2 can be answered, not asserted.
+
+[@tbl:design-goals] consolidates these into six goals, tracing each from need, through requirement, to design response.
+
+| # | User / domain need | Requirement | Design response |
+|---|--------------------|-------------|-----------------|
+| G1 | Moderators must act before spikes; researchers and surveillance need lead time, not hindsight ([@tbl:pain-points]) | **Early prediction.** Forecast a surge in the next 24 hours using only signals available when a post is scored | Forward-looking composite target over a 24-hour horizon ([@sec:surge-definition]) |
+| G2 | Prior work is undermined by temporal leakage ([@sec:methodological-weaknesses]); predictions must hold on genuinely unseen future data | **No future information.** No feature, label, or statistic may draw on data later than the record being scored | Backward-only features ([@sec:feature-engineering]), train-frozen z-scores ([@sec:surge-definition]), time-ordered validation ([@sec:temporal-validation]) |
+| G3 | Reviewers must triage a shortlist and trust why each ticker was flagged ([@sec:operational-criteria]) | **Ranked, interpretable output.** Emit a per-ticker surge probability for ranking, on a transparent, inspectable feature basis | Probability ranking with top-$k$ review, an interpretable baseline model, and permutation importance ([@sec:model-selection], [@sec:operational-criteria]) |
+| G4 | A shortlist is only useful if it fits a reviewer's daily capacity and catches enough genuine surges to be worth the effort | **Operational usefulness.** Meet the ranking, recall, precision, and alert-volume targets tied to analyst throughput | Acceptance criteria derived from workflow constraints ([@tbl:acceptance-criteria]) |
+| G5 | Third parties must be able to verify the results | **Reproducibility.** Reproduce byte-identically from a fixed, public data snapshot and fixed seeds | Static archival dataset ([@sec:eda]) and a deterministic, seeded pipeline (Section 4) |
+| G6 | Objective 2 needs to know whether complexity actually helps, and by how much it could vary | **Robust evaluation.** Compare models against baselines with quantified uncertainty and significance on a chronological holdout | Expanding-window CV, bootstrap intervals, McNemar's tests, and single-feature baselines ([@sec:temporal-validation], [@sec:evaluation-framework]) |
+
+: Design goals, each tracing a user or domain need through the requirement it imposes to the design response that satisfies it. {#tbl:design-goals}
+
+The goals are not equally binding. **G2 (no future information) is the most important**: it is built into every stage, forbidding post-hoc engagement features, forcing training-only normalisation, and ruling out random cross-validation. The remaining goals fix what is predicted and how it is used (G1, G3), the bar for useful enough (G4), and how the result is produced and judged (G5, G6). The subsections that follow work through the design in pipeline order, each returning to the goal it serves.
 
 ## Overall Pipeline Architecture
 
@@ -443,6 +459,10 @@ All source code resides under `src/`, split into a core library modules and exec
 
 ```default {#lst:source-org caption="Source code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves."}
 src/
+├── eda/                         
+│   ├── 01_discovery.ipynb       # 
+│   ├── 02_highlevel_eval.ipynb  # 
+│   ├── 03_deep_assessment.ipynb # 
 ├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
 │   ├── config.py                # Configuration dataclass + JSON I/O
 │   ├── loader.py                # CSV ingestion, ticker extraction, explosion
