@@ -23,6 +23,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from surge_pipeline.config import WINDOW_SECONDS, PipelineConfig
+from surge_pipeline.timestamps import to_epoch_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,11 @@ logger = logging.getLogger(__name__)
 _WINDOW_SECONDS = WINDOW_SECONDS
 
 # ---------------------------------------------------------------------------
-# Module-level VADER analyzer cache (lazy-initialised on first use)
+# Module-level analyzer caches (lazy-initialised on first use)
 # ---------------------------------------------------------------------------
 
 _vader_analyzer = None
+_textblob_cls = None
 
 
 def _get_vader_analyzer():
@@ -47,6 +49,19 @@ def _get_vader_analyzer():
         from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
         _vader_analyzer = SentimentIntensityAnalyzer()
     return _vader_analyzer
+
+
+def _get_textblob_cls():
+    """Return the cached ``TextBlob`` class, importing it on first call.
+
+    Mirrors the VADER lazy-init pattern so the (potentially heavy) textblob
+    import happens once rather than on every polarity call.
+    """
+    global _textblob_cls
+    if _textblob_cls is None:
+        from textblob import TextBlob
+        _textblob_cls = TextBlob
+    return _textblob_cls
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +111,7 @@ def _compute_polarity_textblob(title: str, selftext: str) -> float:
     float
         Polarity score in [-1.0, 1.0]. Returns 0.0 if text is empty.
     """
-    from textblob import TextBlob
+    textblob_cls = _get_textblob_cls()
 
     if selftext and str(selftext).strip():
         text = f"{title} {selftext}"
@@ -105,7 +120,7 @@ def _compute_polarity_textblob(title: str, selftext: str) -> float:
     else:
         return 0.0
 
-    return TextBlob(text).sentiment.polarity
+    return textblob_cls(text).sentiment.polarity
 
 
 def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
@@ -132,6 +147,17 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
         Input DataFrame with added columns: sentiment_polarity,
         mean_future_sentiment, sentiment_change.
     """
+    # Validate required columns up front so a missing column surfaces as a
+    # clear message rather than an opaque pandas KeyError (matches loader/
+    # windowing behaviour).
+    required_cols = ("created_utc", "ticker", "title", "selftext")
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            "compute_sentiment requires column(s) "
+            f"{missing_cols}. Expected {list(required_cols)}."
+        )
+
     if df.empty:
         df = df.assign(
             sentiment_polarity=pd.array([], dtype="float64"),
@@ -147,6 +173,11 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     if sentiment_model == "textblob":
         polarity_fn = _compute_polarity_textblob
     else:
+        if sentiment_model != "vader":
+            logger.warning(
+                "Unknown sentiment_model '%s'; falling back to 'vader'.",
+                sentiment_model,
+            )
         polarity_fn = _compute_polarity_vader
 
     logger.info("Sentiment model: %s", sentiment_model)
@@ -174,8 +205,10 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     # ------------------------------------------------------------------
     # Step 1: Compute per-record polarity (AC1, AC4)
     # ------------------------------------------------------------------
-    titles = df["title"].fillna("").astype(str)
-    selftexts = df["selftext"].fillna("").astype(str)
+    # Extract to numpy object arrays once so the hot loop uses cheap
+    # positional indexing rather than per-iteration Series .iloc access.
+    titles = df["title"].fillna("").astype(str).to_numpy()
+    selftexts = df["selftext"].fillna("").astype(str).to_numpy()
 
     polarities = np.zeros(n, dtype=np.float64)
     fallback_count = 0
@@ -184,8 +217,8 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     # Only compute polarity for included records
     included_indices = np.where(included_mask)[0]
     for i in tqdm(included_indices, desc="Sentiment", unit="rec", leave=True):
-        title = titles.iloc[i].strip()
-        selftext = selftexts.iloc[i].strip()
+        title = titles[i].strip()
+        selftext = selftexts[i].strip()
 
         if selftext:
             polarities[i] = polarity_fn(title, selftext)
@@ -217,7 +250,6 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
         mean_future[excluded_indices] = polarities[excluded_indices]
 
     # Convert timestamps to epoch seconds for binary search
-    from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = to_epoch_seconds(df["created_utc"])
 
     # Only process included records in the forward-window computation.
@@ -259,6 +291,18 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
                 window_sums[has_forward] / window_counts[has_forward]
             )
             mean_future[sorted_pos[~has_forward]] = group_polarities[~has_forward]
+
+    # Every record must have received a mean_future value (either via the
+    # forward-window computation or the excluded/no-forward-neighbour
+    # fallbacks). A remaining NaN would silently corrupt sentiment_change and
+    # the downstream composite target, so fail loudly if the invariant breaks.
+    n_unset = int(np.isnan(mean_future).sum())
+    if n_unset > 0:
+        raise ValueError(
+            f"{n_unset} record(s) have an unset mean_future_sentiment after "
+            "windowing. This indicates a coverage gap in the forward-window "
+            "computation and would corrupt the surge target."
+        )
 
     # ------------------------------------------------------------------
     # Step 3: Sentiment change (AC3)

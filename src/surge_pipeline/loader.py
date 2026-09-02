@@ -126,6 +126,60 @@ _UPPERCASE_WORD_PATTERN = re.compile(r"\b([A-Z]{2,5})\b")
 
 
 # ---------------------------------------------------------------------------
+# CSV reading helper (clear errors at the I/O boundary)
+# ---------------------------------------------------------------------------
+
+
+def _read_csv(
+    file_path: Path,
+    nrows: int | None = None,
+    usecols: list[str] | None = None,
+) -> pd.DataFrame:
+    """Read a CSV, converting low-level pandas/OS errors into clear messages.
+
+    Wraps :func:`pandas.read_csv` so that malformed, empty, or unreadable
+    input surfaces as an actionable ``ValueError``/``FileNotFoundError`` that
+    names the offending file, rather than an opaque pandas traceback.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the CSV file.
+    nrows : int, optional
+        Maximum number of rows to read (forwarded to ``pandas.read_csv``).
+    usecols : list[str], optional
+        Subset of columns to read (forwarded to ``pandas.read_csv``).
+
+    Returns
+    -------
+    pd.DataFrame
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist at read time.
+    ValueError
+        If the file is empty, malformed, or not valid UTF-8 text.
+    """
+    try:
+        return pd.read_csv(file_path, nrows=nrows, usecols=usecols)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Input CSV not found: {file_path}") from exc
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError(f"Input CSV is empty: {file_path}") from exc
+    except pd.errors.ParserError as exc:
+        raise ValueError(
+            f"Input CSV is malformed and could not be parsed: {file_path} ({exc})"
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"Input CSV is not valid UTF-8 text: {file_path} ({exc})"
+        ) from exc
+    except OSError as exc:
+        raise ValueError(f"Could not read input CSV: {file_path} ({exc})") from exc
+
+
+# ---------------------------------------------------------------------------
 # Ticker extraction
 # ---------------------------------------------------------------------------
 
@@ -153,7 +207,9 @@ def extract_tickers(title: str, selftext: str) -> list[str]:
     """
     tickers: set[str] = set()
 
-    combined_text = f"{title} {selftext}"
+    # Defensive cast: guard against non-string values (e.g. floats/NaN from
+    # mixed-type CSV columns) that would otherwise be scanned as "nan".
+    combined_text = f"{title!s} {selftext!s}"
 
     # 1. Dollar-sign pattern (highest priority — always included)
     dollar_matches = _DOLLAR_SIGN_PATTERN.findall(combined_text)
@@ -208,6 +264,9 @@ def generate_synthetic_data(
     pd.DataFrame
         DataFrame matching the expected CSV schema.
     """
+    if n_records < 0:
+        raise ValueError(f"n_records must be non-negative, got {n_records}.")
+
     rng = random.Random(seed)
     np_rng = np.random.default_rng(seed)
 
@@ -281,14 +340,26 @@ def compute_dataset_fingerprint(file_path: Path) -> dict[str, object]:
         has_tickers_column.
     """
     # File-level hash (detects any byte-level difference)
-    sha256 = hashlib.sha256(file_path.read_bytes()).hexdigest()
-    file_size = file_path.stat().st_size
+    try:
+        sha256 = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        file_size = file_path.stat().st_size
+    except OSError as exc:
+        raise ValueError(
+            f"Could not read input CSV for fingerprinting: {file_path} ({exc})"
+        ) from exc
 
-    # Structural metadata (fast — only reads headers + first/last rows)
-    df_head = pd.read_csv(file_path, nrows=5)
+    # Timestamp column detection uses the header only.
+    df_head = _read_csv(file_path, nrows=5)
     columns = sorted(df_head.columns.tolist())
-    with open(file_path, encoding="utf-8") as _f:
-        num_rows = sum(1 for _ in _f) - 1  # minus header
+
+    # Logical row count: parse only the first column so embedded newlines in
+    # quoted fields (common in Reddit selftext) are counted as one row each,
+    # matching pandas' row semantics rather than raw file lines.
+    if len(df_head.columns) > 0:
+        first_col = df_head.columns[0]
+        num_rows = len(_read_csv(file_path, usecols=[first_col]))
+    else:
+        num_rows = 0
 
     # Timestamp column detection
     ts_col = None
@@ -297,12 +368,12 @@ def compute_dataset_fingerprint(file_path: Path) -> dict[str, object]:
     if "created_utc" in df_head.columns:
         ts_col = "created_utc"
         # Read just the timestamp column for min/max
-        ts_series = pd.read_csv(file_path, usecols=[ts_col])
+        ts_series = _read_csv(file_path, usecols=[ts_col])
         ts_min = float(ts_series[ts_col].min())
         ts_max = float(ts_series[ts_col].max())
     elif "created" in df_head.columns:
         ts_col = "created"
-        ts_series = pd.read_csv(file_path, usecols=[ts_col])
+        ts_series = _read_csv(file_path, usecols=[ts_col])
         ts_min = str(ts_series[ts_col].min())
         ts_max = str(ts_series[ts_col].max())
 
@@ -363,7 +434,9 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
 
     if file_path and file_path.exists():
         logger.info("Loading data from %s", file_path)
-        df = pd.read_csv(file_path)
+        df = _read_csv(file_path)
+        if df.empty:
+            raise ValueError(f"Input CSV contains no data rows: {file_path}")
         is_synthetic = False
         fingerprint = compute_dataset_fingerprint(file_path)
     else:
@@ -386,6 +459,14 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
     if "tickers" not in df.columns and not is_synthetic:
         logger.info("No 'tickers' column found — extracting tickers from title/selftext.")
 
+        missing_cols = [c for c in ("title", "selftext") if c not in df.columns]
+        if missing_cols:
+            raise ValueError(
+                "Cannot extract tickers: input CSV is missing required column(s) "
+                f"{missing_cols}. Expected 'title' and 'selftext', or a "
+                "precomputed 'tickers' column."
+            )
+
         # Clean selftext: replace [deleted], [removed], NaN with empty string
         df["selftext"] = df["selftext"].fillna("")
         df["selftext"] = df["selftext"].replace(
@@ -395,11 +476,15 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
         # Clean title: fill NaN with empty string
         df["title"] = df["title"].fillna("")
 
-        # Extract tickers for each record
-        df["tickers"] = df.apply(
-            lambda row: ",".join(extract_tickers(row["title"], row["selftext"])),
-            axis=1,
-        )
+        # Extract tickers per record. Iterating over the two columns directly
+        # (rather than df.apply(axis=1)) avoids constructing a Series per row
+        # and is substantially faster on large datasets (~1M+ rows).
+        df["tickers"] = [
+            ",".join(extract_tickers(title, selftext))
+            for title, selftext in zip(
+                df["title"].to_numpy(), df["selftext"].to_numpy()
+            )
+        ]
 
         # Log extraction statistics
         ticker_counts = df["tickers"].apply(
@@ -420,14 +505,32 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
     # ------------------------------------------------------------------
     if "created_utc" in df.columns:
         # Synthetic data or datasets with epoch-second timestamps
-        df["created_utc"] = pd.to_datetime(df["created_utc"], unit="s", utc=True)
+        try:
+            df["created_utc"] = pd.to_datetime(
+                df["created_utc"], unit="s", utc=True, errors="coerce"
+            )
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"Could not parse 'created_utc' as epoch seconds: {exc}"
+            ) from exc
+        ts_source = "created_utc"
     elif "created" in df.columns:
         # Real dataset with datetime string format (e.g., "2021-01-01 00:13:41")
-        df["created_utc"] = pd.to_datetime(df["created"], utc=True)
+        df["created_utc"] = pd.to_datetime(df["created"], utc=True, errors="coerce")
         df = df.drop(columns=["created"])
+        ts_source = "created"
     else:
         raise ValueError(
             "Dataset must contain either 'created_utc' (epoch) or 'created' (datetime string) column."
+        )
+
+    # Fail loudly on unparseable timestamps rather than letting NaT values
+    # silently corrupt the chronological ordering the whole pipeline depends on.
+    n_invalid = int(df["created_utc"].isna().sum())
+    if n_invalid > 0:
+        raise ValueError(
+            f"{n_invalid} record(s) have an unparseable '{ts_source}' timestamp. "
+            "All timestamps must be valid to preserve chronological ordering."
         )
 
     df = df.sort_values("created_utc").reset_index(drop=True)

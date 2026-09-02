@@ -22,6 +22,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from surge_pipeline.config import WINDOW_SECONDS, PipelineConfig
+from surge_pipeline.timestamps import to_epoch_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,15 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         Input DataFrame with added columns: forward_count, backward_count,
         posting_volume_growth (or backward_surge_ratio), excluded.
     """
+    # Validate required columns before any processing so a missing column
+    # surfaces as a clear message rather than an opaque pandas KeyError.
+    missing_cols = [c for c in ("created_utc", "ticker") if c not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            "compute_windowed_counts requires column(s) "
+            f"{missing_cols}. Expected 'created_utc' and 'ticker'."
+        )
+
     if df.empty:
         df = df.assign(
             forward_count=pd.array([], dtype="int64"),
@@ -80,8 +90,17 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
     # Convert timestamps to epoch seconds for numeric binary search
     # This avoids datetime comparison overhead and works with searchsorted.
     # Uses resolution-independent conversion (safe across pandas versions).
-    from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = to_epoch_seconds(df["created_utc"])
+
+    # The searchsorted-based counting relies on chronological ordering: the
+    # loader guarantees this, but the invariant is asserted here so that any
+    # caller passing unsorted data fails loudly rather than producing silently
+    # incorrect window counts (a temporal-leakage risk).
+    if np.any(np.diff(epoch_seconds) < 0):
+        raise ValueError(
+            "Input DataFrame must be sorted chronologically by 'created_utc' "
+            "before windowing. Found records out of temporal order."
+        )
 
     # Group by ticker and process each group with vectorised searchsorted
     ticker_groups = df.groupby("ticker", sort=False)
@@ -123,6 +142,12 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         # Backward-only: compare each record's backward_count to the
         # ticker's expanding historical mean (all prior records for that
         # ticker). This requires no forward-looking data.
+        #
+        # NOTE: the resulting backward surge ratio is deliberately stored in
+        # the `posting_volume_growth` column (rather than a separate
+        # `backward_surge_ratio` column) so that downstream stages read a
+        # single, method-agnostic surge-metric column. The value's meaning
+        # therefore depends on config.surge_method.
         posting_volume_growth = _compute_backward_surge_ratio(df, backward_counts)
 
         # Exclusion: insufficient backward history

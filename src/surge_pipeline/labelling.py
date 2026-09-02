@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from surge_pipeline.config import PipelineConfig
+from surge_pipeline.timestamps import to_epoch_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,14 @@ def _temporal_split(
         Array of partition labels ('train'/'test') and the split timestamp
         (epoch seconds).
     """
-    from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = pd.Series(to_epoch_seconds(df["created_utc"]), index=df.index)
     split_ts = np.percentile(epoch_seconds.values, ratio * 100)
 
+    # Boundary ties go to TRAIN by design: with per-second Reddit timestamps
+    # and high volume, many records can share the exact split second. Using
+    # `<= split_ts` assigns all of them to training, which is the leakage-safe
+    # choice (the boundary instant is never treated as future/test data). As a
+    # consequence the realised train fraction may drift slightly from `ratio`.
     partitions = np.where(epoch_seconds.values <= split_ts, "train", "test")
     return partitions, float(split_ts)
 
@@ -200,6 +205,25 @@ def apply_labelling(
             split_timestamp=0.0,
         )
         return LabellingResult(df=df, stats=stats, class_distributions={})
+
+    # ------------------------------------------------------------------
+    # Validate required columns (only for non-empty input; the empty-frame
+    # branch above intentionally tolerates missing columns). A clear message
+    # here beats an opaque pandas KeyError, matching the earlier stages.
+    # ------------------------------------------------------------------
+    required_cols = (
+        "created_utc",
+        "posting_volume_growth",
+        "sentiment_change",
+        "excluded",
+    )
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            "apply_labelling requires column(s) "
+            f"{missing_cols}. Expected {list(required_cols)} from the "
+            "windowing and sentiment stages."
+        )
 
     # ------------------------------------------------------------------
     # Step 1: Temporal train/test split (R5-AC1)

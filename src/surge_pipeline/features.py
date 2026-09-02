@@ -30,6 +30,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from surge_pipeline.timestamps import to_epoch_seconds
+
 logger = logging.getLogger(__name__)
 
 # Window sizes in seconds
@@ -77,6 +79,40 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
         for col in FEATURE_COLUMNS:
             df[col] = pd.array([], dtype="float64")
         return df
+
+    # ------------------------------------------------------------------
+    # Validate required columns up front so a missing input surfaces as a
+    # clear message rather than an opaque pandas KeyError (matches the
+    # earlier pipeline stages).
+    # ------------------------------------------------------------------
+    required_cols = (
+        "id",
+        "ticker",
+        "created_utc",
+        "title",
+        "selftext",
+        "backward_count",
+        "sentiment_polarity",
+    )
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            "compute_features requires column(s) "
+            f"{missing_cols}. Expected {list(required_cols)} from the "
+            "loader, windowing, and sentiment stages."
+        )
+
+    # Several features (time_since_previous, acceleration) rely on each
+    # ticker group being chronologically ordered. The loader guarantees
+    # global chronological order; assert it here so any caller passing
+    # unsorted data fails loudly rather than producing silently incorrect,
+    # potentially leaky, backward-looking features.
+    _epoch_check = to_epoch_seconds(pd.to_datetime(df["created_utc"], utc=True))
+    if np.any(np.diff(_epoch_check) < 0):
+        raise ValueError(
+            "Input DataFrame must be sorted chronologically by 'created_utc' "
+            "before feature engineering. Found records out of temporal order."
+        )
 
     # ------------------------------------------------------------------
     # Feature 1: sentiment_score (R11-AC1)
@@ -191,22 +227,21 @@ def _compute_time_since_previous(
     n = len(df)
     result = np.full(n, -1.0, dtype=np.float64)
 
-    from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = to_epoch_seconds(created_utc)
 
     for _ticker, group in df.groupby("ticker", sort=False):
         idx = group.index.values
+        if len(idx) < 2:
+            # Single occurrence — first record stays -1 (AC11)
+            continue
+
         times = epoch_seconds[idx]
 
-        # For each record (except the first), time_since_previous is
-        # the difference to the immediately preceding same-ticker record.
-        # Since data is sorted chronologically, the previous element in
-        # the group is the most recent prior post for that ticker.
-        for j in range(1, len(idx)):
-            hours_diff = (times[j] - times[j - 1]) / 3600.0
-            result[idx[j]] = hours_diff
-
-        # First occurrence for this ticker remains -1 (AC11)
+        # Within each chronologically-sorted ticker group, the gap to the
+        # immediately preceding same-ticker post is the successive time
+        # difference. np.diff vectorises the previous per-record Python loop;
+        # the first occurrence is left at -1 (AC11).
+        result[idx[1:]] = np.diff(times) / 3600.0
 
     return result
 
@@ -236,7 +271,6 @@ def _compute_ticker_post_acceleration(
     n = len(df)
     result = np.zeros(n, dtype=np.float64)
 
-    from surge_pipeline.timestamps import to_epoch_seconds
     epoch_seconds = to_epoch_seconds(created_utc)
 
     for _ticker, group in df.groupby("ticker", sort=False):
