@@ -513,14 +513,14 @@ The plan is derived from the CRISP-DM data-mining process model, whose stages (b
 
 The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, built with setuptools) depending on `pandas` ($\ge 2.0$), `scikit-learn` ($\ge 1.3$), `XGBoost` ($\ge 2.0$), `vaderSentiment` ($\ge 3.3.2$), and `NumPy` ($\ge 1.24$). Exact pinned versions are recorded in `requirements.txt` and logged with each experiment run for full reproducibility. 
 
-All source code resides under `src/`, split into a core library modules and executable CLI scripts:
+All source code resides under `src/`, split into core library modules and executable CLI scripts:
 
 ```default {#lst:source-org caption="Source code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves."}
 src/
 ├── eda/                         
-│   ├── 01_discovery.ipynb       # 
-│   ├── 02_highlevel_eval.ipynb  # 
-│   ├── 03_deep_assessment.ipynb # 
+│   ├── 01_discovery.ipynb       # Dataset Discovery
+│   ├── 02_highlevel_eval.ipynb  # High-Level Dataset Evaluation
+│   └── 03_deep_assessment.ipynb # Deep Dataset Assessment
 ├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
 │   ├── config.py                # Configuration dataclass + JSON I/O
 │   ├── loader.py                # CSV ingestion, ticker extraction, explosion
@@ -540,7 +540,7 @@ src/
 └── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ```
 
-Each pipeline stage maps  directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
+Each pipeline stage maps directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
 Executable commands are exposed via entry-point CLI scripts to streamline individual stages and end-to-end runs.
 
@@ -553,7 +553,7 @@ Executable commands are exposed via entry-point CLI scripts to streamline indivi
 
 : CLI entry points. {#tbl:cli-entry-points}
 
-Pipeline behavior is controlled centrally via a `PipelineConfig` dataclass, which holds every tuneable parameter and can be overridden via configuration files. To guarantee determinism across runs, a fixed global seed (default 42) is systematically set across Python's native random module, NumPy, and all scikit-learn estimators.
+Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, which holds every tuneable parameter and can be overridden via configuration files. To guarantee determinism across runs, a fixed global seed (default 42) is systematically set across Python's native random module, NumPy, and all scikit-learn estimators.
 
 ## Exploratory Data Analysis Tooling {#sec:eda-tooling}
 
@@ -580,17 +580,7 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 
 : High-level dataset comparison from the EDA screening. Profiled on a 20,000-row sample per dataset; the Twitter-derived datasets are excluded because they carry no engagement fields and cannot support a surge label. {#tbl:eda-highlevel}
 
-Applying the subreddit criteria from [@sec:eda] across the nine available Reddit subreddits produces [@tbl:subreddit-eval]. Three fall away immediately: `r/stocks` and `r/investing` favour longer-form, strategy-oriented posts that mention few explicit tickers, so more than 90% of their records drop out at the extraction stage, and `r/GME` centres on a single ticker, which collapses the per-ticker design. That leaves `WSB` as the high-density community (577,872 exploded record-ticker pairs) and `r/pennystocks` as the sparse one (80,212 pairs).
-
-| Subreddit | Raw Records | Ticker Diversity | Suitability |
-|-----------|-------------|------------------|-------------|
-| `WSB` | ~1,294,000 | High (multi-ticker) | Dense mainstream community; selected |
-| `r/pennystocks` | ~305,000 | High (2,912 tickers; lowest missing-selftext rate) | Sparse niche community; selected |
-| `r/stocks` | ~200,000 | Low (longer-form, fewer ticker mentions) | Rejected: >90% exclusion after extraction |
-| `r/investing` | ~150,000 | Low (portfolio/strategy focus) | Rejected: same issue as r/stocks |
-| `r/GME` | ~273,000 | Single ticker | Rejected: per-ticker design becomes trivial |
-
-: Candidate subreddit evaluation. {#tbl:subreddit-eval}
+Applying the subreddit criteria from [@sec:eda] across the nine available Reddit subreddits, three fall away immediately: `r/stocks` and `r/investing` favour longer-form, strategy-oriented posts that mention few explicit tickers, so more than 90% of their records drop out at extraction, and `r/GME` centres on a single ticker, which collapses the per-ticker design. That leaves the selected pair, `WSB` as the high-density community and `r/pennystocks` as the sparse one; their full-run sizes are given later in [@tbl:loader-attrition].
 
 **Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement as a reliability check on the sentiment signal, then runs a surge-viability sweep across nine candidate surge definitions formed by crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition yields a positive class above a minimum viable rate. Both datasets pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
 
@@ -616,24 +606,13 @@ Two boundaries separate this tooling from the pipeline. First, the sampling caps
 
 ## Data Loading and Preprocessing
 
-The data loader module  (`loader.py`) ingest raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
+The data loader module (`loader.py`) ingests raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
 
-**Step 1: Text Cleaning**
-
-Moderation placeholders (such as `[deleted]`, `[removed]`) and `null` are replaced with empty strings. Each row in the raw archival dataset maps to a unique Reddit submission ID, so no deduplication is needed. [@lst:text-cleaning] shows the implementation:
-
-```python {#lst:text-cleaning caption="Text cleaning (from loader.py). Moderation-redacted content and null values are normalised to empty strings before downstream extraction, ensuring regex patterns operate on consistent input without raising exceptions on missing data."}
-# Clean selftext: replace [deleted], [removed], NaN with empty string
-df["selftext"] = df["selftext"].fillna("")
-df["selftext"] = df["selftext"].replace({"[deleted]": "", "[removed]": ""})
-
-# Clean title: fill NaN with empty string
-df["title"] = df["title"].fillna("")
-```
+**Step 1: Text Cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) and nulls in both `selftext` and `title` are replaced with empty strings so downstream regex operates on consistent input. Each raw row maps to a unique Reddit submission ID, so no deduplication is needed.
 
 **Step 2: Ticker Extraction** 
 
-Tickers are extracted from submission text using two prioritized regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers because penny stocks and emerging tickers rotate frequently; the worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks. [@lst:ticker-extraction] shows the extraction logic:
+Tickers are extracted from submission text using two prioritised regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers because penny stocks and emerging tickers rotate frequently; the worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks. [@lst:ticker-extraction] shows the extraction logic:
 
 ```python {#lst:ticker-extraction caption="Ticker extraction with dual regex priority cascade and stopword filtering (from loader.py). The dollar-sign pattern captures explicit financial references with high precision; the uppercase pattern broadens recall at the cost of precision, mitigated by a 297-term stopword lexicon spanning eight categories."}
 # Extract tickers from combined title + selftext
@@ -654,46 +633,9 @@ for match in word_matches:
         tickers.add(ticker)
 ```
 
-**Step 3: Timestamp Normalisation**
+**Step 3: Timestamp Normalisation.** The loader accepts both formats present across the archives, Unix epoch integers and ISO datetime strings, unifying them into timezone-aware `datetime64[ns, UTC]` and sorting chronologically. This ordering is a hard precondition for the binary-search windowing that follows; a missing timestamp column raises an explicit error rather than failing silently.
 
-Raw timestamps (Unix epoch integers or ISO datetime strings) are normalised to standard `datetime64[ns, UTC]` and sorted. This chronological ordering is a hard precondition for the binary-search windowing that follows. [@lst:timestamp-norm] shows the implementation:
-
-```python {#lst:timestamp-norm caption="Timestamp normalisation and chronological sorting (from loader.py). The loader accepts two timestamp formats, Unix epoch integers (common in Reddit API exports) and ISO datetime strings (common in Kaggle archives), unifying both into timezone-aware datetime64[ns, UTC]. The sort establishes the chronological invariant required by all downstream stages."}
-# Parse timestamps: handle both epoch-second and datetime-string formats
-if "created_utc" in df.columns:
-    df["created_utc"] = pd.to_datetime(df["created_utc"], unit="s", utc=True)
-elif "created" in df.columns:
-    df["created_utc"] = pd.to_datetime(df["created"], utc=True)
-    df = df.drop(columns=["created"])
-else:
-    raise ValueError(
-        "Dataset must contain either 'created_utc' (epoch) or "
-        "'created' (datetime string) column."
-    )
-
-df = df.sort_values("created_utc").reset_index(drop=True)
-```
-
-**Step 4: Ticker Explosion & Filtering** 
-
-Multi-ticker posts (e.g., "comparing `$AMC` vs `$GME`") are exploded into separate record–ticker rows using pandas.explode(). Records that yield zero valid tickers after filtering are dropped from the pipeline. [@lst:ticker-explosion] shows the implementation:
-
-```python {#lst:ticker-explosion caption="Ticker explosion and filtering (from loader.py). The comma-separated ticker string is split into a list and exploded via pandas.explode(), converting one multi-ticker post into multiple rows, one per (record, ticker) pair. This transforms the unit of analysis from post to post-about-a-specific-ticker, enabling per-ticker temporal windowing in subsequent stages."}
-# Exclude records with missing/empty tickers
-df["tickers"] = df["tickers"].astype(str).str.strip()
-df["tickers"] = df["tickers"].replace({"": np.nan, "nan": np.nan, "None": np.nan})
-mask_has_tickers = df["tickers"].notna()
-df = df[mask_has_tickers].reset_index(drop=True)
-
-# Explode multi-ticker records: one row per (record_id, ticker) pair
-df["tickers"] = df["tickers"].str.split(",")
-df = df.explode("tickers", ignore_index=True)
-
-# Clean individual ticker values
-df["tickers"] = df["tickers"].str.strip().str.upper()
-df = df[df["tickers"].str.len() > 0].reset_index(drop=True)
-df = df.rename(columns={"tickers": "ticker"})
-```
+**Step 4: Ticker Explosion & Filtering.** Multi-ticker posts (e.g. "comparing `$AMC` vs `$GME`") are split and exploded via `pandas.explode()` into one row per record–ticker pair, realising the unit of analysis from [@sec:data-representation]; records yielding zero valid tickers after filtering are dropped.
 
 | Step | r/pennystocks | WSB |
 |------|---------------|------------------|
@@ -733,13 +675,11 @@ Eleven features feed the classifiers. The governing constraint is that every fea
 | 8 | `hour_of_` \ `day` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts UTC hour (0–23) from `created_utc` via `pd.to_datetime(..., utc=True)` \ `.dt.hour`. Captures intraday cyclicality aligned with US market hours (pre-market activity typically spikes 13:00–14:00 UTC). |
 | 9 | `day_of_week` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts day-of-week index (Monday=0, Sunday=6) from `created_utc` via `.dt.dayofweek`. Captures weekly periodicity: weekday posts cluster near market sessions; weekend posts are predominantly speculative. |
 | 10 | `word_count_` \ `x_hour` | Interaction | Computed inline in `features.compute_` \ `features()` via element-wise multiplication: `word_count × hour_of_` \ `day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
-| 11 | `accel_x_time_` \ `since_prev` | Interaction | Computed inline in `features.compute_` \ `features()`. Multiplicative interaction: `ticker_post_acceleration × time_` \ `since_previous`. Captures the pattern of sudden acceleration after prolonged silence, a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. Ablation (Experiment B2) confirmed +1.4 pp AUC lift from including both interaction terms. |
+| 11 | `accel_x_time_` \ `since_prev` | Interaction | Computed inline in `features.compute_` \ `features()`. Multiplicative interaction: `ticker_post_acceleration × time_` \ `since_previous`. Captures the pattern of sudden acceleration after prolonged silence, a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. |
 
 : Feature engineering detail. Each row specifies what the feature captures and how it is computed, including the responsible function. {#tbl:feature-detail}
 
-The most algorithmically involved feature is `ticker_post_acceleration`. It splits the backward 24-hour window into two 12-hour halves (a recent half covering $(t - 12\text{h}, t]$ and an older half covering $(t - 24\text{h}, t - 12\text{h}]$ and then computes the ratio: $$\text{ticker\_post\_acceleration} = \frac{\text{count}_{\text{recent}}}{\max(\text{count}_{\text{older}}, 1)}$$
-
-Values above 1.0 indicate accelerating discussion volume. By leveraging pre-sorted timestamp arrays per ticker group, the implementation uses NumPy's searchsorted to perform interval counting in $O(n \log n)$ time:
+The most algorithmically involved feature is `ticker_post_acceleration` ([@tbl:feature-detail], row 3). Working on pre-sorted per-ticker timestamp arrays, it counts posts in the recent and older 12-hour halves with four `np.searchsorted` calls, giving $O(n \log n)$ interval counting per ticker group:
 
 ```python {#lst:acceleration caption="Ticker post acceleration via split-window binary search (from features.py). The backward 24-hour window is bisected into recent and older halves. Four searchsorted calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The max(..., 1) guard prevents division by zero when the older half is empty."}
 # Count posts in recent half (t-12h, t] excluding self
@@ -755,7 +695,7 @@ count_older = older_right - older_left
 acceleration = count_recent / np.maximum(count_older, 1)
 ```
 
-The two interaction terms (`word_count_x_hour` and `accel_x_time_since_prev`) provide models with an explicit signal for combined dynamic, such as a sudden surge in post volume following a period of silence, without requiring multi-level decision tree splits to discover the interaction. An ablation study confirmed a consistent +1.4pp AUC lift from including these terms.
+The two interaction terms (`word_count_x_hour` and `accel_x_time_since_prev`) provide models with an explicit signal for combined dynamics, such as a sudden surge in post volume following a period of silence, without requiring multi-level decision tree splits to discover the interaction. An ablation study confirmed a consistent +1.4pp AUC lift from including these terms.
 
 ## Surge Labelling
 
@@ -773,7 +713,7 @@ Measuring the test set against training-derived distributions prevents future da
 
 **Composite Metric and Thresholding.** 
 
-The surge composite score combines the standardized metrics:
+The surge composite score combines the standardised metrics:
 
 $$\text{composite} = (w_{\text{volume}} \cdot z_{\text{volume}}) + (w_{\text{sentiment}} \cdot z_{\text{sentiment}})$$
 
@@ -937,6 +877,16 @@ weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
 
 The hyperparameter configuration yielding the highest mean validation Area Under the ROC Curve (AUC) across all three splits is selected as the winning model. This optimal configuration is then retrained on the entire 80% training partition, using a freshly fitted `StandardScaler`, prior to generating final predictions on the held-out test set.
 
+## Evaluation Pipeline Implementation {#sec:eval-pipeline}
+
+Evaluation is implemented as a reusable set of functions (`evaluation.py`), figure generators (`evaluation_figures.py`), and an append-only run tracker (`experiment_log.py`), so that every reported number and plot derives from a single, re-runnable path rather than ad-hoc analysis.
+
+**Metric computation.** For each trained model, held-out predictions are scored for AUC-ROC (the primary metric), plus precision, recall, $F_1$, and PR-AUC at both the default 0.5 threshold and the validation-tuned threshold. Threshold tuning maximises $F_1$ on the last validation fold and is applied unchanged to the test set, so no test information informs the operating point. Uncertainty is quantified by 1,000 bootstrap resamples of the test set, yielding 95% confidence intervals for every metric, and pairwise model differences are tested with McNemar's test under a Bonferroni-corrected $\alpha$.
+
+**Experiment orchestration.** A run is fully specified by a `PipelineConfig` (dataset, weights $w_1/w_2$, threshold $\tau$, seed). The CLI entry points ([@tbl:cli-entry-points]) execute a run end-to-end; each writes its resolved configuration, metrics, and environment to a timestamped directory and appends one line to a JSONL log recording the config, the Git commit SHA, and the output path. Because a run is reproducible from its config and seed, model comparisons, threshold sweeps ($\tau$), and sentiment-weight sweeps ($w_2$) are executed by re-running with different configs rather than by editing code, and the cross-dataset transfer experiment simply loads a model trained on one community and scores it on the other's test set.
+
+**Artefacts and figures.** Each run emits machine-readable JSON (metrics, confidence intervals, per-model confusion counts) alongside the figures used in Section 5, ROC curves, confusion matrices, threshold-sensitivity and feature-importance plots, regenerated deterministically from the saved evaluation JSON by `surge-figures`. Separating figure generation from metric computation means the reported tables and plots cannot diverge: both read the same artefacts.
+
 ## Implementation Decisions Driven by Empirical Findings
 
 Iterative development uncovered several dataset and pipeline edge cases, driving key architectural decisions:
@@ -955,20 +905,7 @@ At $\tau = 1.5$, extreme class imbalance (1.44% surge rate; 102:1 ratio) led XGB
 
 ## Implementation Status
 
-All six core pipeline stages are fully implemented and execute end-to-end to generate reproducible artifacts. [@tbl:impl-status] summarizes the implementation status and outputs for each stage.
-
-| Stage | Status | Key Output |
-|-------|--------|------------|
-| 1. Data Loading | Complete | Exploded DataFrame (~80,000 / 577,872 records) |
-| 2. Temporal Windowing | Complete | Forward/backward counts per ticker |
-| 3. Sentiment | Complete | VADER polarity + forward-window means |
-| 4. Target Labelling | Complete | Binary surge labels + threshold sweep |
-| 5. Feature Engineering | Complete | 11-feature matrix |
-| 6. Training & Evaluation | Complete | 3 trained models + full evaluation JSON |
-
-: Pipeline implementation stages, status, and corresponding primary outputs. {#tbl:impl-status}
-
-Both the `r/pennystocks` and `WSB` datasets process completely through the pipeline with deterministic results. Execution runtime (from target labelling through final evaluation) is approximately 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a standard laptop CPU, with VADER sentiment computation accounting for the majority of compute time.
+All six pipeline stages ([@tbl:pipeline-stages]) are fully implemented and execute end-to-end on both datasets to produce reproducible artefacts. Both the `r/pennystocks` and `WSB` datasets process completely through the pipeline with deterministic results. Execution runtime (from target labelling through final evaluation) is approximately 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a standard laptop CPU, with VADER sentiment computation accounting for the majority of compute time.
 
 Determinism was verified empirically: running configuration A1 (seed 42) on July 13 and July 19 produced identical AUC values (0.753) and byte-identical execution logs. Results are robust to seed choice across five seeds (42, 123, 456, 789, 2024) on `r/pennystocks`, with AUC scores spanning 0.734 to 0.753 (a 0.019 margin). All 30+ experimental runs are fully trackable via logged configuration JSONs, Git commit SHAs, and timestamped output paths.
 
@@ -995,7 +932,7 @@ Pipeline stability, software health, and correctness claims are maintained throu
 
 **Temporal Leakage Prevention**
 
-The most critical test module (`test_labelling.py`) verifies that normalization statistics do not leak future information into historical records. The test constructs synthetic data with distinct training ($\mu = 5.0, \sigma = 5.0$) and test ($\mu = 17.5, \sigma = 2.5$) distributions, then asserts that test-set $z$-scores are derived exclusively using the training parameters:
+The most critical test module (`test_labelling.py`) verifies that normalisation statistics do not leak future information into historical records. The test constructs synthetic data with distinct training ($\mu = 5.0, \sigma = 5.0$) and test ($\mu = 17.5, \sigma = 2.5$) distributions, then asserts that test-set $z$-scores are derived exclusively using the training parameters:
 
 ```python {#lst:leakage-test caption="Leakage-prevention test (from test_labelling.py). The test constructs data with known training and test distributions, then asserts that test-set z-scores are computed using training parameters (mean=5, sd=5) rather than test-set parameters (mean=17.5, sd=2.5). A negative assertion confirms the wrong computation does not occur."}
 class TestZScoreNormalisation:
