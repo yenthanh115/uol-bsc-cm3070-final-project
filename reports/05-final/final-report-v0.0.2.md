@@ -71,29 +71,19 @@ Social media discussions in financial communities can shift from quiet to frenzi
 
 # Introduction
 
-## Project Concept and Objectives
+## Background and Context {#sec:background}
 
-Following the **CM3005 Data Science** project template, *Predictive Modelling of Social Media Trend Emergence*, this project implements a machine learning system that predicts whether a stock ticker's Reddit discussion is about to surge, using only backward-looking features available at observation time. Three classifiers (Logistic Regression, Random Forest, and XGBoost) are trained and compared on this task.
+This project adapts the template of **CM3005 Data Science** (Predictive Modelling of Social Media Trend Emergence) to financial forums. On social media, a trend takes off when crowd attention suddenly converges on a specific topic or entity. This dynamic is especially intense in stock-market communities, where an obscure ticker can explode in popularity overnight, often signalling unusual trading activity before it happens [15]. Yet most current tracking tools only flag a trend once it is already widespread, by which point the chance to analyse, act on, or moderate the movement has usually passed. Anticipating these shifts before they peak is far more valuable than confirming them afterwards, but also harder, because it means recognising subtle patterns before the main surge arrives.
 
-The project has three objectives:
+Turning that objective into a concrete task requires deciding both where to look and exactly what to predict. It focuses on Reddit's financial communities, which uniquely combine public, archived, timestamped discussions tied to named stock tickers, so activity can be tracked at the level of an individual asset rather than the market wide. The core problem then comes down to this: given what a community has said about a ticker up to a given moment, *can we predict an imminent spike in its discussion?* Framed as a supervised classification task, the project forecasts short-term surges in ticker discussion before they peak.
 
-- Build a predictive model from early-stage discussion features (temporal patterns, activity frequency, sentiment) that can forecast per-ticker surges before they happen
-- Compare multiple ML approaches to find out whether more complex models actually improve prediction over simpler baselines
-- Confirm that predictions hold up on unseen future time periods by using temporal evaluation protocols that prevent data leakage, a common methodological weakness in social media prediction studies
+## Problem Statement and User Needs {#sec:problem-motivation}
 
-## Problem Statement and Motivation {#sec:problem-motivation}
+What makes this prediction worth attempting is also what makes it hard. These surges are triggered by earnings surprises, speculative momentum, or coordinated retail interest build over hours across forums where thousands of tickers are discussed daily, far too quickly and too large at scale to watch by hand.
 
-Stock-related discussions on Reddit can go from quiet to frenzied within hours. A ticker attracting two posts yesterday might appear in fifty today, triggered by earnings surprises, speculative momentum, or coordinated retail interest. These surges develop too quickly for manual monitoring, particularly across forums where thousands of tickers are discussed daily.
+This tension motivates the central **research question**: *can a social-media surge be predicted before it happens from early discussion patterns alone?* The answer matters to three user groups. **Market surveillance and compliance teams** would prioritise which tickers warrant investigation for unusual or potentially coordinated activity [1]. **Quantitative researchers** would select a small set of tickers for deeper financial and textual analysis. **Platform moderators** would position monitoring capacity before discussion spikes. Across all three the system is a *prioritisation tool* that reduces a large candidate universe to a reviewable shortlist, not an autonomous decision-maker [2]. Their error tolerances differ, however: surveillance and moderation need broad coverage (high recall), whereas research can accept a smaller, higher-precision shortlist. These differing needs are formalised as acceptance criteria in [@sec:operational-criteria] and tested in [@sec:operational-precision].
 
-The central research question is: *can a social media surge be predicted before it happens by looking at early discussion patterns?* The answer holds practical value for three user groups. **Market surveillance and compliance teams** would use predictions to prioritise which tickers warrant investigation for unusual or potentially coordinated activity among thousands of candidates [1]. **Quantitative researchers** would use them to select a small set of tickers for deeper financial and textual analysis. **Platform moderation teams** would use them to allocate monitoring and moderation capacity before discussion spikes. Across all three, the system operates as a *prioritisation tool*, reducing a large surveillance universe to a manageable shortlist for human review, rather than an autonomous decision-maker [2].
-
-These use cases do not share an identical error tolerance. For surveillance and moderation, missing 70% of surges would be unacceptable because the purpose is broad coverage and missed events may carry greater cost than additional reviews. For quantitative research, a lower-recall shortlist can be acceptable when the captured cases are sufficiently relevant to justify follow-up analysis. Across the applications, false positives are tolerable when they produce a reviewable queue: as an operational starting point, precision of approximately 20% means that about one in five flagged cases merits attention, provided the daily volume remains within analyst capacity. This project therefore sets a stricter screening aspiration of recall $\ge 0.50$ and precision $\ge 0.10$ at the chosen threshold, with 20–30 flags per day, while treating these as application criteria rather than claims that the model already satisfies them. [@sec:operational-criteria] formalises these requirements, and [@sec:operational-precision] evaluates the best model against them.
-
-Standard rule-based heuristics, such as flagging a ticker when volume exceeds $+2\sigma$, cannot capture non-linear interactions across diverse data streams. This project proposes a learning-based approach that integrates temporal, textual, and sentiment features into a unified predictive framework. Prior research focuses on related but different problems, forecasting eventual content reach or predicting price movements, rather than predicting sudden short-term spikes in discussion volume for specific tickers (see [@sec:research-gap]).
-
-## End-User Pain Points {#sec:pain-points}
-
-The three user groups introduced above share a common structural problem: the volume of candidate tickers vastly exceeds the human capacity available to review them, and the surges that matter develop faster than manual monitoring can react. [@tbl:pain-points] summarises the specific pain point each group faces and why current practice falls short. These pain points motivate the design choices in [@sec:surge-definition] (defining a discrete, rankable target) and the operational framing in [@sec:operational-criteria] (deriving acceptance thresholds from analyst throughput).
+Beneath these differences lies one structural problem common to all three: candidate tickers vastly outnumber the capacity to review them, and surges develop faster than manual monitoring can react. [@tbl:pain-points] sets out the specific pain point each group faces and why current practice falls short.
 
 | User group | Pain point | Current workaround and its limit |
 |------------|--------------------|--------------------------|
@@ -103,7 +93,33 @@ The three user groups introduced above share a common structural problem: the vo
 
 : End-user pain points and the shortcomings of current practice. {#tbl:pain-points}
 
-Across all three groups, the underlying need is the same: an *early, ranked shortlist* that compresses a large candidate universe into a reviewable queue. This is the value the project targets, a prioritisation layer that surfaces likely surges before they peak, leaving causal judgement and action to the human reviewer ([@sec:operational-criteria]).
+The shared need is therefore an *early, ranked shortlist* that compresses the candidate universe into a reviewable queue, leaving causal judgement and action to the human reviewer. This motivates the discrete, rankable target in [@sec:surge-definition] and the throughput-derived criteria in [@sec:operational-criteria].
+
+Meeting this need is not straightforward. Simple volume rules (e.g. $+2\sigma$) cannot capture non-linear signal interactions or rank candidates, and prior work has mostly targeted adjacent questions such as eventual reach or price movement, not short-term spikes in per-ticker discussion (Section 2). This project therefore takes a learning-based approach, integrating temporal, textual, and sentiment signals into one predictive framework.
+
+## Aim, Objectives and Contributions {#sec:aim}
+
+To answer this question, the **aim** is to build and rigorously evaluate a system predicting per-ticker Reddit surges over a 24-hour horizon from only backward-looking features available at observation time. Three objectives, each with an explicit success test, follow ([@tbl:objectives]).
+
+| # | Objective | Success test |
+|---|-----------|--------------|
+| O1 — Predict | Build a model from early-stage discussion features (temporal, activity, sentiment) that forecasts surges before they occur | Model clears the target AUC-ROC tier ([@tbl:success-tiers]) on held-out future data |
+| O2 — Compare | Establish whether more complex models improve prediction over simpler baselines | Model differences are quantified with uncertainty and significance ([@sec:statistical-validation]) |
+| O3 — Validate temporally | Establish whether predictions hold on unseen future periods under leakage-free evaluation | No feature, label, or statistic draws on future data, and results are reported on a chronological holdout ([@sec:eval-objectives]) |
+
+: Project objectives and their success tests. {#tbl:objectives}
+
+The **contributions** are a leakage-free forecasting methodology, a composite volume-and-sentiment surge metric, and evidence that data density constrains performance more than model complexity (Section 6).
+
+## Prediction Target {#sec:prediction-target}
+
+The template uses "trend emergence," but trends can be gradual and sustained, making them hard to label objectively. This project instead targets *surges*: significant short-term spikes in both **posting volume** and **sentiment intensity** for a ticker **within a 24-hour window**, captured by a composite metric combining normalised volume growth with sentiment-shift magnitude ([@sec:surge-definition]). Because surges are discrete and quantifiable, prediction becomes binary classification. The target uses timestamped post volume, not post-hoc engagement metrics like upvotes (which introduce look-ahead bias), with z-scores computed from training statistics alone to prevent leakage. The underlying hypothesis is that backward-looking signal suffices to discriminate surges from baseline activity, and that performance scales with data density rather than model complexity.
+
+## Study Scope and Exclusions
+
+The study evaluates binary surge classification on two archival 2021 Reddit datasets, `r/pennystocks` and `r/wallstreetbets` (hereafter **WSB**), chosen as sparse and dense communities. Three classifiers, Logistic Regression (**LR**), Random Forest (**RF**), and XGBoost (**XGB**), are trained on backward-looking features and evaluated on a chronological holdout with expanding-window cross-validation, bootstrap intervals, McNemar's tests, single-feature baselines, and cross-dataset transfer, under a deterministic, seeded pipeline.
+
+Excluded from scope: real-time ingestion and production deployment; user behaviours, comment networks, and cross-platform channels; multi-class or regression targets; and trading signals, financial advice, or causal claims about market impact.
 
 ## Assumptions {#sec:assumptions}
 
@@ -121,20 +137,6 @@ The project's conclusions hold under the explicit assumptions in [@tbl:assumptio
 | 8 | Static, complete, well-ordered input data | Features and frozen statistics assume gap-free, chronologically ordered input with a stable schema, as in the archival dataset; a production stream (missing or late posts, schema drift, vocabulary shift) would require re-ingestion safeguards and periodic recalibration ([@sec:temporal-stability]) |
 
 : Explicit project assumptions and where each is addressed. {#tbl:assumptions}
-
-## Prediction Target {#sec:prediction-target}
-
-The original project template uses the term "trend emergence," but trends can be gradual and sustained, making them difficult to label objectively. This project focuses on surges: statistically significant, short-term spikes in both **posting volume** and **sentiment intensity** for a ticker **within a 24-hour window**, identified using a composite metric combining normalised volume growth with sentiment shift magnitude (see [@sec:sentiment-contribution]). Because surges are discrete and quantifiable, they can be framed as a binary classification problem.
-
-The target is based on timestamped post volume rather than engagement metrics like upvotes, as post-hoc scores introduce look-ahead bias. Z-scores are calculated using training-set statistics alone to prevent data leakage. [@sec:surge-definition] outlines the formal definitions, weighting, and threshold choices.
-
-The underlying hypothesis is that backward-looking temporal and textual features carry sufficient signal to discriminate surges from baseline activity, and that predictive performance scales with data density rather than model complexity.
-
-## Study Scope and Exclusions
-
-This study evaluates binary surge classification across two archival 2021 Reddit datasets: `r/pennystocks` and `r/wallstreetbets` (hereafter **WSB**). Using strictly backward-looking features, three classifier families: Logistic Regression (**LR**), Random Forest (**RF**), and XGBoost (**XGB**) are trained to predict 24-hour ticker surges. Model performance is assessed using an 80/20 chronological holdout split alongside 4-fold expanding-window cross-validation, supported by bootstrap confidence intervals, McNemar's pairwise tests, and single-feature baselines. Cross-dataset transfer experiments assess model generalisability, using a fully deterministic pipeline with fixed seeds for end-to-end reproducibility.
-
-Excluded from scope: real-time data ingestion and production deployment; individual user behaviours, comment networks, and cross-platform channels; multi-class or regression targets; trading signals, financial advice, or causal claims regarding market impact.
 
 ## Report Structure
 
