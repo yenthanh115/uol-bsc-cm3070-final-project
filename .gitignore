@@ -223,7 +223,7 @@ __marimo__/
 
 # Large raw data (tracked via Git LFS or reproduced locally)
 input/raw/*.csv
-src/eda/input/
+eda/input/
 
 # Pipeline outputs (reproducible – regenerate with `make pipeline`)
 output/processed/*.csv

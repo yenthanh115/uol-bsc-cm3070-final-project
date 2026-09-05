@@ -30,7 +30,7 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 ├── src/
 │   ├── surge_pipeline/                 # Core pipeline modules
 │   │   ├── config.py                   # PipelineConfig dataclass (JSON-serialisable)
-│   │   ├── cli_logging.py             # Tee-style CLI output logging to file
+│   │   ├── cli_logging.py              # Tee-style CLI output logging to file
 │   │   ├── loader.py                   # Data loading and ticker extraction
 │   │   ├── windowing.py                # Temporal windowed count computation
 │   │   ├── sentiment.py                # TextBlob sentiment scoring
@@ -41,13 +41,18 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   │   ├── evaluation.py              # Precision, Recall, F1, ROC-AUC evaluation
 │   │   ├── experiment_log.py           # Append-only experiment log (JSONL)
 │   │   └── pipeline.py                # Orchestrator (load → window → sentiment → label)
-│   ├── eda/
-│   │   └── eda_pipeline.py             # Exploratory data analysis with figures
 │   ├── tests/                          # Unit tests
 │   ├── run_labeling.py                 # CLI: run the labelling pipeline
 │   ├── run_training.py                 # CLI: train model and evaluate
 │   ├── run_cross_validation.py         # CLI: cross-dataset generalisation test
 │   └── generate_figures.py             # CLI: standalone figure generation from saved models
+│
+├── eda/                                # Exploratory data analysis notebooks
+│   ├── 01_discovery.ipynb              # Initial data discovery
+│   ├── 02_highlevel_eval.ipynb         # High-level evaluation
+│   ├── 03_deep_assessment.ipynb        # Deep assessment
+│   ├── input/                          # Notebook-local inputs
+│   └── output/                         # Notebook-local outputs
 │
 ├── reports/                            # Academic reports (literature review, design, etc.)
 ├── admin/                              # Project admin (decision log, journal)
@@ -161,9 +166,15 @@ python run_training.py --data-path ../output/processed/labelled_dataset.csv --lo
 
 ### Run Exploratory Data Analysis
 
+There are 03 Jupyter notebooks in the `eda/` directory. Open and run them from the repository root:
+
 ```bash
-python -m eda.eda_pipeline
+jupyter lab eda/
 ```
+
+- `eda/01_discovery.ipynb` — initial data discovery
+- `eda/02_highlevel_eval.ipynb` — high-level evaluation
+- `eda/03_deep_assessment.ipynb` — deep assessment
 
 ### Run Tests
 
