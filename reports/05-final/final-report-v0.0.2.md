@@ -86,7 +86,7 @@ This tension motivates the central **research question**: *can a social-media su
 Beneath these differences lies one structural problem common to all three: candidate tickers vastly outnumber the capacity to review them, and surges develop faster than manual monitoring can react. [@tbl:pain-points] sets out the specific pain point each group faces and why current practice falls short.
 
 | User group | Pain point | Current workaround and its limit |
-|------------|--------------------|--------------------------|
+|----------|----------------------|--------------------------|
 | Market surveillance / compliance | Thousands of tickers are discussed daily; potentially coordinated or unusual activity must be triaged, but surges develop too fast for manual review [1] | Rule-based volume alerts (e.g. $+2\sigma$) miss non-linear, multi-signal precursors and cannot rank candidates by likelihood |
 | Quantitative researchers | A small set of tickers must be selected for deeper analysis from a large, noisy universe | Manual scanning is slow, subjective, and tends to surface tickers only after they have already become prominent |
 | Platform moderators | Monitoring and moderation capacity must be positioned *before* discussion spikes, not after | Reactive moderation begins once a spike is already underway, when intervention is hardest |
@@ -101,11 +101,11 @@ Meeting this need is not straightforward. Simple volume rules (e.g. $+2\sigma$) 
 
 To answer this question, the **aim** is to build and rigorously evaluate a system predicting per-ticker Reddit surges over a 24-hour horizon from only backward-looking features available at observation time. Three objectives, each with an explicit success test, follow ([@tbl:objectives]).
 
-| # | Objective | Success test |
-|---|-----------|--------------|
-| O1 — Predict | Build a model from early-stage discussion features (temporal, activity, sentiment) that forecasts surges before they occur | Model clears the target AUC-ROC tier ([@tbl:success-tiers]) on held-out future data |
-| O2 — Compare | Establish whether more complex models improve prediction over simpler baselines | Model differences are quantified with uncertainty and significance ([@sec:statistical-validation]) |
-| O3 — Validate temporally | Establish whether predictions hold on unseen future periods under leakage-free evaluation | No feature, label, or statistic draws on future data, and results are reported on a chronological holdout ([@sec:eval-objectives]) |
+| # | Objective | - | Success test |
+|---|-----|-------------|-------------|
+| O1 | **Predict surges** | Build a model from early-stage discussion features (temporal, activity, sentiment) that forecasts surges before they occur | Model clears the target AUC-ROC tier ([@tbl:success-tiers]) on held-out future data |
+| O2 | **Compare approaches** | Establish whether more complex models improve prediction over simpler baselines | Model differences are quantified with uncertainty and significance ([@sec:statistical-validation]) |
+| O3 | **Validate temporally** | Establish whether predictions hold on unseen future periods under leakage-free evaluation | No feature, label, or statistic draws on future data, and results are reported on a chronological holdout ([@sec:eval-objectives]) |
 
 : Project objectives and their success tests. {#tbl:objectives}
 
@@ -158,7 +158,7 @@ Lerman and Hogg [6] extended this understanding by modelling the interaction bet
 
 The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth. Furthermore, a key tension exists within these findings: Szabo and Huberman [5] show that early popularity strongly predicts final outcome, yet Cheng et al. [9] later found that cascade prediction accuracy plateaus after the initial phase. This suggests that predictability diminishes once content leaves the emergence stage, which is precisely the window this project targets.
 
-![Online attention lifecycle model [7][8]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.](figures/fig1-online-attention-lifecycle-model.png){#fig:lifecycle}
+![Online attention lifecycle model [7][8]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.](figures/1-online-attention-lifecycle-model.png){#fig:lifecycle}
 
 ## The Shift Toward Pre-Engagement Prediction
 
@@ -171,7 +171,7 @@ This body of work established a second consensus: prediction is achievable befor
 Taken together, the two waves point to a small set of signal families with predictive value, but the evidence for each is uneven and not all of them are usable under this project's leakage constraint. [@tbl:signal-families] synthesises which signals prior work supports, how strong that evidence is, and which are admissible here (available strictly before the surge, computed from backward-looking data only).
 
 | Signal family | Evidence from prior work | Strength | Fit for this project |
-|---------------|--------------------------|----------|----------------------|
+|------------|----------------------------|---------|------------------------|
 | Volume / activity rate | Early view and post counts predict later attention [5][15] | Strong | Included as backward-looking counts ([@sec:feature-engineering]) |
 | Growth / acceleration | Early *rate* of spread predicts sustained growth better than magnitude [9][11] | Strong | Included as lagged growth and acceleration features |
 | Content metadata | Source, category, named entities predict popularity pre-engagement [10] | Moderate | Partially included (word/title counts, ticker counts) |
@@ -226,7 +226,7 @@ This methodological oversight is significant because Tashman [18] demonstrated t
 Consequently, reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains uncertain whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. As Fernández-Delgado et al. [20] noted in their large-scale classifier benchmark, evaluation methodology substantially affects reported performance rankings, reinforcing that how a model is evaluated matters as much as which model is selected.
 
 | Study | Evaluation Method | Temporal Ordering Preserved? | Specific flaw | Leakage Risk |
-|---------------|----------------|-------------|---------------|--------------|
+|---------------|----------------|-----------|--------------------|-----------|
 | Szabo & Huberman [5] | Same-period evaluation | No | Train and test drawn from the same period | High |
 | Bandari et al. [10] | Random train-test split | No | Tests on articles published before some training data | High |
 | Bollen et al. [12] | Fixed holdout (1 month) | Partial | Short window, no out-of-sample testing | Medium |
@@ -248,12 +248,12 @@ The literature reviewed above establishes four cumulative findings:
 
 Against these findings, four key gaps remain unaddressed, each of which this project targets directly ([@tbl:research-gaps]).
 
-| Gap | What prior work lacks | How this project addresses it |
-|-----|-----------------------|-------------------------------|
-| 1. Prediction target | Studies predict *eventual outcomes* (total popularity, cascade size, market returns), not the *onset* of rapid growth in a bounded window; no formulation for a composite volume-and-sentiment surge per entity | Composite surge metric defines a binary onset target within a strict 24-hour window ([@sec:surge-definition]) |
-| 2. Signal integration | Each strand shows one feature category in isolation, temporal [5], content [10], sentiment [12], structural [9], with little empirical integration, despite evidence they interact [6][8] | Feature set combines temporal, activity-frequency, sentiment, and textual signals ([@sec:feature-engineering]) |
-| 3. Domain specificity | General research [5][10][9] neglects financial dynamics (event-driven reactions, domain language, speculation); Reddit finance work [15][16][17] predicts market consequences, not whether surges *occur* | Pipeline applied to two Reddit financial communities at opposite ends of the data-density spectrum |
-| 4. Temporal validity | Random or unspecified splits [5][10][9][15] may inflate reported performance; rigorous temporal methods [18][19] remain unadopted in this domain | Expanding-window temporal cross-validation ensures no future information leaks into training |
+| # | Gap | What prior work lacks | How this project addresses it |
+|---|---------|-----------------------------|--------------------|
+| 1 | Prediction target | Studies predict *eventual outcomes* (total popularity, cascade size, market returns), not the *onset* of rapid growth in a bounded window; no formulation for a composite volume-and-sentiment surge per entity | Composite surge metric defines a binary onset target within a strict 24-hour window ([@sec:surge-definition]) |
+| 2 | Signal integration | Each strand shows one feature category in isolation, temporal [5], content [10], sentiment [12], structural [9], with little empirical integration, despite evidence they interact [6][8] | Feature set combines temporal, activity-frequency, sentiment, and textual signals ([@sec:feature-engineering]) |
+| 3 | Domain specificity | General research [5][10][9] neglects financial dynamics (event-driven reactions, domain language, speculation); Reddit finance work [15][16][17] predicts market consequences, not whether surges *occur* | Pipeline applied to two Reddit financial communities at opposite ends of the data-density spectrum |
+| 4 | Temporal validity | Random or unspecified splits [5][10][9][15] may inflate reported performance; rigorous temporal methods [18][19] remain unadopted in this domain | Expanding-window temporal cross-validation ensures no future information leaks into training |
 
 : The four research gaps and the design response to each. {#tbl:research-gaps}
 
@@ -265,26 +265,12 @@ Whether this integration yields meaningful predictive performance is the empiric
 
 ## Requirements and Design Goals {#sec:requirements}
 
-This subsection answers one question before any design detail: *what must the proposed system achieve?* The three user groups ([@tbl:pain-points]) share one need, an early, ranked shortlist of likely-to-surge tickers, and the research question ([@sec:problem-motivation]) adds that the prediction be genuinely predictive and trustworthy on future data. With the objectives and assumptions ([@tbl:assumptions]), these yield the requirements below.
+This subsection answers one question before any design detail: *what must the proposed system achieve?* The three user groups ([@tbl:pain-points]) share one need, an early, ranked shortlist of likely-to-surge tickers, and the research question ([@sec:problem-motivation]) adds that the prediction be genuinely predictive and trustworthy on future data. Together with the objectives and assumptions ([@tbl:assumptions]), these translate into two kinds of requirement.
 
-**Functional (what the system does).**
-
-- Ingest raw Reddit submissions and identify the ticker each post discusses.
-- Each daily cycle, score every active ticker for a surge in the *next* 24 hours.
-- Emit a per-ticker surge *probability* that ranks candidates for a top-$k$ shortlist, not a binary verdict or autonomous action ([@sec:operational-criteria]).
-
-**Data-science (how it must learn and be judged).**
-
-- *Early:* every model input must exist at or before scoring time, so the system forecasts rather than confirms.
-- *No future information* (most important): no feature, label, or statistic may draw on later data. Temporal leakage is the recurring flaw in prior work ([@sec:methodological-weaknesses]), and a prediction that peeked ahead is worthless in deployment.
-- *Interpretable and reproducible:* reviewers can inspect what drives a flag, and any run reproduces for a third party.
-
-**Success criteria.** Ranking quality is judged against the AUC-ROC tiers ([@tbl:success-tiers]) and operational usefulness against the recall, precision, and alert-volume thresholds ([@tbl:acceptance-criteria]); model comparisons must be reported with uncertainty and significance so Objective 2 is answered, not asserted.
-
-[@tbl:design-goals] consolidates these into six goals, tracing each from need, through requirement, to design response.
+The *functional* requirements fix what the system does: ingest raw Reddit submissions, identify the ticker each post discusses, and each daily cycle score every active ticker for a surge in the *next* 24 hours, emitting a per-ticker score that ranks candidates for a top-$k$ shortlist rather than a binary verdict or autonomous action. The *data-science* requirements govern how it must learn and be judged: every model input must exist at or before scoring time so the system forecasts rather than confirms; no feature, label, or statistic may draw on later data (the most important requirement, since temporal leakage is the recurring flaw in prior work, [@sec:methodological-weaknesses]); and the pipeline must stay interpretable and reproducible. Ranking quality is judged against the AUC-ROC tiers ([@tbl:success-tiers]) and operational usefulness against the recall, precision, and alert-volume thresholds ([@tbl:acceptance-criteria]), with model comparisons reported with uncertainty and significance so Objective 2 is answered, not asserted. [@tbl:design-goals] consolidates these into six goals, tracing each from need, through requirement, to design response.
 
 | # | User / domain need | Requirement | Design response |
-|---|--------------------|-------------|-----------------|
+|---|------------------|---------------|-----------------|
 | G1 | Moderators must act before spikes; researchers and surveillance need lead time, not hindsight ([@tbl:pain-points]) | **Early prediction.** Forecast a surge in the next 24 hours using only signals available when a post is scored | Forward-looking composite target over a 24-hour horizon ([@sec:surge-definition]) |
 | G2 | Prior work is undermined by temporal leakage ([@sec:methodological-weaknesses]); predictions must hold on genuinely unseen future data | **No future information.** No feature, label, or statistic may draw on data later than the record being scored | Backward-only features ([@sec:feature-engineering]), train-frozen z-scores ([@sec:surge-definition]), time-ordered validation ([@sec:temporal-validation]) |
 | G3 | Reviewers must triage a shortlist and trust why each ticker was flagged ([@sec:operational-criteria]) | **Ranked, interpretable output.** Emit a per-ticker surge probability for ranking, on a transparent, inspectable feature basis | Probability ranking with top-$k$ review, an interpretable baseline model, and permutation importance ([@sec:model-selection], [@sec:operational-criteria]) |
@@ -311,7 +297,7 @@ The prediction system is a six-stage linear pipeline ([@tbl:pipeline-stages]). E
 
 : Six pipeline stages and their responsibilities. {#tbl:pipeline-stages}
 
-![Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).](figures/fig2-data-pipeline-v0.1.png){#fig:pipeline}
+![Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).](figures/2-data-pipeline-v0.1.png){#fig:pipeline}
 
 Every stage honours goal G2: no stage may access future information relative to a record's observation time. How this is enforced at each stage, backward-only windows, train-frozen z-scores, and time-ordered folds, is detailed in the subsections that follow.
 
@@ -390,7 +376,7 @@ The four categories (content, temporal, activity, interaction) draw on the signa
 The prediction objective is a supervised binary classification task ($y \in \{0, 1\}$): whether a ticker experiences a composite surge within the subsequent 24 hours. Three classifier families spanning the complexity spectrum ([@tbl:model-families]) evaluate whether architectural sophistication improves prediction.
 
 | Model | Role | Rationale |
-|-------|------|-----------|
+|-----|------|-------------|
 | Logistic Regression (LR) | Interpretable linear baseline (Elastic Net, $L_1+L_2$) | Strong performance would indicate approximate linear separability of the surge feature space |
 | Random Forest (RF) | Bagged tree ensemble | Captures non-linear relationships; consistent top-tier tabular performance [20] |
 | XGBoost | Gradient-boosted trees ($L_1/L_2$ leaf-weight regularisation) | Each tree corrects prior errors; state-of-the-art on structured tabular data |
@@ -409,7 +395,7 @@ Standard $k$-fold cross-validation violates chronological ordering by permitting
 
 **Level 2: Expanding-window CV within training ($k=4$).** The training partition is divided into four chronological blocks producing three validation splits. Each fold trains on all preceding blocks and validates on the next, ensuring every validation instance occurs strictly after all training instances.
 
-![Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.](figures/fig3-expanding-window-cv.png){#fig:expanding-cv}
+![Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.](figures/3-expanding-window-cv.png){#fig:expanding-cv}
 
 A fold count of $k = 4$ ensures sufficient positive surge instances per validation window for stable AUC estimation while maintaining adequate initial training depth. Following hyperparameter optimisation, $F_1$-optimised decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in [@sec:temporal-stability].
 
@@ -449,7 +435,7 @@ The system is designed as a daily screening tool, not an autonomous decision-mak
 **Deriving acceptance thresholds from workflow constraints.** A typical surveillance analyst can review 20–30 flagged tickers per day. On `WSB`, where 500–800 unique tickers appear daily, the system must reduce this universe by at least an order of magnitude.
 
 | Criterion | Requirement | Rationale |
-|-----------|-------------|-------------------|
+|--------------|-------|----------------------|
 | Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [2] |
 | Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [22] |
 | Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive [3] |
@@ -503,7 +489,7 @@ Taken together, the design trades breadth for defensibility: a narrower, fully l
 
 The plan is derived from the CRISP-DM data-mining process model, whose stages (business understanding, data understanding, modelling, evaluation) map directly onto Phases 1–9; this grounding ensures the schedule follows an established methodology rather than an ad-hoc ordering. The phases are sequenced by dependency: scoping and the literature review (Phases 1–2) fix the research question and success criteria that the system design (Phase 4) must satisfy, and data understanding (Phase 3) constrains the surge definition and feature set before any modelling begins. A feasibility prototype (Phase 5) is scheduled ahead of full implementation specifically to de-risk the approach, validating the leakage-free labelling and a single baseline model before committing effort to the complete pipeline. The process is iterative rather than strictly linear: evaluation (Phase 7) feeds refinement (Phase 8), which loops back through implementation and re-evaluation as weaknesses such as threshold miscalibration and data sparsity are identified and addressed. This design allocates the most time to the implementation and evaluation phases, where the project's technical risk is concentrated.
 
-![Project Timeline (Gantt Chart).](figures/fig4-gantt-chart-v0.2.png){#fig:gantt}
+![Project Timeline (Gantt Chart).](figures/4-gantt-chart-v0.2.png){#fig:gantt}
 
 ---
 
@@ -598,9 +584,9 @@ Applying the subreddit criteria from [@sec:eda] across the nine available Reddit
 
 [@fig:eda-viability] shows the surge-viability sweep for `WSB` and how the positive-class rate shrinks as the definition gets stricter, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties that motivate the sparse-versus-dense framing used throughout the evaluation.
 
-![Surge-viability sweep for `WSB` from the EDA screening. Each cell reports the positive-class rate for a candidate surge definition (a volume percentile crossed with a standard-deviation multiplier). Shaded cells clear the minimum viable positive-class threshold, confirming that a usable surge signal exists before any pipeline development.](figures/fig5-eda-surge-viability-wsb.png){#fig:eda-viability}
+![Surge-viability sweep for `WSB` from the EDA screening. Each cell reports the positive-class rate for a candidate surge definition (a volume percentile crossed with a standard-deviation multiplier). Shaded cells clear the minimum viable positive-class threshold, confirming that a usable surge signal exists before any pipeline development.](../../eda/output/figures/surge_viability_leukipp_wallstreetbets_submissions_reddit.png){#fig:eda-viability}
 
-![Cross-dataset comparison from the EDA phase, setting `r/pennystocks` and `WSB` side by side on volume, coverage, and signal properties. This exploratory contrast is what motivates the sparse-versus-dense experimental design later formalised in the evaluation.](figures/fig6-eda-cross-dataset-comparison.png){#fig:eda-cross-dataset}
+![Cross-dataset comparison from the EDA phase, setting `r/pennystocks` and `WSB` side by side on volume, coverage, and signal properties. This exploratory contrast is what motivates the sparse-versus-dense experimental design later formalised in the evaluation.](../../eda/output/figures/cross_dataset_comparison.png){#fig:eda-cross-dataset}
 
 Two boundaries separate this tooling from the pipeline. First, the sampling caps above mean the EDA's record counts and date spans are screening artefacts; they do not match the full-run figures the pipeline produces on the complete data ([@tbl:dataset-characteristics]). Second, the surge-viability sweep is a simple percentile-and-standard-deviation heuristic used only to confirm that some viable positive class exists; it is deliberately distinct from the leakage-free composite z-score target the pipeline uses for actual labelling ([@sec:surge-definition]).
 
@@ -989,11 +975,11 @@ These unit tests execute on synthetic datasets and run automatically prior to ev
 
 The three objectives ([@tbl:objectives]) were each assessed against their success test on the held-out data. [@tbl:objective-verdicts] records the verdict and points to the evidence that supports it, developed in the Results and Critical Analysis that follow; the detailed figures are not restated here.
 
-| Objective | Verdict | Key evidence |
-|-----------|---------|--------------|
-| O1 — Predict surges | Met | Both tree models clear the stretch tier on `WSB` and target on `r/pennystocks`, well above the best single feature; the binding constraint is data density, not methodology ([@tbl:perf-default], [@tbl:baselines]) |
-| O2 — Compare approaches | Met | All pairwise model differences are significant; complexity helps under abundance but inverts under scarcity ([@sec:statistical-validation], [@sec:complexity-density]) |
-| O3 — Temporal validity | Met | Reported on a chronological holdout with leakage prevented at every stage; the large validation-to-test F1 gap shows the protocol exposing what random splits would have hidden ([@sec:temporal-stability]) |
+| # | Objective | Verdict | Key evidence |
+|---|------|-----|-----------------------|
+| O1 | **Predict surges** | Met | Both tree models clear the stretch tier on `WSB` and target on `r/pennystocks`, well above the best single feature; the binding constraint is data density, not methodology ([@tbl:perf-default], [@tbl:baselines]) |
+| O2 | **Compare approaches** | Met | All pairwise model differences are significant; complexity helps under abundance but inverts under scarcity ([@sec:statistical-validation], [@sec:complexity-density]) |
+| O3 | **Temporal validity** | Met | Reported on a chronological holdout with leakage prevented at every stage; the large validation-to-test F1 gap shows the protocol exposing what random splits would have hidden ([@sec:temporal-stability]) |
 
 : Verdicts against the three project objectives, with pointers to supporting evidence. {#tbl:objective-verdicts}
 
@@ -1012,7 +998,7 @@ Two properties make the problem genuinely hard rather than merely imbalanced. Fi
 On `WSB`, XGBoost achieved AUC-ROC 0.892 [0.881–0.902] and Random Forest 0.880 [0.869–0.890], both clearing the stretch tier. On `r/pennystocks`, Random Forest led at 0.753 [0.673–0.824], meeting target.
 
 | Dataset | Model | AUC-ROC [95% CI] | Precision | Recall | F1 | Tier |
-|---------|-------|-------------------|-----------|--------|-----|------|
+|----------------|-------|----------------|--------|-------|-----|------|
 | WSB (68,923 records, 668 surges, 0.97% rate) | LR | 0.707 [0.684–0.729] | 0.013 | 0.801 | 0.026 | Target |
 | | RF | 0.880 [0.869–0.890] | 0.095 | 0.311 | 0.145 | Stretch |
 | | XGB | 0.892 [0.881–0.902] | 0.043 | 0.819 | 0.081 | Stretch |
@@ -1048,9 +1034,9 @@ After tuning, XGBoost on `WSB` achieves the best $F_1 = 0.226$ at threshold 0.85
 
 At the best operating point on WSB, XGBoost identifies 157 of 668 surges with 565 false alarms (~1 true positive per 4.6 flags), manageable for human review but unsuitable for automation.
 
-![Confusion matrix for XGBoost at tuned threshold (0.85) on the WSB held-out test set. The model correctly identifies 157 surges (TP) while generating 565 false alarms (FP), with 511 missed surges (FN). The extreme class imbalance (67,690 TN) visually confirms why precision remains low despite strong ranking ability.](figures/10_confusion_matrix_xgboost.png){#fig:confusion-matrix}
+![Confusion matrix for XGBoost at tuned threshold (0.85) on the WSB held-out test set. The model correctly identifies 157 surges (TP) while generating 565 false alarms (FP), with 511 missed surges (FN). The extreme class imbalance (67,690 TN) visually confirms why precision remains low despite strong ranking ability.](../../output/figures/evaluation/20260905_A2/10_confusion_matrix_xgboost.png){#fig:confusion-matrix}
 
-![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).](figures/fig9-roc_curves_combined.png){#fig:roc-curves}
+![Combined ROC curves for Logistic Regression, Random Forest, and XGBoost on the WSB held-out test set. The diagonal represents a random classifier (AUC = 0.5).](../../output/figures/evaluation/20260905_A2/11_roc_curves_combined.png){#fig:roc-curves}
 
 ### Statistical Validation {#sec:statistical-validation}
 
@@ -1105,7 +1091,7 @@ Models were evaluated on the other community's test set without retraining ([@tb
 
 `sentiment_score` dominates everywhere (+0.113 to +0.203). On WSB, activity features fill ranks 2–3; on pennystocks, `time_since_previous` rises to second (+0.086), reflecting reliance on temporal gaps when volume is low. Interaction terms remain negligible on WSB (≤+0.005) but `word_count_x_hour` reaches +0.017 on pennystocks RF.
 
-![Permutation feature importance comparison across models and datasets. Sentiment score consistently dominates, while the relative ordering of activity and temporal features shifts between high-density (WSB) and sparse (pennystocks) communities.](figures/feature_importance_comparison.png){#fig:feature-importance}
+![Permutation feature importance (mean decrease in AUC-ROC, 10 repeats) for the three models on the WSB held-out test set. Sentiment score dominates for both tree models, with activity features (`ticker_post_rate_24h`) next; the cross-community comparison against pennystocks is given in [@tbl:feature-importance].](../../output/figures/evaluation/20260905_A2/13_feature_importance_comparison.png){#fig:feature-importance}
 
 ### Sentiment Contribution (Phase 1 vs Phase 2) {#sec:sentiment-contribution}
 
@@ -1187,7 +1173,7 @@ The best operating point (XGBoost, threshold 0.85 on `WSB`) is evaluated against
 
 The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~584 flags/day, operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
 
-![Classification threshold sensitivity for XGBoost on WSB. As the decision threshold varies, precision and recall trade off sharply. No single threshold simultaneously achieves recall ≥ 0.50 and precision ≥ 0.10, illustrating the fundamental constraint imposed by the 102:1 class imbalance.](figures/12_threshold_sensitivity_xgboost.png){#fig:threshold-sensitivity}
+![Classification threshold sensitivity for XGBoost on WSB. As the decision threshold varies, precision and recall trade off sharply. No single threshold simultaneously achieves recall ≥ 0.50 and precision ≥ 0.10, illustrating the fundamental constraint imposed by the 102:1 class imbalance.](../../output/figures/evaluation/20260905_A2/12_classification_threshold_sensitivity_xgboost.png){#fig:threshold-sensitivity}
 
 **Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, ~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
 
