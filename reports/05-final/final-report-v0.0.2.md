@@ -357,23 +357,29 @@ Taken together, per record–ticker pair, event-relative windows, one sentiment 
 
 ## Surge Definition (Target Variable) {#sec:surge-definition}
 
-A fixed posting-count threshold fails because tickers have different baselines. The solution is a composite metric that normalises volume growth relative to the training distribution and combines it with sentiment change. For each record mentioning ticker *X* at time *t*, the pipeline:
+A single fixed posting-count cutoff cannot compare surges across tickers, because the same absolute count means different things for different baselines: twenty posts in an hour is explosive for an obscure penny stock but routine for a heavily discussed ticker. The target therefore measures *relative* volume growth, normalised against the training distribution, and combines it with sentiment change into a composite score. For each record mentioning ticker *X* at time *t*, the pipeline computes the composite in five steps ([@tbl:surge-steps]).
 
-1. Counts posts mentioning ticker $X$ within a backward window $[t - 24\text{h}, t)$ and a forward window $(t, t+24\text{h}]$
-2. Computes volume growth: $$\Delta V = \frac{C_{\text{fwd}}}{\max(C_{\text{bwd}}, 1)} - 1$$where $C_{\text{fwd}}$ and $C_{\text{bwd}}$ are forward and backward post counts respectively.
-3. Computes sentiment shift magnitude: $$\Delta S = \vert{}\bar{S}_{\text{fwd}} - s_t\vert{}$$where $\bar{S}_{\text{fwd}}$ is the mean VADER score across forward-window posts and $s_t$ is the current post's score.
-4. Standardises both using training-partition parameters exclusively: $$Z(\Delta V) = \frac{\Delta V - \mu_{\Delta V,\text{train}}}{\sigma_{\Delta V,\text{train}}}, \quad Z(\Delta S) = \frac{\Delta S - \mu_{\Delta S,\text{train}}}{\sigma_{\Delta S,\text{train}}}$$
-5. Combines into a composite score and applies binary thresholding:$$\text{Composite} = w_1 \cdot Z(\Delta V) + w_2 \cdot Z(\Delta S)$$A record is labelled surge ($y = 1$) if $\text{Composite} > \tau$.
+| Step | Operation | Definition |
+|----|-------|------------------|
+| 1 | Window counts | Count posts mentioning ticker $X$ in the backward window $[t - 24\text{h}, t)$ and forward window $(t, t+24\text{h}]$, giving $C_{\text{bwd}}$ and $C_{\text{fwd}}$ |
+| 2 | Volume growth | $\Delta V = C_{\text{fwd}} / \max(C_{\text{bwd}}, 1) - 1$ |
+| 3 | Sentiment shift | $\Delta S = \lvert \bar{S}_{\text{fwd}} - s_t \rvert$, where $\bar{S}_{\text{fwd}}$ is the mean VADER score over forward-window posts and $s_t$ the current post's score |
+| 4 | Standardise | $Z(\Delta V), Z(\Delta S)$ using training-partition $\mu, \sigma$ exclusively |
+| 5 | Composite + label | $\text{Composite} = w_1 Z(\Delta V) + w_2 Z(\Delta S)$; label surge ($y=1$) if $\text{Composite} > \tau$ |
 
-Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the training partition prevents test-set distribution information from leaking into target labels.
+: The five-step composite surge computation. {#tbl:surge-steps}
 
-**Observation window:** A 24-hour window is chosen to align with daily trading cycles. The expectation is that shorter windows (6h) would yield sparse per-ticker counts and unstable statistics, while longer windows (72h) would blur surge onset with sustained activity; these are design rationales rather than tested outcomes, and multi-scale alternatives are left to future work ([@sec:proposed-improvements]).
+Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the training partition (step 4) prevents test-set distribution information from leaking into the target labels.
 
-**Sentiment weighting:** Incorporating $\Delta S$ is intended to capture scenarios where discussion grows polarised without an immediate volume spike [4][10], on the hypothesis that a rising emotional charge can precede a surge. Whether it earns its place is tested by comparing a volume-only target against the composite, reported in [@sec:sentiment-contribution]. The EDA phase separately screens the reliability of the VADER signal that underpins $\Delta S$ before it is committed to ([@sec:eda-tooling]).
+The definition has three free parameters, set once and held fixed across the pipeline ([@tbl:surge-parameters]).
 
-**Threshold selection:** The threshold $\tau$ trades anomaly purity against class balance: a high $\tau$ isolates rarer, more clearly anomalous surges but leaves fewer positives to learn from, while a low $\tau$ does the reverse. The design fixes $\tau = 1.5$ as the primary operating point, intended to isolate genuine statistical anomalies while retaining enough positive instances for stable estimation, with $\tau = 1.0$ retained as a secondary point for sensitivity analysis. The EDA viability gate ([@sec:eda]) exists precisely to confirm, before this is committed to, that a workable positive class survives at comparably strict definitions; the measured surge counts across $\tau$ are reported with the sensitivity analysis in [@sec:eval-objectives].
+| Parameter | Value | Rationale |
+|-------|-----|-----------------|
+| Observation window | 24 h | Aligns with daily trading cycles. Shorter (6h) is expected to give sparse, unstable counts and longer (72h) to blur surge onset; these are design rationales, not tested outcomes, and multi-scale windows are future work ([@sec:proposed-improvements]) |
+| Weights $w_1, w_2$ | $0.5, 0.5$ (composite) | $\Delta S$ is included to catch discussion that grows polarised before volume spikes [4][10]; whether it earns its place is tested against a volume-only target ($w_2 = 0$) in [@sec:sentiment-contribution], and the VADER signal behind $\Delta S$ is screened in the EDA ([@sec:eda-tooling]) |
+| Threshold $\tau$ | $1.5$ (primary), $1.0$ (secondary) | $\tau$ trades anomaly purity against class balance: higher isolates rarer, clearer surges but leaves fewer positives. $\tau = 1.5$ balances the two; the EDA viability gate ([@sec:eda]) confirms a workable positive class survives, and surge counts across $\tau$ appear in [@sec:eval-objectives] |
 
-**Two-phase validation:** Phase 1 ($w_1 = 1.0, w_2 = 0.0$) evaluates a volume-only target; Phase 2 ($w_1 = 0.5, w_2 = 0.5$) evaluates the composite. Comparing phases isolates sentiment's empirical contribution. A full weight sweep ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$) is reported in [@sec:sentiment-contribution].
+: The three parameters of the surge definition and their fixed values. {#tbl:surge-parameters}
 
 ## Feature Engineering {#sec:feature-engineering}
 
@@ -508,17 +514,19 @@ The plan is derived from the CRISP-DM data-mining process model, whose stages (b
 
 ## Code Organisation
 
-The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, built with setuptools) depending on `pandas` ($\ge 2.0$), `scikit-learn` ($\ge 1.3$), `XGBoost` ($\ge 2.0$), `vaderSentiment` ($\ge 3.3.2$), and `NumPy` ($\ge 1.24$). Exact pinned versions are recorded in `requirements.txt` and logged with each experiment run for full reproducibility. 
+The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, built with setuptools via `pyproject.toml`). Dependencies are declared as minimum-version ranges in both `pyproject.toml` and `requirements.txt` (listed in full in [@sec:appendix-dependencies]), and the resolved environment is logged with each experiment run so a run can be reproduced against the versions actually used.
 
-All source code resides under `src/`, split into core library modules and executable CLI scripts:
+The pipeline source resides under `src/`, split into core library modules and executable CLI scripts. Alongside it, a separate top-level `eda/` directory holds the standalone data-selection notebooks (kept outside the pipeline package; see [@sec:eda-tooling]):
 
-```default {#lst:source-org caption="Source code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage, enforcing separation of concerns. Each module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves."}
+```default {#lst:source-org caption="Repository code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage (plus a few shared-utility and data-contract modules), enforcing separation of concerns. Each stage module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves. The \`eda/\` notebooks sit outside \`src/\` and share no code with the pipeline package."}
+eda/                             # Standalone data-selection notebooks ([@sec:eda-tooling])
+├── 01_discovery.ipynb           # Candidate discovery (Kaggle + HuggingFace APIs)
+├── 02_highlevel_eval.ipynb      # High-level comparative profiling
+├── 03_deep_assessment.ipynb     # Deep viability assessment
+├── input/                       # Manually downloaded candidate datasets
+└── output/                      # Screening CSVs + figures
 src/
-├── eda/                         
-│   ├── 01_discovery.ipynb       # Dataset Discovery
-│   ├── 02_highlevel_eval.ipynb  # High-Level Dataset Evaluation
-│   └── 03_deep_assessment.ipynb # Deep Dataset Assessment
-├── surge_pipeline/              # Core library (15 modules, ~4,250 LOC)
+├── surge_pipeline/              # Core library (16 modules, ~4,450 LOC)
 │   ├── config.py                # Configuration dataclass + JSON I/O
 │   ├── loader.py                # CSV ingestion, ticker extraction, explosion
 │   ├── windowing.py             # Per-ticker 24h counts (searchsorted)
@@ -527,19 +535,25 @@ src/
 │   ├── normalisation.py         # Z-score parameter persistence
 │   ├── features.py              # 11 backward-only features
 │   ├── training.py              # Expanding-window CV + grid search
+│   ├── training_models.py       # Training result / model-container dataclasses
 │   ├── evaluation.py            # Metrics, bootstrap CI, McNemar's
+│   ├── evaluation_models.py     # Evaluation result dataclasses + tier constants
 │   ├── evaluation_figures.py    # ROC curves, confusion matrices, plots
 │   ├── experiment_log.py        # Append-only JSONL tracker
+│   ├── timestamps.py            # Portable datetime -> epoch-seconds conversion
+│   ├── cli_logging.py           # Tee-style console + log-file output
 │   └── pipeline.py              # Orchestrator: chains all stages
 ├── tests/                       # 10 test modules (pytest)
 ├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
-└── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
+├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
+├── generate_figures.py          # CLI: regenerate figures from saved artefacts
+└── generate_prediction_examples.py  # CLI: worked prediction examples
 ```
 
-Each pipeline stage maps directly to one or two library modules. This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
+Each pipeline stage maps directly to one or two library modules, with a few small modules holding shared utilities (`timestamps.py`, `cli_logging.py`) and data contracts (`training_models.py`, `evaluation_models.py`). This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
-Executable commands are exposed via entry-point CLI scripts to streamline individual stages and end-to-end runs.
+Executable commands are exposed via entry-point CLI scripts (declared in `pyproject.toml`) to streamline individual stages and end-to-end runs.
 
 | Command | Purpose |
 |---------|-----------------------------|
@@ -547,6 +561,7 @@ Executable commands are exposed via entry-point CLI scripts to streamline indivi
 | `surge-train` | Train all three models and produce the full evaluation report |
 | `surge-cross-val` | Test whether a model trained on one subreddit transfers to the other |
 | `surge-figures` | Regenerate publication figures from saved evaluation artefacts |
+| `surge-examples` | Generate worked per-record prediction examples |
 
 : CLI entry points. {#tbl:cli-entry-points}
 
@@ -554,7 +569,7 @@ Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, whi
 
 ## Exploratory Data Analysis Tooling {#sec:eda-tooling}
 
-The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `src/eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `src/eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
+The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `src/eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
 
 | Notebook | Screening stage | Input | Output artefact |
 |-------------|------------|-----------|---------------|
@@ -1328,3 +1343,33 @@ Two directions would extend the methodology:
 [22] Haibo He and Edwardo A. Garcia. 2009. Learning from imbalanced data. *IEEE Trans. Knowl. Data Eng.* 21, 9 (September 2009), 1263–1284. https://doi.org/10.1109/TKDE.2008.239
 
 [23] Andrew J. Vickers and Elena B. Elkin. 2006. Decision curve analysis: A novel method for evaluating prediction models. *Medical Decision Making* 26, 6 (November 2006), 565–574. https://doi.org/10.1177/0272989X06295361
+
+---
+
+# Appendix {.unnumbered}
+
+## Software Dependencies {#sec:appendix-dependencies}
+
+[@tbl:dependencies] lists the declared dependencies of the `surge-pipeline` package, taken from `pyproject.toml` and `requirements.txt`. All are specified as minimum-version constraints; the exact resolved versions are captured in each run's experiment log ([@sec:eval-pipeline]). The project targets Python $\ge 3.10$ and is built with setuptools ($\ge 68.0$).
+
+| Package | Constraint | Group | Role |
+|---------|------------|-------|------|
+| `pandas` | $\ge 2.0$ | Runtime | DataFrame ingestion, windowing, and labelling |
+| `numpy` | $\ge 1.24$ | Runtime | Vectorised counts, z-scores, array operations |
+| `scikit-learn` | $\ge 1.3$ | Runtime | Logistic Regression, Random Forest, metrics, scaling |
+| `xgboost` | $\ge 1.7$ | Runtime | Gradient-boosted tree classifier |
+| `scipy` | $\ge 1.10$ | Runtime | Statistical tests (McNemar's) and distributions |
+| `vaderSentiment` | $\ge 3.3$ | Runtime | Rule-based sentiment scoring |
+| `textblob` | $\ge 0.17$ | Runtime | Secondary sentiment signal for EDA agreement check |
+| `matplotlib` | $\ge 3.7$ | Runtime | Figure generation (ROC, confusion matrices) |
+| `seaborn` | $\ge 0.12$ | Runtime | Statistical plotting |
+| `joblib` | $\ge 1.2$ | Runtime | Model persistence |
+| `tqdm` | $\ge 4.60$ | Runtime | Progress reporting for long-running stages |
+| `kaggle` | $\ge 1.6$ | EDA | Dataset discovery via the Kaggle API |
+| `huggingface_hub` | $\ge 0.20$ | EDA | Dataset discovery via the HuggingFace API |
+| `pytest` | $\ge 7.0$ | Dev | Test suite execution |
+| `mypy` | $\ge 1.10$ | Dev | Static type checking |
+| `ruff` | $\ge 0.4$ | Dev | Linting and formatting |
+| `pandas-stubs` | $\ge 2.0$ | Dev | Type stubs for `pandas` |
+
+: Declared software dependencies of the `surge-pipeline` package, from `pyproject.toml` and `requirements.txt`. {#tbl:dependencies}
