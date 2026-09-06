@@ -226,7 +226,7 @@ This methodological oversight is significant because Tashman [18] demonstrated t
 Consequently, reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains uncertain whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. As Fernández-Delgado et al. [20] noted in their large-scale classifier benchmark, evaluation methodology substantially affects reported performance rankings, reinforcing that how a model is evaluated matters as much as which model is selected.
 
 | Study | Evaluation Method | Temporal Ordering Preserved? | Specific flaw | Leakage Risk |
-|---------------|----------------|-----------|--------------------|-----------|
+|---------------|----------------|-----------|----------------------|---------|
 | Szabo & Huberman [5] | Same-period evaluation | No | Train and test drawn from the same period | High |
 | Bandari et al. [10] | Random train-test split | No | Tests on articles published before some training data | High |
 | Bollen et al. [12] | Fixed holdout (1 month) | Partial | Short window, no out-of-sample testing | Medium |
@@ -471,7 +471,7 @@ Ranking quality is scored against the tiers in [@tbl:success-tiers], using the m
 Several plausible design choices were considered and deliberately not taken. [@tbl:design-alternatives] records each alternative, why it was rejected, and the constraint that drove the decision, so the chosen design is legible as a set of trade-offs rather than defaults. The unifying theme is feasibility under a fixed archival dataset, a strict no-leakage requirement, and a single-developer time and compute budget: where an option added capability at the cost of leakage risk, scope creep, or data the archive cannot supply, it was set aside.
 
 | Alternative considered | Why not chosen | Governing constraint |
-|-------------------|---------------------|-------------------|
+|-------------------|-----------------------|-----------------|
 | Real-time ingestion / live dashboard | Adds streaming infrastructure orthogonal to the research question; retrospective evaluation answers it more cleanly | Scope, time; deferred to future work ([@sec:proposed-improvements]) |
 | Network / diffusion features (user graphs, reshare cascades) | Archive has no reliable user-interaction graph; would break the per-ticker, per-post unit of analysis | Data availability, scope ([@tbl:signal-families]) |
 | LSTM / sequence or time-series models | Sparse, highly imbalanced positives; large labelled-data and compute demands; opacity conflicts with the interpretability requirement | Data density, compute, interpretability ([@sec:modelling-review]) |
@@ -491,7 +491,7 @@ Taken together, the design trades breadth for defensibility: a narrower, fully l
 [@tbl:timeline] outlines the main project phases, activities, and expected deliverables.
 
 | Id | Phase | Key Activities | Deliverables |
-|----|-------|----------------|--------------|
+|----|-----------|---------------|-----------|
 | Phase 1 | Business Understanding & Scoping | Define problem, users, research question, scope and success criteria | Project definition and requirements |
 | Phase 2 | Literature Review | Review trend prediction, engagement prediction and sentiment analysis research | Literature review and research gap |
 | Phase 3 | Data Understanding | Dataset investigation, exploratory analysis and quality assessment | Dataset profile and EDA results |
@@ -542,13 +542,17 @@ src/
 │   ├── experiment_log.py        # Append-only JSONL tracker
 │   ├── timestamps.py            # Portable datetime -> epoch-seconds conversion
 │   ├── cli_logging.py           # Tee-style console + log-file output
-│   └── pipeline.py              # Orchestrator: chains all stages
+│   ├── pipeline.py              # Orchestrator: chains all stages
 ├── tests/                       # 10 test modules (pytest)
 ├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
 ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
 ├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
 ├── generate_figures.py          # CLI: regenerate figures from saved artefacts
-└── generate_prediction_examples.py  # CLI: worked prediction examples
+├── generate_prediction_examples.py  # CLI: worked prediction examples
+└── build_stopwords.py           # Regenerates ticker_stopwords.txt
+input/reference/
+└── ticker_stopwords.txt         # stopword lexicon (NLTK base + supplement)
+scripts/
 ```
 
 Each pipeline stage maps directly to one or two library modules, with a few small modules holding shared utilities (`timestamps.py`, `cli_logging.py`) and data contracts (`training_models.py`, `evaluation_models.py`). This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
@@ -569,10 +573,10 @@ Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, whi
 
 ## Exploratory Data Analysis Tooling {#sec:eda-tooling}
 
-The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `src/eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
+The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
 
 | Notebook | Screening stage | Input | Output artefact |
-|-------------|------------|-----------|---------------|
+|--------------|-----------|-----------|---------------|
 | `01_discovery.ipynb` | Candidate discovery | Kaggle + HuggingFace dataset APIs | `candidates.csv` |
 | `02_highlevel_eval.ipynb` | High-level comparative profiling | Shortlisted CSVs (20k-row sample each) | `highlevel_comparison.csv` |
 | `03_deep_assessment.ipynb` | Deep viability assessment | Selected Reddit datasets (up to 100k rows) | `deep_assessment.csv` + figures |
@@ -584,20 +588,20 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 **Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap-to-compute properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields needed to build a surge label (text, timestamp, engagement) are present. Profiling runs on a 20,000-row sample per dataset for speed and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets have no engagement fields at all and cannot support a surge label regardless of their ticker vocabulary.
 
 | Dataset | Records (sampled) | Date span | Engagement fields | Surge-label ready |
-|-------------------|--------------|----------------|--------------|--------------|
-| `r/pennystocks` submissions | 20,000 | 2021-01-01 to 2021-02-16 | Yes (`score`, `num_comments`) | Yes |
-| `WSB` submissions | 20,000 | 2021-01-01 to 2021-01-19 | Yes (`score`, `num_comments`) | Yes |
+|--------------------------|------------|---------------------|---------|---------|
+| `r/pennystocks` submissions | 20,000 | 2021-01-01 to 2021-02-16 | Yes | Yes |
+| `WSB` submissions | 20,000 | 2021-01-01 to 2021-01-19 | Yes | Yes |
 | `financial-tweets` (stockerbot) | 20,000 | 2018-02-23 to 2018-07-19 | No | No |
 | `sentiment-analysis-financial-tweets` | 20,000 | 2018-02-23 to 2018-07-19 | No | No |
 
 : High-level dataset comparison from the EDA screening. Profiled on a 20,000-row sample per dataset; the Twitter-derived datasets are excluded because they carry no engagement fields and cannot support a surge label. {#tbl:eda-highlevel}
 
-Applying the subreddit criteria from [@sec:eda] across the nine available Reddit subreddits, three fall away immediately: `r/stocks` and `r/investing` favour longer-form, strategy-oriented posts that mention few explicit tickers, so more than 90% of their records drop out at extraction, and `r/GME` centres on a single ticker, which collapses the per-ticker design. That leaves the selected pair, `WSB` as the high-density community and `r/pennystocks` as the sparse one; their full-run sizes are given later in [@tbl:loader-attrition].
+The `leukipp/reddit-finance-data` archive bundles several financial subreddits. A preliminary screening of these communities against the subreddit criteria from [@sec:eda], carried out ahead of and outside the committed notebooks, narrowed the field to the two most suitable for the experiments: `WSB` as the high-density community and `r/pennystocks` as the sparse one. This pair spans opposite ends of the posting-density spectrum, which serves the abundance-versus-scarcity and cross-dataset-transfer goals; single-ticker or predominantly long-form communities were set aside because they do not support the per-ticker surge design. The high-level profiling above ([@tbl:eda-highlevel]) is therefore reported for this selected pair, and their full-run sizes are given later in [@tbl:loader-attrition].
 
 **Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement as a reliability check on the sentiment signal, then runs a surge-viability sweep across nine candidate surge definitions formed by crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition yields a positive class above a minimum viable rate. Both datasets pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
 
 | Property | `r/pennystocks` | `WSB` |
-|----------|-----------------|-------|
+|----------------|------------|------------|
 | Records assessed | 54,785 | 100,000 |
 | Date range (sampled) | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-01-28 |
 | Coverage / gaps (>7 days) | 364 days / 0 | 27 days / 0 |
@@ -618,19 +622,17 @@ Two boundaries separate this tooling from the pipeline. First, the sampling caps
 
 ## Data Loading and Preprocessing
 
-The data loader module (`loader.py`) ingests raw Reddit submission exports and transforms them into the core unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps:
+The data loader (`loader.py`) turns raw submission exports into the unit of analysis (one row per record-ticker pair, sorted chronologically) in four steps.
 
-**Step 1: Text Cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) and nulls in both `selftext` and `title` are replaced with empty strings so downstream regex operates on consistent input. Each raw row maps to a unique Reddit submission ID, so no deduplication is needed.
+**Step 1: Text Cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) and nulls in `selftext` and `title` become empty strings so the regex sees consistent input. Each row has a unique submission ID, so no deduplication is needed.
 
-**Step 2: Ticker Extraction** 
+**Step 2: Ticker Extraction.** Two prioritised regex patterns are applied: dollar-sign tickers (`\$([A-Z]{1,5})`, e.g. `$AMC`), the highest-confidence marker, and standalone 2–5 character uppercase words (`\b[A-Z]{2,5}\b`), a broader net. Matches are filtered against a stopword lexicon that is *derived* rather than hand-coded, for transparent provenance: an **English base** taken mechanically from the NLTK `stopwords` corpus (upper-cased, restricted to 1–5 character tokens) is unioned with a curated, categorised **domain supplement** of finance/Reddit/market terms that resemble tickers (`DD`, `YOLO`, `NASDAQ`, `CEO`) plus everyday words NLTK omits (`HUGE`, `TECH`, `STOCK`). The supplement grew from iterative error analysis on early runs (inspect frequent uppercase false positives, categorise, repeat). A build script (`src/build_stopwords.py`) writes the lexicon to a self-documenting reference file (`input/reference/ticker_stopwords.txt`) that the loader reads at startup, keeping it auditable and free of magic literals. A stopword filter beats a closed exchange-listed universe because tickers rotate frequently: its worst case is minor per-record noise, whereas a stale master list would silently drop unknown stocks. [@lst:ticker-extraction] shows the logic:
 
-Tickers are extracted from submission text using two prioritised regex patterns: (1) Dollar-sign tickers (e.g., `\$([A-Za-z]{1,5})` for `$AMC`, `$TSLA`), which carry the highest confidence since the dollar prefix is an explicit marker in financial communities; (2) Standalone 2–5 character uppercase words `(\b[A-Z]{2,5}\b)`, which cast a broader net. Extracted matches are filtered against a curated stopword lexicon of 297 terms across eight categories (common English, Reddit slang, finance abbreviations, etc.), developed through iterative error analysis on early runs. A stopword filter was selected over a closed universe of exchange-listed tickers because penny stocks and emerging tickers rotate frequently; the worst-case failure mode is a false-positive adding minor noise to one record, whereas an outdated master ticker list would silently drop posts about unknown stocks. [@lst:ticker-extraction] shows the extraction logic:
-
-```python {#lst:ticker-extraction caption="Ticker extraction with dual regex priority cascade and stopword filtering (from loader.py). The dollar-sign pattern captures explicit financial references with high precision; the uppercase pattern broadens recall at the cost of precision, mitigated by a 297-term stopword lexicon spanning eight categories."}
+```python {#lst:ticker-extraction caption="Ticker extraction with dual regex priority cascade and stopword filtering (from loader.py). The dollar-sign pattern captures explicit financial references with high precision; the uppercase pattern broadens recall at the cost of precision, mitigated by a stopword lexicon derived from an NLTK English base plus a curated domain supplement (see `src/build_stopwords.py`)."}
 # Extract tickers from combined title + selftext
-combined_text = f"{title} {selftext}"
+combined_text = f"{title!s} {selftext!s}"
 
-# 1. Dollar-sign pattern (highest priority always included)
+# 1. Dollar-sign pattern (highest priority — always included)
 dollar_matches = _DOLLAR_SIGN_PATTERN.findall(combined_text)
 for match in dollar_matches:
     ticker = match.upper()
@@ -645,9 +647,9 @@ for match in word_matches:
         tickers.add(ticker)
 ```
 
-**Step 3: Timestamp Normalisation.** The loader accepts both formats present across the archives, Unix epoch integers and ISO datetime strings, unifying them into timezone-aware `datetime64[ns, UTC]` and sorting chronologically. This ordering is a hard precondition for the binary-search windowing that follows; a missing timestamp column raises an explicit error rather than failing silently.
+**Step 3: Timestamp Normalisation.** Both archive formats (Unix epoch integers and ISO datetime strings) are unified into timezone-aware `datetime64[ns, UTC]` and sorted chronologically, a hard precondition for the binary-search windowing that follows. A missing timestamp column raises an explicit error rather than failing silently.
 
-**Step 4: Ticker Explosion & Filtering.** Multi-ticker posts (e.g. "comparing `$AMC` vs `$GME`") are split and exploded via `pandas.explode()` into one row per record–ticker pair, realising the unit of analysis from [@sec:data-representation]; records yielding zero valid tickers after filtering are dropped.
+**Step 4: Ticker Explosion & Filtering.** Multi-ticker posts are split and exploded via `pandas.explode()` into one row per record–ticker pair ([@sec:data-representation]); records with zero valid tickers are dropped.
 
 | Step | r/pennystocks | WSB |
 |------|---------------|------------------|
@@ -657,7 +659,7 @@ for match in word_matches:
 
 : Loader-stage attrition. {#tbl:loader-attrition}
 
-Carried through the remaining stages (surge labelling excludes records whose forward window is too sparse or runs past the dataset boundary, as described in [@sec:surge-definition]), these two datasets resolve to the end-to-end characteristics in [@tbl:dataset-characteristics]. These full-run figures, not the capped EDA samples in [@sec:eda-tooling], are the ones used throughout the evaluation.
+After the remaining stages (labelling also drops records whose forward window is too sparse or runs past the dataset boundary, [@sec:surge-definition]), the datasets resolve to the characteristics in [@tbl:dataset-characteristics]. These full-run figures, not the capped EDA samples ([@sec:eda-tooling]), are used throughout the evaluation.
 
 | Property | r/pennystocks | WSB |
 |----------|---------------|------------------|
@@ -1371,5 +1373,6 @@ Two directions would extend the methodology:
 | `mypy` | $\ge 1.10$ | Dev | Static type checking |
 | `ruff` | $\ge 0.4$ | Dev | Linting and formatting |
 | `pandas-stubs` | $\ge 2.0$ | Dev | Type stubs for `pandas` |
+| `nltk` | $\ge 3.8$ | Dev | Build-time only: English base of the ticker stopword lexicon |
 
 : Declared software dependencies of the `surge-pipeline` package, from `pyproject.toml` and `requirements.txt`. {#tbl:dependencies}

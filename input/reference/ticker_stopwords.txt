@@ -1,0 +1,346 @@
+# =====================================================================
+# ticker_stopwords.txt  --  GENERATED FILE, DO NOT EDIT BY HAND
+# =====================================================================
+#
+# Regenerate with:  python scripts/build_stopwords.py
+# Generated (UTC):  2026-09-06 15:14:21
+#
+# WHAT THIS IS
+#   The stopword lexicon used by ticker extraction to reject uppercase
+#   tokens that look like tickers but are not (THE, CEO, YOLO, NASDAQ ...).
+#
+# HOW IT WAS BUILT (two sources, see scripts/build_stopwords.py)
+#   1. ENGLISH BASE  -- curated common English words (1-5 chars) that are
+#      not tickers: articles, pronouns, prepositions, auxiliaries, etc.
+#   2. DOMAIN SUPPLEMENT -- a curated, categorised set of finance / Reddit /
+#      market terms identified by iterative error analysis on early
+#      extraction runs.
+#
+#   Final lexicon = ENGLISH BASE union DOMAIN SUPPLEMENT.
+#
+# FORMAT
+#   One term per line, upper-case. Blank lines and lines beginning with '#'
+#   are ignored by the loader. Section headers below are comments only.
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# SECTION 1 -- English base (common English words, 149 terms)
+# ---------------------------------------------------------------------
+ALL
+ALSO
+AN
+AND
+ANY
+ARE
+AS
+AT
+BACK
+BE
+BEEN
+BEST
+BIG
+BOTH
+BUT
+BUY
+BY
+CAN
+COME
+DAY
+DID
+DO
+DOES
+DONE
+DONT
+EACH
+EVEN
+FEEL
+FEW
+FIND
+FOR
+FROM
+GET
+GIVE
+GO
+GOOD
+GOT
+HAD
+HAS
+HAVE
+HE
+HELP
+HER
+HERE
+HIGH
+HIS
+HOT
+HOW
+HUGE
+IF
+IN
+INFO
+INTO
+IS
+IT
+ITS
+JUST
+KEEP
+KNOW
+LEFT
+LESS
+LETS
+LIFE
+LIKE
+LINE
+LIST
+LOOK
+LOTS
+LOW
+MADE
+MAKE
+MANY
+MAY
+ME
+MORE
+MOST
+MUCH
+MUST
+MY
+NEED
+NEW
+NO
+NOT
+NOW
+OF
+OH
+OLD
+ON
+ONCE
+ONE
+ONLY
+OPEN
+OR
+OUR
+OVER
+OWN
+PART
+PAST
+PLAN
+PUT
+REAL
+RED
+REST
+RUN
+SAID
+SAME
+SAW
+SET
+SHOW
+SIDE
+SO
+SOME
+SUCH
+SURE
+TAKE
+TECH
+TELL
+TEN
+TERM
+THAN
+THAT
+THE
+THEM
+THEN
+THEY
+THIS
+TIME
+TO
+TOP
+TWO
+TYPE
+UP
+USED
+VERY
+WAIT
+WANT
+WAS
+WE
+WELL
+WENT
+WERE
+WHAT
+WHEN
+WHO
+WHY
+WILL
+WITH
+WORK
+YOUR
+
+# ---------------------------------------------------------------------
+# SECTION 2 -- Domain supplement (curated, by category)
+# ---------------------------------------------------------------------
+# [reddit_slang] (55 terms)
+APE
+CALL
+DD
+DM
+DOWN
+DR
+DROP
+DUMP
+EDIT
+FALL
+FOMO
+FREE
+FUD
+GAIN
+HOLD
+ICYMI
+IMHO
+IMO
+LAST
+LINK
+LMAO
+LOL
+LONG
+LOSS
+MOON
+MOVE
+NEXT
+NSFW
+OMG
+OP
+PENNY
+PICK
+PLAY
+POST
+PRICE
+PUMP
+PUTS
+RISE
+ROFL
+SELL
+SHARE
+SHARES
+SHORT
+SMH
+STOCK
+TBH
+TL
+TLDR
+TRADE
+UPDATE
+WEEK
+WSB
+WTF
+YEAR
+YOLO
+
+# [finance_abbreviations] (32 terms)
+ATH
+ATL
+AVG
+CEO
+CFO
+CO
+CORP
+CPI
+EMA
+EOD
+EOM
+EOW
+EPS
+ETF
+FDA
+GDP
+INC
+IPO
+ITM
+LLC
+LTD
+MACD
+MAX
+MIN
+NYSE
+OTC
+OTM
+ROI
+RSI
+SEC
+SMA
+VS
+
+# [market_venues] (8 terms)
+AMEX
+CSE
+NASDAQ
+OTCQB
+OTCQX
+SP
+TSX
+TSXV
+
+# [currencies_and_assets] (6 terms)
+BTC
+CAD
+CRYPTO
+EUR
+GBP
+USD
+
+# [datetime_and_units] (26 terms)
+AM
+APR
+AUG
+DEC
+EST
+FEB
+FRI
+FT
+JAN
+JUL
+JUN
+LB
+MAR
+MON
+NOV
+OCT
+OZ
+PM
+PST
+SAT
+SEP
+SUN
+THU
+TUE
+UTC
+WED
+
+# [geography] (9 terms)
+CA
+EU
+FL
+NY
+PT
+TX
+UK
+US
+USA
+
+# [technology_buzzwords] (7 terms)
+AI
+AR
+CBD
+COVID
+EV
+NFT
+VR
+
+# [reddit_false_positives] (5 terms)
+GLOBE
+PINK
+PR
+XXXX
+ZERO
+
+# Total unique terms in lexicon: 297
