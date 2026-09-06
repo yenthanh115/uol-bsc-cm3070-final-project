@@ -140,7 +140,7 @@ The project's conclusions hold under the explicit assumptions in [@tbl:assumptio
 
 ## Report Structure
 
-Section 2 reviews the literature on online attention prediction, financial sentiment, and Reddit-specific research. Section 3 details the design: surge definition, feature engineering, model selection, and temporal validation. Section 4 describes implementation. Section 5 presents results, statistical validation, critical analysis, and limitations. Section 6 concludes with key findings and future directions.
+Section 2 reviews the literature on online attention prediction, financial sentiment, and Reddit-specific research. Section 3 details the design: data selection, data preprocessing, surge definition, feature engineering, model selection, and temporal validation. Section 4 describes implementation. Section 5 presents results, statistical validation, critical analysis, and limitations. Section 6 concludes with key findings and future directions.
 
 ---
 
@@ -263,11 +263,17 @@ Whether this integration yields meaningful predictive performance is the empiric
 
 # Design
 
-## Requirements and Design Goals {#sec:requirements}
+## Context, Requirements, and Acceptance Criteria {#sec:requirements}
 
-This subsection answers one question before any design detail: *what must the proposed system achieve?* The three user groups ([@tbl:pain-points]) share one need, an early, ranked shortlist of likely-to-surge tickers, and the research question ([@sec:problem-motivation]) adds that the prediction be genuinely predictive and trustworthy on future data. Together with the objectives and assumptions ([@tbl:assumptions]), these translate into two kinds of requirement.
+Before any design detail, this subsection fixes what the system must achieve. The design follows from its operational context, which sets the requirements and, in turn, a measurable acceptance bar.
 
-The *functional* requirements fix what the system does: ingest raw Reddit submissions, identify the ticker each post discusses, and each daily cycle score every active ticker for a surge in the *next* 24 hours, emitting a per-ticker score that ranks candidates for a top-$k$ shortlist rather than a binary verdict or autonomous action. The *data-science* requirements govern how it must learn and be judged: every model input must exist at or before scoring time so the system forecasts rather than confirms; no feature, label, or statistic may draw on later data (the most important requirement, since temporal leakage is the recurring flaw in prior work, [@sec:methodological-weaknesses]); and the pipeline must stay interpretable and reproducible. Ranking quality is judged against the AUC-ROC tiers ([@tbl:success-tiers]) and operational usefulness against the recall, precision, and alert-volume thresholds ([@tbl:acceptance-criteria]), with model comparisons reported with uncertainty and significance so Objective 2 is answered, not asserted. [@tbl:design-goals] consolidates these into six goals, tracing each from need, through requirement, to design response.
+### Operational Context {#sec:operational-context}
+
+The system is a daily screening tool, not an autonomous decision-maker: each cycle it ranks active tickers by predicted surge probability and surfaces the top-$k$ for human review, as classifiers do in fraud detection and medical screening [2][23]. This serves the three user groups ([@tbl:pain-points]) and the research question ([@sec:problem-motivation]), and, with the objectives and assumptions ([@tbl:assumptions]), sets two kinds of requirement.
+
+### Requirements {#sec:design-goals}
+
+*Functional* requirements fix what the system does; *data-science* requirements govern how it learns and is judged, chief among them that no feature, label, or statistic may draw on future data ([@sec:methodological-weaknesses]). [@tbl:design-goals] consolidates both into six goals, tracing each from need, through requirement, to design response; the targets they are judged against follow in [@tbl:success-tiers] and [@tbl:acceptance-criteria].
 
 | # | User / domain need | Requirement | Design response |
 |---|------------------|---------------|-----------------|
@@ -280,11 +286,44 @@ The *functional* requirements fix what the system does: ingest raw Reddit submis
 
 : Design goals, each tracing a user or domain need through the requirement it imposes to the design response that satisfies it. {#tbl:design-goals}
 
-The goals are not equally binding. **G2 (no future information) is the most important**: it is built into every stage, forbidding post-hoc engagement features, forcing training-only normalisation, and ruling out random cross-validation. The remaining goals fix what is predicted and how it is used (G1, G3), the bar for useful enough (G4), and how the result is produced and judged (G5, G6). The subsections that follow work through the design in pipeline order, each returning to the goal it serves.
+The goals are not equally binding. **G2 (no future information) is the most important**: it is built into every stage, forbidding post-hoc engagement features, forcing training-only normalisation, and ruling out random cross-validation. The remaining goals fix what is predicted and how it is used (G1, G3), the bar for useful enough (G4), and how the result is produced and judged (G5, G6).
+
+### Acceptance Criteria {#sec:operational-criteria}
+
+G4 sets operational usefulness as a goal; the concrete bar follows from the reviewer's workflow. A surveillance analyst can review only a bounded number of flagged tickers per day, taken here as roughly 20–30 (Assumption 2, [@tbl:assumptions]). On `WSB`, where hundreds of distinct tickers are discussed daily (577,872 ticker mentions across 2021, [@tbl:dataset-characteristics]), the system must therefore compress that universe by at least an order of magnitude. [@tbl:acceptance-criteria] turns this constraint into measurable targets.
+
+| Criterion | Requirement | Rationale |
+|--------------|-------|----------------------|
+| Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [2] |
+| Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [22] |
+| Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive (derived from the 0.10 bound); precision-recall analysis is the appropriate lens under severe imbalance [3] |
+| Daily alert volume | 20–30 flags | Matches analyst throughput |
+
+: Operational acceptance criteria, derived from the reviewer's workflow (Assumption 2, [@tbl:assumptions]) and the user scenarios ([@sec:problem-motivation]). {#tbl:acceptance-criteria}
+
+These criteria are shaped by two considerations. First, errors are asymmetric: a missed surge (false negative) costs more than an unnecessary review (false positive), since a compliance team missing a pump-and-dump faces regulatory risk while investigating a benign ticker costs only analyst-hours, which motivates recall-oriented thresholds and cost-sensitive learning [4][22]. Second, the prediction is deliberately narrow in scope: a high surge probability means discussion is statistically likely to escalate within 24 hours, not that price will move or manipulation is occurring, so the system flags candidates while humans determine causality and response [23]. The criteria therefore assume human-in-the-loop review; fully automated action would demand precision ≥ 0.80 and formal probability calibration, and whether the built system meets even the human-in-the-loop bar is tested in [@sec:operational-precision].
+
+With the context, requirements, and acceptance bar established, the remaining subsections work through the design in pipeline order, each returning to the goal it serves. One prerequisite comes first: the design can only be built on data that actually exists and can support a surge label, so [@sec:eda] establishes that data before the architecture is settled.
+
+## Data Selection Plan {#sec:eda}
+
+The design assumes a specific dataset, so before any of it is fixed the project must establish what data is actually reachable and whether it can support a surge label at all. This is settled in a dedicated data-understanding phase (Phase 3, [@tbl:timeline]) of exploratory data analysis (EDA). It is a project activity that feeds the design rather than a stage of the running system: kept separate from the pipeline, it is a screening aid that answers three questions in turn and records why rejected options failed. Its tooling and results are reported in [@sec:eda-tooling]. [@tbl:eda-decisions] sets out each decision, the criteria applied, and what disqualifies a candidate.
+
+| Decision | Criteria applied | Disqualifies a candidate |
+|--------|-----------------------|-----------------------|
+| Which platform | Public (no auth), sub-hourly timestamps, per-ticker attribution, sufficient per-ticker volume, static archival snapshot | No engagement fields or ticker attribution, so no surge label is possible, whatever the size (rules out Twitter/X vs Reddit) |
+| Which communities | Two communities at opposite posting densities (for abundance-vs-scarcity and cross-dataset transfer); screened on ticker diversity, volume surviving extraction, selftext availability | Long-form posting that defeats per-ticker extraction, or single-ticker focus that makes the design trivial |
+| Whether a surge signal exists | Viability gate: surge-label fields present and at least one candidate definition yields a learnable positive class; data quality, coverage, and sentiment reliability recorded | No surge-label fields, or no definition yields a viable positive class |
+
+: EDA screening decisions, the criteria applied, and what disqualifies a candidate. {#tbl:eda-decisions}
+
+The viability gate uses a deliberately simple surge heuristic on sampled data, distinct from the leakage-free composite target used for actual labelling ([@sec:surge-definition]), so its sample-level statistics differ from the pipeline's full-run figures.
+
+**Ethics and known limitations.** All data is publicly posted forum submissions, analysed only at ticker level with no individual user identified. The main limitations are inherited from the source: deleted posts are absent (survivorship bias), engagement metrics are frozen at their final values, and findings are tied to the 2021 period the archive covers.
 
 ## Overall Pipeline Architecture
 
-The prediction system is a six-stage linear pipeline ([@tbl:pipeline-stages]). Each stage consumes the previous stage's output and writes intermediate artefacts to disk, enabling independent re-execution without recomputing upstream operations.
+With the dataset established in [@sec:eda], the prediction system is designed as a six-stage linear pipeline ([@tbl:pipeline-stages]) that ingests those selected Reddit submissions. Each stage consumes the previous stage's output and writes intermediate artefacts to disk, enabling independent re-execution without recomputing upstream operations.
 
 | # | Stage | Responsibility |
 |---|-------|----------------|
@@ -303,31 +342,18 @@ Every stage honours goal G2: no stage may access future information relative to 
 
 ## Data Representation and Preprocessing Design {#sec:data-representation}
 
-Before selecting a source or a target, the design fixes how a raw submission becomes a modelling unit. A single post can mention several tickers, but a surge is defined *per ticker*, so the **unit of analysis is the record–ticker pair**: a post naming three tickers becomes three rows, each carrying the post's text, timestamp, and the one ticker it is attributed to. This makes per-ticker windowing and labelling well defined and keeps a multi-ticker post from being forced into a single entity.
+With the source dataset selected ([@sec:eda]), the first design step is to fix how a raw submission from it becomes a modelling unit, before any target is defined on it. A single post can mention several tickers, but a surge is defined *per ticker*, so the **unit of analysis is the record–ticker pair**: a post naming three tickers becomes three rows, each carrying the post's text, timestamp, and the one ticker it is attributed to. This makes per-ticker windowing and labelling well defined and keeps a multi-ticker post from being forced into a single entity. Four further representation choices follow from this unit, each resolving how a specific aspect of a raw submission is encoded ([@tbl:data-representation]).
 
-**Temporal granularity.** Records keep their native sub-hourly timestamps rather than being bucketed into fixed calendar bins. Windows are measured relative to each record's own observation time ($[t-24\text{h},\,t)$ backward, $(t,\,t+24\text{h}]$ forward), so the representation is event-centred, not grid-centred. This avoids arbitrary bin boundaries splitting a surge and lets the same 24-hour definition apply uniformly to dense and sparse tickers.
+| Aspect | Design choice | Rationale and trade-off |
+|-------|---------------------|--------------------|
+| Temporal granularity | Keep native sub-hourly timestamps; measure windows relative to each record's own observation time ($[t-24\text{h},\,t)$ backward, $(t,\,t+24\text{h}]$ forward) | Event-centred rather than grid-centred, so no arbitrary calendar bin splits a surge and one 24-hour definition applies to dense and sparse tickers alike |
+| Entity identification | Extract tickers from post text (the archive carries no ticker field); treat a mention as a *proxy* for genuine discussion (Assumption 3, [@tbl:assumptions]) | Text extraction is noisy, but trading precision for recall keeps emerging or rotating tickers from being silently dropped |
+| Missing periods | Do not impute gaps; an absent interval contributes a zero to a backward or forward count. Records whose forward window holds fewer than two same-ticker posts are excluded from labelling ([@sec:surge-definition]) | A zero is the honest representation of "no discussion" and avoids inventing activity; too-sparse forward windows cannot define a meaningful growth ratio, so they are excluded rather than guessed at |
+| Text, sentiment, engagement | Normalise text (moderation placeholders and nulls emptied) before extraction; represent sentiment as one per-record VADER compound score with title-fallback; exclude engagement fields (upvotes, comments) from features | Title-fallback gives every record a defined value without a separate imputation step; engagement is post-hoc and would leak future information, so it informs only dataset selection, never the model |
 
-**Entity identification.** Tickers are the entities, extracted from post text rather than a metadata field, since the archive carries none. The design accepts that text extraction is noisy and treats a mention as a *proxy* for genuine discussion (Assumption 3, [@tbl:assumptions]), trading precision for recall so that emerging or rotating tickers are not silently dropped.
+: Representation choices for encoding a raw submission, each with its rationale and trade-off. {#tbl:data-representation}
 
-**Missing periods.** Sparse tickers have hours or days with no posts. These gaps are not imputed: an absent interval simply contributes a zero to a backward or forward count, which is the honest representation of "no discussion" and avoids inventing activity. Records whose forward window is too sparse to define a growth ratio are excluded from labelling rather than guessed at ([@sec:surge-definition]).
-
-**Text, sentiment, and engagement.** Post text is normalised (moderation placeholders and nulls emptied) before extraction. Sentiment is represented as a single per-record VADER compound score, with the title used when the body is absent, giving every record a defined value without a separate imputation step. Engagement fields (upvotes, comments) are deliberately *not* aggregated into features: although present in the archive, their values are post-hoc and would leak future information, so they inform only dataset selection, never the model. This aggregation, per record–ticker pair, event-relative windows, one sentiment scalar, no engagement, is chosen because it is the minimal representation that supports a leakage-free per-ticker surge label while remaining computable at scoring time.
-
-## Data Selection Plan {#sec:eda}
-
-Before any modelling, a dedicated exploratory data analysis (EDA) phase (Phase 3, [@tbl:timeline]) decides what data the project uses. Kept separate from the pipeline, it is a screening aid that answers three questions in turn and records why rejected options failed; its tooling and results are reported in [@sec:eda-tooling]. [@tbl:eda-decisions] sets out each decision, the criteria applied, and what disqualifies a candidate.
-
-| Decision | Criteria applied | Disqualifies a candidate |
-|----------|------------------|--------------------------|
-| Which platform | Public (no auth), sub-hourly timestamps, per-ticker attribution, sufficient per-ticker volume, static archival snapshot | No engagement fields or ticker attribution, so no surge label is possible, whatever the size (rules out Twitter/X vs Reddit) |
-| Which communities | Two communities at opposite posting densities (for abundance-vs-scarcity and cross-dataset transfer); screened on ticker diversity, volume surviving extraction, selftext availability | Long-form posting that defeats per-ticker extraction, or single-ticker focus that makes the design trivial |
-| Whether a surge signal exists | Viability gate: surge-label fields present and at least one candidate definition yields a learnable positive class; data quality, coverage, and sentiment reliability recorded | No surge-label fields, or no definition yields a viable positive class |
-
-: EDA screening decisions, the criteria applied, and what disqualifies a candidate. {#tbl:eda-decisions}
-
-The viability gate uses a deliberately simple surge heuristic on sampled data, distinct from the leakage-free composite target used for actual labelling ([@sec:surge-definition]), so its sample-level statistics differ from the pipeline's full-run figures.
-
-**Ethics and known limitations.** All data is publicly posted forum submissions, analysed only at ticker level with no individual user identified. The main limitations are inherited from the source: deleted posts are absent (survivorship bias), engagement metrics are frozen at their final values, and findings are tied to the 2021 period the archive covers.
+Taken together, per record–ticker pair, event-relative windows, one sentiment scalar, and no engagement, this is the minimal representation that supports a leakage-free per-ticker surge label while remaining computable at scoring time.
 
 ## Surge Definition (Target Variable) {#sec:surge-definition}
 
@@ -341,7 +367,7 @@ A fixed posting-count threshold fails because tickers have different baselines. 
 
 Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the training partition prevents test-set distribution information from leaking into target labels.
 
-**Observation window:** A 24-hour window aligns with daily trading cycles. Shorter windows (6h) yield sparse per-ticker counts and unstable statistics; longer windows (72h) blur surge onset with sustained activity. [@sec:proposed-improvements] explores multi-scale alternatives.
+**Observation window:** A 24-hour window is chosen to align with daily trading cycles. The expectation is that shorter windows (6h) would yield sparse per-ticker counts and unstable statistics, while longer windows (72h) would blur surge onset with sustained activity; these are design rationales rather than tested outcomes, and multi-scale alternatives are left to future work ([@sec:proposed-improvements]).
 
 **Sentiment weighting:** Incorporating $\Delta S$ is intended to capture scenarios where discussion grows polarised without an immediate volume spike [4][10], on the hypothesis that a rising emotional charge can precede a surge. Whether it earns its place is tested by comparing a volume-only target against the composite, reported in [@sec:sentiment-contribution]. The EDA phase separately screens the reliability of the VADER signal that underpins $\Delta S$ before it is committed to ([@sec:eda-tooling]).
 
@@ -353,8 +379,8 @@ Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the tra
 
 All eleven features satisfy a strict backward-looking constraint: each is derived exclusively from information available at or before observation timestamp $t$. Post-hoc engagement metrics (Reddit score, num_comments) are excluded because they accumulate after publication and would introduce lookahead bias.
 
-| | Feature | Category | Definition |
-|-|-------------|--------|----------------|
+| # | Feature | Category | Definition |
+|---|------------|-----|--------------------|
 |1| `sentiment_score` | Content | VADER compound sentiment of the post text |
 |2| `word_count` | Content | Words in selftext (0 if absent) |
 |3| `title_length` | Content | Character count of title |
@@ -369,7 +395,7 @@ All eleven features satisfy a strict backward-looking constraint: each is derive
 
 : Feature definitions. All features use backward-looking or concurrent information only. {#tbl:feature-definitions}
 
-The four categories (content, temporal, activity, interaction) draw on the signal families supported by the literature ([@tbl:signal-families]); activity features in particular operationalise the popularity-prediction evidence [1][5]. The two interaction terms are cross-feature products that give the models an explicit signal for combined dynamics, such as long analytical posts arriving at peak trading hours, without relying on deep tree splits to discover them; their empirical value is assessed by ablation in the evaluation.
+The four categories (content, temporal, activity, interaction) draw on the signal families supported by the literature ([@tbl:signal-families]); activity features in particular operationalise the popularity-prediction evidence that early volume and growth rate predict later attention [5][9]. The two interaction terms are cross-feature products that give the models an explicit signal for combined dynamics, such as long analytical posts arriving at peak trading hours, without relying on deep tree splits to discover them; their empirical value is assessed by ablation ([@sec:feature-implementation]).
 
 ## Model Selection {#sec:model-selection}
 
@@ -379,29 +405,43 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 |-----|------|-------------|
 | Logistic Regression (LR) | Interpretable linear baseline (Elastic Net, $L_1+L_2$) | Strong performance would indicate approximate linear separability of the surge feature space |
 | Random Forest (RF) | Bagged tree ensemble | Captures non-linear relationships; consistent top-tier tabular performance [20] |
-| XGBoost | Gradient-boosted trees ($L_1/L_2$ leaf-weight regularisation) | Each tree corrects prior errors; state-of-the-art on structured tabular data |
+| XGBoost | Gradient-boosted trees ($L_1/L_2$ leaf-weight regularisation) | Each tree corrects prior errors; boosting is among the strongest tabular families when labelled positives are sufficient [20] |
 
 : Three classifier families spanning the complexity spectrum. {#tbl:model-families}
 
-**Primary metric (AUC-ROC):** With surge rates of 1–5%, accuracy is uninformative, a naive "no surge" predictor achieves 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, $F_1$, and PR-AUC are reported as secondary metrics at default and validation-optimised thresholds.
+**Primary metric (AUC-ROC):** At the sub-1% to ~5% surge rates the target actually produces ([@tbl:dataset-characteristics], [@tbl:weight-sensitivity]), accuracy is uninformative, a naive "no surge" predictor scores 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, $F_1$, and PR-AUC are reported as secondary metrics at default and validation-optimised thresholds.
 
 **Handling class imbalance:** SMOTE is unsuitable for temporal data because synthetic instances lack meaningful timestamps and risk local data leakage. Instead, imbalance is addressed via cost-sensitive learning: `class_weight='balanced'` for LR and RF, and `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
 ## Temporal Validation Design {#sec:temporal-validation}
 
-Standard $k$-fold cross-validation violates chronological ordering by permitting models to train on future observations while validating on past ones, systematically overestimating performance [19]. The evaluation pipeline employs a two-level temporal partitioning scheme:
+Standard $k$-fold cross-validation violates chronological ordering by permitting models to train on future observations while validating on past ones, systematically overestimating performance [19]. The evaluation pipeline employs the two-level temporal partitioning scheme in [@tbl:temporal-partitioning].
 
-**Level 1: Train/test split (80/20 by timestamp).** Records are sorted by observation timestamp. The earliest 80% constitute the training partition; the final 20% form the held-out test set, evaluated exactly once.
+| Level | Scheme | Partitioning | Temporal guarantee |
+|---|--------|---------------------|-----------------|
+| 1 | Train/test split (80/20 by timestamp) | Records sorted by observation timestamp; earliest 80% form the training partition, final 20% the held-out test set, evaluated exactly once | Every test record occurs strictly after every training record |
+| 2 | Expanding-window CV within training ($k=4$) | Training partition split into four chronological blocks, producing three validation splits; each fold trains on all preceding blocks and validates on the next | Every validation instance occurs strictly after all training instances in its fold |
 
-**Level 2: Expanding-window CV within training ($k=4$).** The training partition is divided into four chronological blocks producing three validation splits. Each fold trains on all preceding blocks and validates on the next, ensuring every validation instance occurs strictly after all training instances.
+: Two-level temporal partitioning scheme. {#tbl:temporal-partitioning}
 
 ![Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.](figures/3-expanding-window-cv.png){#fig:expanding-cv}
 
-A fold count of $k = 4$ ensures sufficient positive surge instances per validation window for stable AUC estimation while maintaining adequate initial training depth. Following hyperparameter optimisation, $F_1$-optimised decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in [@sec:temporal-stability].
+A fold count of $k = 4$ is chosen to balance two competing needs: enough positive surge instances per validation window for stable AUC estimation, and adequate initial training depth in the first fold. Following hyperparameter optimisation, $F_1$-optimised decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in [@sec:temporal-stability].
 
 ## Evaluation Framework {#sec:evaluation-framework}
 
-The empirical evaluation addresses four questions: (1) Do models predict surges significantly better than trivial baselines? (2) Do ensemble methods yield statistically significant gains over linear baselines? (3) How confident are the metric estimates? (4) Does the learned representation generalise across communities?
+This subsection specifies the protocol by which the built system is judged (the detailed form of goal G6), applied to the held-out test set in Section 5. It fixes four evaluation questions and the method that answers each ([@tbl:eval-questions]).
+
+| # | Question | Method | Reported |
+|---|----------|------------|------|
+| Q1 | Do models beat trivial baselines? | Compare against a random baseline (AUC 0.50) and eleven single-feature Logistic Regression models | [@sec:statistical-validation] |
+| Q2 | Do ensembles beat the linear baseline? | McNemar's pairwise test, Bonferroni-corrected $\alpha = 0.017$ ($0.05/3$) | [@sec:statistical-validation] |
+| Q3 | How confident are the estimates? | 1,000 bootstrap resamples of the test set for 95% confidence intervals | [@tbl:perf-default] |
+| Q4 | Does it generalise across communities? | Train on one subreddit, test on the other without retraining; a chosen transfer threshold of AUC > 0.60 (comfortably above the 0.50 chance level) is read as evidence of shared structure | [@sec:cross-community] |
+
+: Evaluation questions and the method answering each. {#tbl:eval-questions}
+
+Ranking quality is scored against the tiers in [@tbl:success-tiers], using the metrics in [@tbl:eval-metrics]. These tiers gauge *research-level* discrimination and are distinct from the stricter, workflow-derived acceptance criteria ([@sec:operational-criteria]), which gauge *operational* usefulness. Robustness is further stress-tested by two sweeps: threshold ($\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$) and sentiment weight ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$).
 
 | Tier | AUC-ROC | Interpretation |
 |------|---------|----------------|
@@ -410,10 +450,6 @@ The empirical evaluation addresses four questions: (1) Do models predict surges 
 | Stretch | > 0.80 | Strong; reliably separates surges from non-surges |
 
 : Success tiers. {#tbl:success-tiers}
-
-**Baselines:** Performance is benchmarked against a random baseline ($\text{AUC} = 0.50$) and eleven univariate Logistic Regression models (one per feature), determining whether multi-feature integration outperforms the single best feature.
-
-**Statistical robustness:** 1,000 bootstrap resamples of the test set construct 95% confidence intervals. McNemar's test assesses pairwise significance between models, with Bonferroni-corrected $\alpha = 0.017$ ($0.05 / 3$ comparisons).
 
 | Metric | Role |
 |--------|------|
@@ -424,44 +460,19 @@ The empirical evaluation addresses four questions: (1) Do models predict surges 
 
 : Evaluation metrics. {#tbl:eval-metrics}
 
-**Cross-dataset transfer:** Models trained on one subreddit are evaluated on the other's test set without retraining. AUC-ROC serves as the transfer metric since it is invariant to operating-point shifts. Transfer AUC > 0.60 indicates shared cross-community surge structure.
-
-**Sensitivity analysis:** Two sweeps stress-test robustness: threshold sensitivity ($\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$) and sentiment weight sensitivity ($w_2 \in \{0.0, 0.25, 0.50, 0.75, 1.00\}$).
-
-## Operational Context and Acceptance Criteria {#sec:operational-criteria}
-
-The system is designed as a daily screening tool, not an autonomous decision-maker. Each cycle, the model ranks all active tickers by predicted surge probability and surfaces the top-$k$ for human review. This mirrors established practice in fraud detection and medical screening, where classifiers serve as prioritisation layers [2][23].
-
-**Deriving acceptance thresholds from workflow constraints.** A typical surveillance analyst can review 20–30 flagged tickers per day. On `WSB`, where 500–800 unique tickers appear daily, the system must reduce this universe by at least an order of magnitude.
-
-| Criterion | Requirement | Rationale |
-|--------------|-------|----------------------|
-| Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [2] |
-| Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [22] |
-| Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive [3] |
-| Daily alert volume | 20–30 flags | Matches analyst throughput |
-
-: Operational acceptance criteria derived from user scenarios ([@sec:problem-motivation]). {#tbl:acceptance-criteria}
-
-**Asymmetric error costs.** False negatives (missed surges) carry higher consequential cost than false positives (unnecessary reviews). A compliance team missing a pump-and-dump campaign faces regulatory risk; investigating a benign ticker costs only analyst-hours. This asymmetry motivates recall-oriented thresholds and cost-sensitive learning [4][22].
-
-**Scope of prediction.** A high surge probability means discussion is statistically likely to escalate within 24 hours. It does not imply price movement, manipulation, or any recommended action. The system flags candidates for investigation; humans determine causality and response [23].
-
-**Limitations.** These criteria assume human-in-the-loop review. Fully automated action would require precision ≥ 0.80 and formal probability calibration, neither of which the current system achieves. [@sec:operational-precision] evaluates the best model against these criteria.
-
 ## Design Trade-offs and Alternatives {#sec:design-alternatives}
 
 Several plausible design choices were considered and deliberately not taken. [@tbl:design-alternatives] records each alternative, why it was rejected, and the constraint that drove the decision, so the chosen design is legible as a set of trade-offs rather than defaults. The unifying theme is feasibility under a fixed archival dataset, a strict no-leakage requirement, and a single-developer time and compute budget: where an option added capability at the cost of leakage risk, scope creep, or data the archive cannot supply, it was set aside.
 
 | Alternative considered | Why not chosen | Governing constraint |
-|------------------------|----------------|----------------------|
+|-------------------|---------------------|-------------------|
 | Real-time ingestion / live dashboard | Adds streaming infrastructure orthogonal to the research question; retrospective evaluation answers it more cleanly | Scope, time; deferred to future work ([@sec:proposed-improvements]) |
 | Network / diffusion features (user graphs, reshare cascades) | Archive has no reliable user-interaction graph; would break the per-ticker, per-post unit of analysis | Data availability, scope ([@tbl:signal-families]) |
 | LSTM / sequence or time-series models | Sparse, highly imbalanced positives; large labelled-data and compute demands; opacity conflicts with the interpretability requirement | Data density, compute, interpretability ([@sec:modelling-review]) |
 | SMOTE / synthetic oversampling | Synthetic points lack meaningful timestamps and risk local temporal leakage | No-leakage requirement ([@sec:model-selection]) |
 | Post-hoc engagement features (upvotes, comments) | Accumulate after posting; using them would leak the outcome | No-leakage requirement ([@sec:data-representation]) |
 | Volume-only surge target | Misses cases where emotional charge rises before volume; tested but retained only as a phase-1 control | Answered empirically, not assumed ([@sec:sentiment-contribution]) |
-| Longer / shorter windows (6h, 72h) or multi-scale | 6h too sparse for stable statistics; 72h blurs onset; multi-scale adds tuning surface beyond budget | Statistical stability, time ([@sec:surge-definition], [@sec:proposed-improvements]) |
+| Longer / shorter windows (6h, 72h) or multi-scale | 6h expected too sparse for stable statistics; 72h expected to blur onset; multi-scale adds tuning surface beyond budget | Statistical stability, time ([@sec:surge-definition], [@sec:proposed-improvements]) |
 | Closed exchange-listed ticker universe | Penny and emerging tickers rotate frequently; a fixed list silently drops unknown stocks | Recall over precision ([@sec:data-representation]) |
 | Multiple platforms (Twitter/X, StockTwits) | No engagement/attribution fields to support a surge label; would fragment the study | Data availability ([@sec:eda]) |
 
@@ -546,7 +557,7 @@ Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, whi
 The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `src/eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `src/eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
 
 | Notebook | Screening stage | Input | Output artefact |
-|----------|-----------------|-------|-----------------|
+|-------------|------------|-----------|---------------|
 | `01_discovery.ipynb` | Candidate discovery | Kaggle + HuggingFace dataset APIs | `candidates.csv` |
 | `02_highlevel_eval.ipynb` | High-level comparative profiling | Shortlisted CSVs (20k-row sample each) | `highlevel_comparison.csv` |
 | `03_deep_assessment.ipynb` | Deep viability assessment | Selected Reddit datasets (up to 100k rows) | `deep_assessment.csv` + figures |
@@ -558,7 +569,7 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 **Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap-to-compute properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields needed to build a surge label (text, timestamp, engagement) are present. Profiling runs on a 20,000-row sample per dataset for speed and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets have no engagement fields at all and cannot support a surge label regardless of their ticker vocabulary.
 
 | Dataset | Records (sampled) | Date span | Engagement fields | Surge-label ready |
-|---------|-------------------|-----------|-------------------|-------------------|
+|-------------------|--------------|----------------|--------------|--------------|
 | `r/pennystocks` submissions | 20,000 | 2021-01-01 to 2021-02-16 | Yes (`score`, `num_comments`) | Yes |
 | `WSB` submissions | 20,000 | 2021-01-01 to 2021-01-19 | Yes (`score`, `num_comments`) | Yes |
 | `financial-tweets` (stockerbot) | 20,000 | 2018-02-23 to 2018-07-19 | No | No |
@@ -645,7 +656,7 @@ Carried through the remaining stages (surge labelling excludes records whose for
 
 : Dataset characteristics. {#tbl:dataset-characteristics}
 
-## Feature Engineering (Implementation)
+## Feature Engineering (Implementation) {#sec:feature-implementation}
 
 Eleven features feed the classifiers. The governing constraint is that every feature must be computable from data *at or before* the current record's timestamp. Nothing may peek into the future.
 
