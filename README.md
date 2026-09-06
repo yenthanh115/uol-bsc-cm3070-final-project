@@ -1,6 +1,6 @@
 # Surge-Labelling Pipeline for Reddit Trend Prediction
 
-A machine learning pipeline that detects emerging "surge" trends in Reddit penny stock discussions. The system processes submission data from r/pennystocks, computes temporal windowed features and sentiment scores, then labels windows as surge/no-surge for downstream classification.
+A machine learning pipeline that detects emerging "surge" trends in Reddit discussions. The system processes submission data from r/pennystocks and r/wallstreetbets, computes temporal windowed features and sentiment scores, then labels windows as surge/no-surge for downstream classification.
 
 ## Project Structure
 
@@ -22,7 +22,6 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   │   ├── evaluation_metrics.json
 │   │   └── final_summary.json
 │   ├── figures/                        # ALL generated figures
-│   │   ├── eda/                        # EDA figures (01–09)
 │   │   └── evaluation/                 # Model evaluation figures (10+)
 │   ├── logs/                           # CLI run logs (via --log-file)
 │   └── experiment_log.jsonl            # Consolidated log of all runs
@@ -53,9 +52,6 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 │   ├── 03_deep_assessment.ipynb        # Deep assessment
 │   ├── input/                          # Notebook-local inputs
 │   └── output/                         # Notebook-local outputs
-│
-├── reports/                            # Academic reports (literature review, design, etc.)
-├── admin/                              # Project admin (decision log, journal)
 └── README.md
 ```
 
@@ -107,7 +103,7 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit penny
 
 ## Usage
 
-All commands below assume you are in the `src/` directory and your virtual environment is activated.
+All commands below run in the `src/` directory and your virtual environment is activated.
 
 ```bash
 cd src
@@ -205,7 +201,9 @@ Useful pytest flags:
 
 ## Configuration
 
-The pipeline is configured via `PipelineConfig` (defined in `src/surge_pipeline/config.py`). You can pass parameters on the command line or provide a JSON config file:
+The pipeline is configured via `PipelineConfig` (defined in `src/surge_pipeline/config.py`). 
+
+You can pass parameters on the command line or provide a JSON config file:
 
 ```json
 {

@@ -17,7 +17,7 @@ nameInLink: true
 // Page setup — ACM-style margins and font
 #set page(margin: 2.54cm)
 #set text(font: "Times New Roman", size: 11pt)
-#set par(justify: true, leading: 0.55em, first-line-indent: 1em)
+#set par(justify: true, leading: 0.55em)
 
 // Heading styles
 #show heading.where(level: 1): it => {
@@ -578,8 +578,8 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 | Notebook | Screening stage | Input | Output artefact |
 |--------------|-----------|-----------|---------------|
 | `01_discovery.ipynb` | Candidate discovery | Kaggle + HuggingFace dataset APIs | `candidates.csv` |
-| `02_highlevel_eval.ipynb` | High-level comparative profiling | Shortlisted CSVs (20k-row sample each) | `highlevel_comparison.csv` |
-| `03_deep_assessment.ipynb` | Deep viability assessment | Selected Reddit datasets (up to 100k rows) | `deep_assessment.csv` + figures |
+| `02_highlevel_eval` \ `.ipynb` | High-level comparative profiling | Shortlisted CSVs (20k-row sample each) | `highlevel_` \ `comparison.csv` |
+| `03_deep_assessment` \ `.ipynb` | Deep viability assessment | Selected Reddit datasets (up to 100k rows) | `deep_assessment` \ `.csv` + figures |
 
 : EDA notebooks, in run order, with their inputs and outputs. All three are standalone and share no code with the pipeline package. {#tbl:eda-notebooks}
 
@@ -626,7 +626,7 @@ The data loader (`loader.py`) turns raw submission exports into the unit of anal
 
 **Step 1: Text Cleaning.** Moderation placeholders (`[deleted]`, `[removed]`) and nulls in `selftext` and `title` become empty strings so the regex sees consistent input. Each row has a unique submission ID, so no deduplication is needed.
 
-**Step 2: Ticker Extraction.** Two prioritised regex patterns are applied: dollar-sign tickers (`\$([A-Z]{1,5})`, e.g. `$AMC`), the highest-confidence marker, and standalone 2–5 character uppercase words (`\b[A-Z]{2,5}\b`), a broader net. Matches are filtered against a stopword lexicon that is *derived* rather than hand-coded, for transparent provenance: an **English base** taken mechanically from the NLTK `stopwords` corpus (upper-cased, restricted to 1–5 character tokens) is unioned with a curated, categorised **domain supplement** of finance/Reddit/market terms that resemble tickers (`DD`, `YOLO`, `NASDAQ`, `CEO`) plus everyday words NLTK omits (`HUGE`, `TECH`, `STOCK`). The supplement grew from iterative error analysis on early runs (inspect frequent uppercase false positives, categorise, repeat). A build script (`src/build_stopwords.py`) writes the lexicon to a self-documenting reference file (`input/reference/ticker_stopwords.txt`) that the loader reads at startup, keeping it auditable and free of magic literals. A stopword filter beats a closed exchange-listed universe because tickers rotate frequently: its worst case is minor per-record noise, whereas a stale master list would silently drop unknown stocks. [@lst:ticker-extraction] shows the logic:
+**Step 2: Ticker Extraction.** Two prioritised regex patterns are applied: dollar-sign tickers (`\$([A-Z]{1,5})`, e.g. `$AMC`), the highest-confidence marker, and standalone 2–5 character uppercase words (`\b[A-Z]{2,5}\b`), a broader net. Matches are filtered against a stopword lexicon that is *derived* rather than hand-coded, for transparent provenance: an **English base** taken mechanically from the NLTK `stopwords` corpus (upper-cased, restricted to 1–5 character tokens) is unioned with a curated, categorised **domain supplement** of finance/Reddit/market terms that resemble tickers (`DD`, `YOLO`, `NASDAQ`, `CEO`) plus everyday words NLTK omits (`HUGE`, `TECH`, `STOCK`). The supplement grew from iterative error analysis on early runs (inspect frequent uppercase false positives, categorise, repeat). A build script (`src/build_stopwords.py`) writes the lexicon to a self-documenting reference file (`input/reference/ticker_stopwords.txt`) that the loader reads at startup. A stopword filter beats a closed exchange-listed universe because tickers rotate frequently: its worst case is minor per-record noise, whereas a stale master list would silently drop unknown stocks. [@lst:ticker-extraction] shows the logic:
 
 ```python {#lst:ticker-extraction caption="Ticker extraction with dual regex priority cascade and stopword filtering (from loader.py). The dollar-sign pattern captures explicit financial references with high precision; the uppercase pattern broadens recall at the cost of precision, mitigated by a stopword lexicon derived from an NLTK English base plus a curated domain supplement (see `src/build_stopwords.py`)."}
 # Extract tickers from combined title + selftext
@@ -679,9 +679,9 @@ Eleven features feed the classifiers. The governing constraint is that every fea
 
 | # | Feature | Category | Computation Method |
 |---|---------|------|---------------------------|
-| 1 | `ticker_post` \ `_rate_24h` | Activity | Reuses `backward_count` produced by `windowing.compute_windowed_counts()`. For each record mentioning ticker $X$ at time $t$, counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group. The self-post is excluded by using `side='left'` at the right boundary. |
-| 2 | `time_since_` \ `previous_post` | Activity | Computed by `features._compute_time_` \ `since_previous()`. For each record at time $t$, identifies the immediately preceding post mentioning the same ticker by iterating through the chronologically sorted per-ticker group (`groupby('ticker')`). Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
-| 3 | `ticker_post_` \ `acceleration` | Activity | Computed by `features._compute_ticker_` \ `post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t]$ and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` for inclusive-left boundaries, `side='left'` for exclusive-right. |
+| 1 | `ticker_post` \ `_rate_24h` | Activity | Reuses `backward_count` produced upstream by `windowing.compute_windowed_counts()` (the feature module copies the column rather than recomputing it). For each record mentioning ticker $X$ at time $t$, the windowing stage counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed there via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group; the self-post is excluded by using `side='left'` at the right boundary. |
+| 2 | `time_since_` \ `previous` | Activity | Computed by `features._compute_time_` \ `since_previous()`. For each chronologically sorted per-ticker group (`groupby('ticker')`), the gap to the immediately preceding same-ticker post is the successive time difference, obtained in a single vectorised `np.diff(times)` call rather than a per-record loop. Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
+| 3 | `ticker_post_` \ `acceleration` | Activity | Computed by `features._compute_ticker_` \ `post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t)$ (self excluded) and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` yields an exclusive-left boundary (first index where $\text{time} > $ bound), while `side='left'` at the recent-half right boundary excludes the self-post at $t$. |
 | 4 | `sentiment_` \ `score` | Content | Reuses `sentiment_polarity` produced by `sentiment.compute_sentiment()` via `_compute_polarity_vader()`. VADER's `polarity_scores()` is applied to the post's selftext; if selftext is empty or absent, the title is used as fallback. The compound score ranges from $-1$ (most negative) to $+1$ (most positive). Computed strictly from the record's own text at creation time, no forward window information. |
 | 5 | `word_count` | Content | Computed inline in `features.compute_features()`. Concatenates `title + " " + selftext`, splits on whitespace (`str.split().str.len()`), counts resulting tokens. Empty/null selftext is replaced with empty string before concatenation. Measures post effort/depth as a proxy for informational content. |
 | 6 | `title_length` | Content | Computed inline in `features.compute_features()`. Splits title on whitespace (`str.split().str.len()`) and counts tokens. Captures headline effort independently of body length. Null titles treated as empty string (0 tokens). |
@@ -696,14 +696,14 @@ Eleven features feed the classifiers. The governing constraint is that every fea
 The most algorithmically involved feature is `ticker_post_acceleration` ([@tbl:feature-detail], row 3). Working on pre-sorted per-ticker timestamp arrays, it counts posts in the recent and older 12-hour halves with four `np.searchsorted` calls, giving $O(n \log n)$ interval counting per ticker group:
 
 ```python {#lst:acceleration caption="Ticker post acceleration via split-window binary search (from features.py). The backward 24-hour window is bisected into recent and older halves. Four searchsorted calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The max(..., 1) guard prevents division by zero when the older half is empty."}
-# Count posts in recent half (t-12h, t] excluding self
-recent_left = np.searchsorted(times, times - 12H_SECONDS, side="right")
+# Count posts in recent half (t-12h, t) excluding self
+recent_left = np.searchsorted(times, times - _12H_SECONDS, side="right")
 recent_right = np.searchsorted(times, times, side="left")
 count_recent = recent_right - recent_left
 
 # Count posts in older half (t-24h, t-12h]
-older_left = np.searchsorted(times, times - 24H_SECONDS, side="right")
-older_right = np.searchsorted(times, times - 12H_SECONDS, side="right")
+older_left = np.searchsorted(times, times - _24H_SECONDS, side="right")
+older_right = np.searchsorted(times, times - _12H_SECONDS, side="right")
 count_older = older_right - older_left
 
 acceleration = count_recent / np.maximum(count_older, 1)
