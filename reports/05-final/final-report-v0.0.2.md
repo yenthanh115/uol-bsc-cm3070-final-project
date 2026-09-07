@@ -504,9 +504,7 @@ Taken together, the design trades breadth for defensibility: a narrower, fully l
 
 : Project timeline and deliverables. {#tbl:timeline}
 
-The plan is derived from the CRISP-DM data-mining process model, whose stages (business understanding, data understanding, modelling, evaluation) map directly onto Phases 1–9; this grounding ensures the schedule follows an established methodology rather than an ad-hoc ordering. The phases are sequenced by dependency: scoping and the literature review (Phases 1–2) fix the research question and success criteria that the system design (Phase 4) must satisfy, and data understanding (Phase 3) constrains the surge definition and feature set before any modelling begins. A feasibility prototype (Phase 5) is scheduled ahead of full implementation specifically to de-risk the approach, validating the leakage-free labelling and a single baseline model before committing effort to the complete pipeline. The process is iterative rather than strictly linear: evaluation (Phase 7) feeds refinement (Phase 8), which loops back through implementation and re-evaluation as weaknesses such as threshold miscalibration and data sparsity are identified and addressed. This design allocates the most time to the implementation and evaluation phases, where the project's technical risk is concentrated.
-
-![Project Timeline (Gantt Chart).](figures/4-gantt-chart-v0.2.png){#fig:gantt}
+The plan is derived from the CRISP-DM data-mining process model, whose stages (business understanding, data understanding, modelling, evaluation) map directly onto Phases 1–9; this grounding ensures the schedule follows an established methodology rather than an ad-hoc ordering. The phases are sequenced by dependency: scoping and the literature review (Phases 1–2) fix the research question and success criteria that the system design (Phase 4) must satisfy, and data understanding (Phase 3) constrains the surge definition and feature set before any modelling begins. A feasibility prototype (Phase 5) is scheduled ahead of full implementation specifically to de-risk the approach, validating the leakage-free labelling and a single baseline model before committing effort to the complete pipeline. The process is iterative rather than strictly linear: evaluation (Phase 7) feeds refinement (Phase 8), which loops back through implementation and re-evaluation as weaknesses such as threshold miscalibration and data sparsity are identified and addressed. This design allocates the most time to the implementation and evaluation phases, where the project's technical risk is concentrated. The corresponding schedule is shown as a Gantt chart in [@fig:gantt].
 
 ---
 
@@ -1350,6 +1348,10 @@ Two directions would extend the methodology:
 
 # Appendix {.unnumbered}
 
+## Project Timeline {#sec:appendix-timeline}
+
+![Project Timeline (Gantt Chart).](figures/4-gantt-chart-v0.2.png){#fig:gantt}
+
 ## Software Dependencies {#sec:appendix-dependencies}
 
 [@tbl:dependencies] lists the declared dependencies of the `surge-pipeline` package, taken from `pyproject.toml` and `requirements.txt`. All are specified as minimum-version constraints; the exact resolved versions are captured in each run's experiment log ([@sec:eval-pipeline]). The project targets Python $\ge 3.10$ and is built with setuptools ($\ge 68.0$).
@@ -1376,3 +1378,4 @@ Two directions would extend the methodology:
 | `nltk` | $\ge 3.8$ | Dev | Build-time only: English base of the ticker stopword lexicon |
 
 : Declared software dependencies of the `surge-pipeline` package, from `pyproject.toml` and `requirements.txt`. {#tbl:dependencies}
+
