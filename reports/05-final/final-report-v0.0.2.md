@@ -1,5 +1,4 @@
 ---
-title: "Predicting Volume and Sentiment Surges in Reddit Financial Communities Using Machine Learning"
 # pandoc-crossref configuration (auto-numbering for tables, figures, sections)
 figureTitle: "Figure"
 tableTitle: "Table"
@@ -63,9 +62,26 @@ nameInLink: true
 )
 ```
 
+```{=typst}
+#align(center)[
+  #text(size: 17pt, weight: "bold")[
+    Predicting Volume and Sentiment Surges in Reddit Financial Communities Using Machine Learning
+  ]
+  #v(0.3cm)
+  #text(size: 14pt, weight: "bold")[\*\*\*]
+]
+#v(0.6cm)
+```
+
 # Abstract {.unnumbered}
 
 Social media discussions in financial communities can shift from quiet to frenzied within hours. This project develops a screening pipeline that predicts whether discussion around an individual stock ticker will surge during the following 24 hours, using only information available when each post is observed. The predictions are intended for market surveillance and compliance teams prioritising unusual activity for investigation, quantitative researchers selecting tickers for deeper analysis, and platform moderators allocating monitoring capacity. The pipeline combines backward-looking activity, textual, temporal, and sentiment features with a composite target based on future volume growth and sentiment change, then evaluates Logistic Regression, Random Forest, and XGBoost using expanding-window validation and a chronological held-out test period. This design tests whether the predictions remain useful when applied to genuinely later data rather than allowing future observations into training. XGBoost achieved the strongest ranking performance on the high-volume `r/wallstreetbets` community (AUC-ROC 0.892), while Random Forest performed best on the sparser `r/pennystocks` community (0.753), indicating that data density constrains performance more than model complexity. On `r/wallstreetbets`, the best operating point produced 21.7% precision and 23.5% recall: approximately one in five flagged cases was a surge, but most surges were missed. This trade-off can support selective human review, particularly for quantitative research, but is insufficient for broad surveillance or moderation coverage and does not justify autonomous action. Cross-community transfer remained above chance (AUC 0.684 from `r/wallstreetbets` to `r/pennystocks`) but requires community-specific recalibration. The main contribution is therefore a temporally valid ranking and screening framework, with performance strong enough to prioritise attention but limited by class imbalance, threshold calibration, sparse-community uncertainty, and the use of a single 2021 observation period.
+
+```{=typst}
+#pagebreak()
+#outline(depth: 2, indent: auto)
+#pagebreak()
+```
 
 ---
 
@@ -517,7 +533,7 @@ The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, b
 The pipeline source resides under `src/`, split into core library modules and executable CLI scripts. Alongside it, a separate top-level `eda/` directory holds the standalone data-selection notebooks (kept outside the pipeline package; see [@sec:eda-tooling]):
 
 ```default {#lst:source-org caption="Repository code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage (plus a few shared-utility and data-contract modules), enforcing separation of concerns. Each stage module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves. The \`eda/\` notebooks sit outside \`src/\` and share no code with the pipeline package."}
-eda/                             # Standalone data-selection notebooks ([@sec:eda-tooling])
+eda/                             # Standalone EDA notebooks
 ├── 01_discovery.ipynb           # Candidate discovery (Kaggle + HuggingFace APIs)
 ├── 02_highlevel_eval.ipynb      # High-level comparative profiling
 ├── 03_deep_assessment.ipynb     # Deep viability assessment
@@ -550,7 +566,6 @@ src/
 └── build_stopwords.py           # Regenerates ticker_stopwords.txt
 input/reference/
 └── ticker_stopwords.txt         # stopword lexicon (NLTK base + supplement)
-scripts/
 ```
 
 Each pipeline stage maps directly to one or two library modules, with a few small modules holding shared utilities (`timestamps.py`, `cli_logging.py`) and data contracts (`training_models.py`, `evaluation_models.py`). This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
@@ -1357,7 +1372,7 @@ Two directions would extend the methodology:
 [@tbl:dependencies] lists the declared dependencies of the `surge-pipeline` package, taken from `pyproject.toml` and `requirements.txt`. All are specified as minimum-version constraints; the exact resolved versions are captured in each run's experiment log ([@sec:eval-pipeline]). The project targets Python $\ge 3.10$ and is built with setuptools ($\ge 68.0$).
 
 | Package | Constraint | Group | Role |
-|---------|------------|-------|------|
+|--------|-----|-----|----------------|
 | `pandas` | $\ge 2.0$ | Runtime | DataFrame ingestion, windowing, and labelling |
 | `numpy` | $\ge 1.24$ | Runtime | Vectorised counts, z-scores, array operations |
 | `scikit-learn` | $\ge 1.3$ | Runtime | Logistic Regression, Random Forest, metrics, scaling |
