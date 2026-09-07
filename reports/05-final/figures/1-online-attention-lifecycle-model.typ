@@ -68,19 +68,19 @@
   // E: prediction point, linked to Emergence (A)
   note(
     stages.at(0).x + bw / 2, ny,
-    [#text(size: 8.5pt)[🎯 This project's \ prediction point]],
-    rgb("#c8e6c9"), rgb("#2e7d32"),
+    [#text(size: 8.5pt)[This project's \ prediction point]],
+    rgb("#ffffff"), rgb("#000000"),
   )
   // F: traditional models note, linked to Growth (B)
   note(
     stages.at(1).x + bw / 2, ny,
     [#text(size: 8.5pt)[Traditional models \ require data here]],
-    rgb("#fff3e0"), rgb("#e65100"),
+    rgb("#ffffff"), rgb("#000000"),
   )
 
   // ---- dotted connectors from stage to its annotation ----
   line((stages.at(0).x + bw / 2, y - bh / 2), (stages.at(0).x + bw / 2, ny + 0.75),
-       stroke: (paint: rgb("#2e7d32"), thickness: 1pt, dash: "dotted"))
+       stroke: (paint: rgb("#000000"), thickness: 1pt, dash: "dotted"))
   line((stages.at(1).x + bw / 2, y - bh / 2), (stages.at(1).x + bw / 2, ny + 0.75),
-       stroke: (paint: rgb("#e65100"), thickness: 1pt, dash: "dotted"))
+       stroke: (paint: rgb("#000000"), thickness: 1pt, dash: "dotted"))
 })

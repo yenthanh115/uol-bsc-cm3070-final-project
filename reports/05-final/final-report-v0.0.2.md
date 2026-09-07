@@ -10,6 +10,15 @@ secPrefix: "Section"
 numberSections: true
 linkReferences: true
 nameInLink: true
+
+# bibliography configuration (automatic citation numbering + reference list).
+# NOTE: the `bibliography:` metadata key is intentionally NOT set here. Setting it
+# makes the Pandoc Typst template append its own untitled #bibliography at the very
+# end of the document, which renders as an empty "Bibliography" section after the
+# Appendix. Instead the reference list is placed explicitly under the "# References"
+# heading via a raw #bibliography(...) block (see sec:ref). Typst resolves every
+# @key citation against that single call, so numbering and the list stay automatic.
+link-citations: true
 ---
 
 ```{=typst}
@@ -89,7 +98,7 @@ Social media discussions in financial communities can shift from quiet to frenzi
 
 ## Background and Context {#sec:background}
 
-This project adapts the template of **CM3005 Data Science** (Predictive Modelling of Social Media Trend Emergence) to financial forums. On social media, a trend takes off when crowd attention suddenly converges on a specific topic or entity. This dynamic is especially intense in stock-market communities, where an obscure ticker can explode in popularity overnight, often signalling unusual trading activity before it happens [15]. Yet most current tracking tools only flag a trend once it is already widespread, by which point the chance to analyse, act on, or moderate the movement has usually passed. Anticipating these shifts before they peak is far more valuable than confirming them afterwards, but also harder, because it means recognising subtle patterns before the main surge arrives.
+This project adapts the template of **CM3005 Data Science** (Predictive Modelling of Social Media Trend Emergence) to financial forums. On social media, a trend takes off when crowd attention suddenly converges on a specific topic or entity. This dynamic is especially intense in stock-market communities, where an obscure ticker can explode in popularity overnight, often signalling unusual trading activity before it happens [@long2023stock]. Yet most current tracking tools only flag a trend once it is already widespread, by which point the chance to analyse, act on, or moderate the movement has usually passed. Anticipating these shifts before they peak is far more valuable than confirming them afterwards, but also harder, because it means recognising subtle patterns before the main surge arrives.
 
 Turning that objective into a concrete task requires deciding both where to look and exactly what to predict. It focuses on Reddit's financial communities, which uniquely combine public, archived, timestamped discussions tied to named stock tickers, so activity can be tracked at the level of an individual asset rather than the market wide. The core problem then comes down to this: given what a community has said about a ticker up to a given moment, *can we predict an imminent spike in its discussion?* Framed as a supervised classification task, the project forecasts short-term surges in ticker discussion before they peak.
 
@@ -97,13 +106,13 @@ Turning that objective into a concrete task requires deciding both where to look
 
 What makes this prediction worth attempting is also what makes it hard. These spikes stem from earnings surprises, speculative momentum, or organized retail activity. Because they unfold over mere hours across thousands of daily tickers, manual tracking is nearly impossible.
 
-This tension motivates the central **research question**: *can a social-media surge be predicted before it happens from early discussion patterns alone?* The answer matters to three user groups. **Market surveillance and compliance teams** would prioritise which tickers warrant investigation for unusual or potentially coordinated activity [1]. **Quantitative researchers** would select a small set of tickers for deeper financial and textual analysis. **Platform moderators** would position monitoring capacity before discussion spikes. Across all three the system is a *prioritisation tool* that reduces a large candidate universe to a reviewable shortlist, not an autonomous decision-maker [2]. Their error tolerances differ, however: surveillance and moderation need broad coverage (high recall), whereas research can accept a smaller, higher-precision shortlist. These differing needs are formalised as acceptance criteria in [@sec:operational-criteria] and tested in [@sec:operational-precision].
+This tension motivates the central **research question**: *can a social-media surge be predicted before it happens from early discussion patterns alone?* The answer matters to three user groups. **Market surveillance and compliance teams** would prioritise which tickers warrant investigation for unusual or potentially coordinated activity [@finra2025socialmedia]. **Quantitative researchers** would select a small set of tickers for deeper financial and textual analysis. **Platform moderators** would position monitoring capacity before discussion spikes. Across all three the system is a *prioritisation tool* that reduces a large candidate universe to a reviewable shortlist, not an autonomous decision-maker [@fawcett2006roc]. Their error tolerances differ, however: surveillance and moderation need broad coverage (high recall), whereas research can accept a smaller, higher-precision shortlist. These differing needs are formalised as acceptance criteria in [@sec:operational-criteria] and tested in [@sec:operational-precision].
 
 Beneath these differences lies one structural problem common to all three: candidate tickers vastly outnumber the capacity to review them, and surges develop faster than manual monitoring can react. [@tbl:pain-points] sets out the specific pain point each group faces and why current practice falls short.
 
 | User group | Pain point | Current workaround and its limit |
 |----------|----------------------|--------------------------|
-| Market surveillance / compliance | Thousands of tickers are discussed daily; potentially coordinated or unusual activity must be triaged, but surges develop too fast for manual review [1] | Rule-based volume alerts (e.g. $+2\sigma$) miss non-linear, multi-signal precursors and cannot rank candidates by likelihood |
+| Market surveillance / compliance | Thousands of tickers are discussed daily; potentially coordinated or unusual activity must be triaged, but surges develop too fast for manual review [@finra2025socialmedia] | Rule-based volume alerts (e.g. $+2\sigma$) miss non-linear, multi-signal precursors and cannot rank candidates by likelihood |
 | Quantitative researchers | A small set of tickers must be selected for deeper analysis from a large, noisy universe | Manual scanning is slow, subjective, and tends to surface tickers only after they have already become prominent |
 | Platform moderators | Monitoring and moderation capacity must be positioned *before* discussion spikes, not after | Reactive moderation begins once a spike is already underway, when intervention is hardest |
 
@@ -164,23 +173,23 @@ Section 2 reviews the literature on online attention prediction, financial senti
 
 ## The Predictability of Online Attention
 
-Trend prediction spans many methods, from sequence and graph models to trajectory forecasting; this review focuses on the strand nearest to the project, supervised tabular classification from hand-crafted features. The sources reviewed here (Section 7) were selected because they directly inform the decisions this project makes: *what to predict* (popularity and surge-onset literature), *what signals to use* (sentiment and content features), *how to model* (classifier families and their trade-offs), and *how to evaluate rigorously* (temporal validation methods). A further strand, Reddit-specific financial research, confirms that this platform contains distinct, predictable signals.
+Trend prediction spans many methods, from sequence and graph models to trajectory forecasting; this review focuses on the strand nearest to the project, supervised tabular classification from hand-crafted features. The sources reviewed here ([@sec:ref]) were selected because they directly inform the decisions this project makes: *what to predict* (popularity and surge-onset literature), *what signals to use* (sentiment and content features), *how to model* (classifier families and their trade-offs), and *how to evaluate rigorously* (temporal validation methods). A further strand, Reddit-specific financial research, confirms that this platform contains distinct, predictable signals.
 
 The foundational question underlying this project, *can future surges in social media activity be predicted?*, was first addressed through research on **online popularity prediction**. This literature demonstrated that online attention is not random: *content that attracts early engagement tends to attract more, following patterns that are statistically detectable*.
 
-Szabo and Huberman [5] produced the seminal result in this domain, demonstrating strong linear correlations between early and later popularity on YouTube and Digg. Their regression model showed that a content item's view count at time *t* predicts its eventual popularity with high accuracy. This established the core principle: early behavioural signals carry predictive information about future attention. However, because the model assumes a stationary growth process, it requires content to have already accumulated measurable engagement before prediction becomes possible. It cannot forecast at or near the time of posting.
+Szabo and Huberman [@szabo2010predicting] produced the seminal result in this domain, demonstrating strong linear correlations between early and later popularity on YouTube and Digg. Their regression model showed that a content item's view count at time *t* predicts its eventual popularity with high accuracy. This established the core principle: early behavioural signals carry predictive information about future attention. However, because the model assumes a stationary growth process, it requires content to have already accumulated measurable engagement before prediction becomes possible. It cannot forecast at or near the time of posting.
 
-Lerman and Hogg [6] extended this understanding by modelling the interaction between social network structure and content discovery, demonstrating that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach revealed that network position and user browsing patterns mediate how content gains visibility. Wang and Huberman [7] and Kong et al. [8] further characterised online attention as following identifiable temporal lifecycles (emergence, growth, peak, and decline), suggesting that content at different lifecycle stages exhibits different observable signatures. Kong et al. [8] specifically addressed *burst* detection for hashtags in real-time, but their approach operates at the hashtag level with contemporaneous features. It detects bursts as they happen rather than predicting them before onset, and works at a platform-wide granularity rather than per-entity (ticker) level.
+Lerman and Hogg [@lerman2010social] extended this understanding by modelling the interaction between social network structure and content discovery, demonstrating that popularity depends on behavioural dynamics beyond simple cumulative counts. Their agent-based approach revealed that network position and user browsing patterns mediate how content gains visibility. Wang and Huberman [@wang2013quantifying] and Kong et al. [@kong2014predicting] further characterised online attention as following identifiable temporal lifecycles (emergence, growth, peak, and decline), suggesting that content at different lifecycle stages exhibits different observable signatures. Kong et al. [@kong2014predicting] specifically addressed *burst* detection for hashtags in real-time, but their approach operates at the hashtag level with contemporaneous features. It detects bursts as they happen rather than predicting them before onset, and works at a platform-wide granularity rather than per-entity (ticker) level.
 
-The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth. Furthermore, a key tension exists within these findings: Szabo and Huberman [5] show that early popularity strongly predicts final outcome, yet Cheng et al. [9] later found that cascade prediction accuracy plateaus after the initial phase. This suggests that predictability diminishes once content leaves the emergence stage, which is precisely the window this project targets.
+The academic consensus that emerged from this first wave of research can be summarised as: *online attention is predictable from early signals, follows lifecycle dynamics, and is mediated by platform-specific network effects*. However, these models all require content to have already gained some traction before prediction is possible, and they target *eventual* popularity rather than the *onset* of rapid growth. Furthermore, a key tension exists within these findings: Szabo and Huberman [@szabo2010predicting] show that early popularity strongly predicts final outcome, yet Cheng et al. [@cheng2014cascades] later found that cascade prediction accuracy plateaus after the initial phase. This suggests that predictability diminishes once content leaves the emergence stage, which is precisely the window this project targets.
 
-![Online attention lifecycle model [7][8]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.](figures/1-online-attention-lifecycle-model.png){#fig:lifecycle}
+![Online attention lifecycle model [@wang2013quantifying; @kong2014predicting]. Traditional popularity prediction requires content to have reached the growth phase before forecasting is possible. This project targets the emergence phase, predicting a surge before substantial engagement has accumulated.](figures/1-online-attention-lifecycle-model.png){#fig:lifecycle}
 
 ## The Shift Toward Pre-Engagement Prediction
 
-A second wave of research addressed the limitation that early popularity models require existing engagement data. Bandari et al. [10] demonstrated that content metadata such as source, category, subjectivity, and named entities could predict popularity before engagement accumulates, achieving approximately 84% classification accuracy on news articles. This represented a key methodological shift: prediction could occur at or before publication rather than requiring an observation period.
+A second wave of research addressed the limitation that early popularity models require existing engagement data. Bandari et al. [@bandari2012pulse] demonstrated that content metadata such as source, category, subjectivity, and named entities could predict popularity before engagement accumulates, achieving approximately 84% classification accuracy on news articles. This represented a key methodological shift: prediction could occur at or before publication rather than requiring an observation period.
 
-Cheng et al. [9] achieved approximately 79.5% accuracy (AUC = 0.877) predicting whether Facebook photo cascades would double in size, using temporal features derived from early propagation speed and structural virality metrics. Their findings showed that the *rate* of initial spread, rather than its magnitude, carries predictive signal for sustained growth. Yuan and Li [11] extended this principle across information diffusion contexts, showing that early-stage propagation patterns contain sufficient signal to forecast long-term diffusion trajectory.
+Cheng et al. [@cheng2014cascades] achieved approximately 79.5% accuracy (AUC = 0.877) predicting whether Facebook photo cascades would double in size, using temporal features derived from early propagation speed and structural virality metrics. Their findings showed that the *rate* of initial spread, rather than its magnitude, carries predictive signal for sustained growth. Yuan and Li [@yuan2019forecasting] extended this principle across information diffusion contexts, showing that early-stage propagation patterns contain sufficient signal to forecast long-term diffusion trajectory.
 
 This body of work established a second consensus: prediction is achievable before substantial engagement accumulates, provided features capture content characteristics or early propagation dynamics. However, the prediction targets remained eventual outcomes, such as final popularity or total cascade size, rather than *rapid onset* within a bounded time window. For example, an analyst monitoring a financial forum needs to know whether discussion will surge within the subsequent 24 hours, not whether it will eventually become popular. This temporal distinction represents a key unaddressed gap.
 
@@ -188,36 +197,36 @@ Taken together, the two waves point to a small set of signal families with predi
 
 | Signal family | Evidence from prior work | Strength | Fit for this project |
 |------------|----------------------------|---------|------------------------|
-| Volume / activity rate | Early view and post counts predict later attention [5][15] | Strong | Included as backward-looking counts ([@sec:feature-engineering]) |
-| Growth / acceleration | Early *rate* of spread predicts sustained growth better than magnitude [9][11] | Strong | Included as lagged growth and acceleration features |
-| Content metadata | Source, category, named entities predict popularity pre-engagement [10] | Moderate | Partially included (word/title counts, ticker counts) |
-| Sentiment | Aggregate social sentiment informs financial forecasting [12] | Moderate | Included as sentiment level and change ([@sec:sentiment-contribution]) |
-| Network / diffusion structure | Network position and reshare structure mediate visibility [6][9] | Moderate | Excluded: requires cross-user graph data outside the per-ticker, per-post scope |
-| Post-hoc engagement (upvotes, comments) | Correlates with popularity but accumulates *after* posting [5] | Strong but unusable | Excluded: future information, would leak the target ([@sec:surge-definition]) |
+| Volume / activity rate | Early view and post counts predict later attention [@szabo2010predicting; @long2023stock] | Strong | Included as backward-looking counts ([@sec:feature-engineering]) |
+| Growth / acceleration | Early *rate* of spread predicts sustained growth better than magnitude [@cheng2014cascades; @yuan2019forecasting] | Strong | Included as lagged growth and acceleration features |
+| Content metadata | Source, category, named entities predict popularity pre-engagement [@bandari2012pulse] | Moderate | Partially included (word/title counts, ticker counts) |
+| Sentiment | Aggregate social sentiment informs financial forecasting [@bollen2011twitter] | Moderate | Included as sentiment level and change ([@sec:sentiment-contribution]) |
+| Network / diffusion structure | Network position and reshare structure mediate visibility [@lerman2010social; @cheng2014cascades] | Moderate | Excluded: requires cross-user graph data outside the per-ticker, per-post scope |
+| Post-hoc engagement (upvotes, comments) | Correlates with popularity but accumulates *after* posting [@szabo2010predicting] | Strong but unusable | Excluded: future information, would leak the target ([@sec:surge-definition]) |
 
 : Predictive signal families, the strength of prior evidence, and their admissibility under this project's backward-looking constraint. {#tbl:signal-families}
 
 ## Sentiment as a Predictive Signal in Finance
 
-Alongside popularity research, computational finance studies established that collective social media sentiment carries measurable predictive information. Bollen et al. [12] demonstrated that aggregate Twitter mood, particularly the "Calm" dimension measured by the Google-Profile of Mood States (GPOMS), predicted Dow Jones movements with about 87% directional accuracy. Although limited by a short evaluation window, missing out-of-sample testing, and an unclear causal mechanism, their study proved pivotal in establishing that **social media textual sentiment can inform financial forecasting**.
+Alongside popularity research, computational finance studies established that collective social media sentiment carries measurable predictive information. Bollen et al. [@bollen2011twitter] demonstrated that aggregate Twitter mood, particularly the "Calm" dimension measured by the Google-Profile of Mood States (GPOMS), predicted Dow Jones movements with about 87% directional accuracy. Although limited by a short evaluation window, missing out-of-sample testing, and an unclear causal mechanism, their study proved pivotal in establishing that **social media textual sentiment can inform financial forecasting**.
 
-The tools used for sentiment extraction have evolved alongside this finding. General-purpose lexicons like OpinionFinder lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning. To better capture online discourse, Hutto and Gilbert [13] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation, and achieving F1=0.96 on social media benchmarks. Araci [14] later introduced FinBERT, a transformer model fine-tuned on financial corpora, capturing contextual meaning that rule-based tools miss. This progression from general lexicons, to social-media rules, to domain-specific deep learning highlights the field's consensus that sentiment analysis tools must be tailored to their specific domain.
+The tools used for sentiment extraction have evolved alongside this finding. General-purpose lexicons like OpinionFinder lack domain specificity for financial language, where terms like "short," "bearish," or "moon" carry specialised meaning. To better capture online discourse, Hutto and Gilbert [@hutto2014vader] developed VADER specifically for social media text, incorporating rules for punctuation emphasis, capitalisation, degree modifiers, and negation, and achieving F1=0.96 on social media benchmarks. Araci [@araci2019finbert] later introduced FinBERT, a transformer model fine-tuned on financial corpora, capturing contextual meaning that rule-based tools miss. This progression from general lexicons, to social-media rules, to domain-specific deep learning highlights the field's consensus that sentiment analysis tools must be tailored to their specific domain.
 
 For this project, the key takeaway is that sentiment *change*, rather than absolute sentiment value, may serve as a leading indicator of activity surges: if a ticker's discussion becomes markedly more emotional before volume escalates, sentiment shift could provide an early warning signal. This motivates including sentiment change magnitude in the composite surge metric.
 
 | Tool | Type | Domain | Strengths | Limitations for This Project |
 |----------|----------|--------|---------------|--------------|
-| OpinionFinder as used in [12] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
-| VADER [13] | Rule-based | Social media | Handles capitalisation, emoticons, negation; F1=0.96 | No financial domain tuning ("short," "moon" mis-scored) |
-| FinBERT [14] | Transformer | Financial text | Context-aware, domain-specific | Computationally expensive for 1M+ records |
+| OpinionFinder as used in [@bollen2011twitter] | Lexicon | General | Early adoption, widely cited | No social media conventions, no financial terms |
+| VADER [@hutto2014vader] | Rule-based | Social media | Handles capitalisation, emoticons, negation; F1=0.96 | No financial domain tuning ("short," "moon" mis-scored) |
+| FinBERT [@araci2019finbert] | Transformer | Financial text | Context-aware, domain-specific | Computationally expensive for 1M+ records |
 
 : Evolution of sentiment analysis tools relevant to financial social media. {#tbl:sentiment-tools}
 
 ## Modelling Approaches for Attention Prediction {#sec:modelling-review}
 
-How the prediction problem is *framed* varies across the literature, and the framing dictates the model family. Szabo and Huberman [5] treat it as regression onto a continuous future count; Bandari et al. [10] and Cheng et al. [9] frame it as classification into popularity or cascade-growth classes; Kong et al. [8] and Yuan and Li [11] adopt time-series or diffusion-trajectory formulations. Because this project predicts a discrete event, namely whether a surge occurs within a fixed window, binary classification is the natural framing, aligning it with the Bandari and Cheng strand rather than with continuous forecasting.
+How the prediction problem is *framed* varies across the literature, and the framing dictates the model family. Szabo and Huberman [@szabo2010predicting] treat it as regression onto a continuous future count; Bandari et al. [@bandari2012pulse] and Cheng et al. [@cheng2014cascades] frame it as classification into popularity or cascade-growth classes; Kong et al. [@kong2014predicting] and Yuan and Li [@yuan2019forecasting] adopt time-series or diffusion-trajectory formulations. Because this project predicts a discrete event, namely whether a surge occurs within a fixed window, binary classification is the natural framing, aligning it with the Bandari and Cheng strand rather than with continuous forecasting.
 
-Within classification, prior work spans a complexity spectrum. Linear and regression models [5][10] are interpretable and cheap to fit, but assume roughly additive effects and can underfit interacting signals. Tree ensembles occupy the middle ground: bagging (Random Forest) averages independent trees to reduce variance, which is robust when positives are scarce, while boosting (gradient-boosted trees) fits residual errors sequentially and typically leads on structured tabular data when enough labelled examples exist. Fernández-Delgado et al. [20] found, across 121 datasets, that ensemble tree methods are consistently among the strongest general-purpose tabular classifiers, while also cautioning that no single family dominates and that evaluation methodology materially affects the ranking. Deep sequence models (e.g. the recurrent approaches implicit in trajectory work [8][11]) can capture richer temporal structure but demand large labelled datasets and sacrifice interpretability, which is ill-suited to a sparse, highly imbalanced surge target where reviewers must be able to inspect why a ticker was flagged.
+Within classification, prior work spans a complexity spectrum. Linear and regression models [@szabo2010predicting; @bandari2012pulse] are interpretable and cheap to fit, but assume roughly additive effects and can underfit interacting signals. Tree ensembles occupy the middle ground: bagging (Random Forest) averages independent trees to reduce variance, which is robust when positives are scarce, while boosting (gradient-boosted trees) fits residual errors sequentially and typically leads on structured tabular data when enough labelled examples exist. Fernández-Delgado et al. [@fernandezdelgado2014classifiers] found, across 121 datasets, that ensemble tree methods are consistently among the strongest general-purpose tabular classifiers, while also cautioning that no single family dominates and that evaluation methodology materially affects the ranking. Deep sequence models (e.g. the recurrent approaches implicit in trajectory work [@kong2014predicting; @yuan2019forecasting]) can capture richer temporal structure but demand large labelled datasets and sacrifice interpretability, which is ill-suited to a sparse, highly imbalanced surge target where reviewers must be able to inspect why a ticker was flagged.
 
 Two implications follow for this project. First, an interpretable linear model (Logistic Regression) is the appropriate baseline: if it performs well, the surge signal is largely additive; if a more complex model beats it, the margin quantifies what non-linear structure is worth. Second, tree ensembles (Random Forest and XGBoost) are the natural improved models, spanning the bagging/boosting contrast and letting the project test *empirically* whether added complexity pays off under scarce positives, rather than assuming the most complex model is best. These choices are set out in [@sec:model-selection] and the complexity-versus-data-density question is examined directly in [@sec:complexity-density].
 
@@ -225,11 +234,11 @@ Two implications follow for this project. First, an interpretable linear model (
 
 While the preceding research established foundational principles on platforms like YouTube, Digg, Facebook, and Twitter, recent studies examine whether these dynamics hold within Reddit's financial communities and how their unique structural features alter information flow.
 
-Penny stocks (low-capitalisation equities trading below $5) occupy a distinctive position because their low liquidity and limited analyst coverage mean that social media discussion can constitute a disproportionate share of available information [15][16]. Unlike Twitter's ephemeral broadcast environment, Reddit's subreddit structure creates concentrated communities with persistent threads and shared behavioural norms.
+Penny stocks (low-capitalisation equities trading below $5) occupy a distinctive position because their low liquidity and limited analyst coverage mean that social media discussion can constitute a disproportionate share of available information [@long2023stock; @costola2022selfinduced]. Unlike Twitter's ephemeral broadcast environment, Reddit's subreddit structure creates concentrated communities with persistent threads and shared behavioural norms.
 
-Long et al. [15] demonstrated that `WSB` posting volume correlated with abnormal trading volume and returns for discussed stocks, with effects concentrated in small-cap equities. Their analysis showed that increased Reddit attention *preceded* trading activity in their sample, suggesting that discussion patterns carry predictive signal rather than merely reflecting market events. Costola et al. [16] examined the GameStop episode specifically, finding that consensus formation within `WSB` followed measurable patterns in posting frequency and sentiment alignment *before* reaching critical mass. A small number of committed users drove broader engagement through detectable temporal signatures. Extending this to security manipulation, Mancini et al. [17] constructed predictive models using the textual and temporal properties of forum posts. Their work confirmed that forum-derived text features significantly outperform chance baselines in forecasting anomalous stock activity.
+Long et al. [@long2023stock] demonstrated that `WSB` posting volume correlated with abnormal trading volume and returns for discussed stocks, with effects concentrated in small-cap equities. Their analysis showed that increased Reddit attention *preceded* trading activity in their sample, suggesting that discussion patterns carry predictive signal rather than merely reflecting market events. Costola et al. [@costola2022selfinduced] examined the GameStop episode specifically, finding that consensus formation within `WSB` followed measurable patterns in posting frequency and sentiment alignment *before* reaching critical mass. A small number of committed users drove broader engagement through detectable temporal signatures. Extending this to security manipulation, Mancini et al. [@mancini2024pumpdump] constructed predictive models using the textual and temporal properties of forum posts. Their work confirmed that forum-derived text features significantly outperform chance baselines in forecasting anomalous stock activity.
 
-These studies confirm that Reddit financial communities produce predictive signals, yet prior work exclusively targets market outcomes such as returns, volume, or manipulation, rather than platform dynamics. Notably, these findings align with general literature: Costola et al.'s consensus patterns [16] reflect Lerman and Hogg's network discovery dynamics [6], while Long et al.'s temporal precedence [15] echoes Cheng et al.'s early speed metrics [9]. However, predicting whether the discussion itself will rapidly escalate, that is, forecasting an imminent surge in posting volume, remains an open challenge. Addressing this gap is the central focus of this paper.
+These studies confirm that Reddit financial communities produce predictive signals, yet prior work exclusively targets market outcomes such as returns, volume, or manipulation, rather than platform dynamics. Notably, these findings align with general literature: Costola et al.'s consensus patterns [@costola2022selfinduced] reflect Lerman and Hogg's network discovery dynamics [@lerman2010social], while Long et al.'s temporal precedence [@long2023stock] echoes Cheng et al.'s early speed metrics [@cheng2014cascades]. However, predicting whether the discussion itself will rapidly escalate, that is, forecasting an imminent surge in posting volume, remains an open challenge. Addressing this gap is the central focus of this paper.
 
 ## Methodological Weaknesses in Prior Work {#sec:methodological-weaknesses}
 
@@ -237,19 +246,19 @@ Beyond the substantive gaps identified above, a critical methodological pattern 
 
 This pattern recurs across the reviewed studies, as [@tbl:temporal-practices] catalogues: same-period evaluation, random train-test splits, random cascade sampling, and full-dataset correlation all break chronological ordering, allowing each model to be tested on data that would not have existed at prediction time.
 
-This methodological oversight is significant because Tashman [18] demonstrated that rolling-origin evaluation, where the forecasting origin advances forward through time, produces far more reliable accuracy estimates for temporal prediction tasks than fixed or random splits. Furthermore, Bergmeir and Benítez [19] showed empirically that random cross-validation overestimates predictive accuracy on time-dependent data, and recommended blocked or expanding-window schemes that preserve temporal ordering. Despite established best practices in time-series forecasting, they remain largely unadopted in social media prediction research.
+This methodological oversight is significant because Tashman [@tashman2000outofsample] demonstrated that rolling-origin evaluation, where the forecasting origin advances forward through time, produces far more reliable accuracy estimates for temporal prediction tasks than fixed or random splits. Furthermore, Bergmeir and Benítez [@bergmeir2012crossvalidation] showed empirically that random cross-validation overestimates predictive accuracy on time-dependent data, and recommended blocked or expanding-window schemes that preserve temporal ordering. Despite established best practices in time-series forecasting, they remain largely unadopted in social media prediction research.
 
-Consequently, reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains uncertain whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. As Fernández-Delgado et al. [20] noted in their large-scale classifier benchmark, evaluation methodology substantially affects reported performance rankings, reinforcing that how a model is evaluated matters as much as which model is selected.
+Consequently, reported performance figures across the reviewed studies may be inflated by temporal leakage, and it remains uncertain whether models would generalise to genuinely unseen future periods. For any system intended for real-world deployment, including surge detection, this is a critical deficiency. As Fernández-Delgado et al. [@fernandezdelgado2014classifiers] noted in their large-scale classifier benchmark, evaluation methodology substantially affects reported performance rankings, reinforcing that how a model is evaluated matters as much as which model is selected.
 
 | Study | Evaluation Method | Temporal Ordering Preserved? | Specific flaw | Leakage Risk |
 |---------------|----------------|-----------|----------------------|---------|
-| Szabo & Huberman [5] | Same-period evaluation | No | Train and test drawn from the same period | High |
-| Bandari et al. [10] | Random train-test split | No | Tests on articles published before some training data | High |
-| Bollen et al. [12] | Fixed holdout (1 month) | Partial | Short window, no out-of-sample testing | Medium |
-| Cheng et al. [9] | Random cascade sampling | No | Cascades sampled without preserving time order | High |
-| Long et al. [15] | Full-dataset correlation | No | No test of generalisation to later periods | High |
-| Costola et al. [16] | Full-dataset analysis | No | No test of generalisation to later periods | High |
-| Mancini et al. [17] | Chronological split | Partial | Partial ordering; limited holdout | Medium |
+| Szabo & Huberman [@szabo2010predicting] | Same-period evaluation | No | Train and test drawn from the same period | High |
+| Bandari et al. [@bandari2012pulse] | Random train-test split | No | Tests on articles published before some training data | High |
+| Bollen et al. [@bollen2011twitter] | Fixed holdout (1 month) | Partial | Short window, no out-of-sample testing | Medium |
+| Cheng et al. [@cheng2014cascades] | Random cascade sampling | No | Cascades sampled without preserving time order | High |
+| Long et al. [@long2023stock] | Full-dataset correlation | No | No test of generalisation to later periods | High |
+| Costola et al. [@costola2022selfinduced] | Full-dataset analysis | No | No test of generalisation to later periods | High |
+| Mancini et al. [@mancini2024pumpdump] | Chronological split | Partial | Partial ordering; limited holdout | Medium |
 
 : Temporal evaluation practices across reviewed studies, with the specific flaw each introduces. {#tbl:temporal-practices}
 
@@ -257,19 +266,19 @@ Consequently, reported performance figures across the reviewed studies may be in
 
 The literature reviewed above establishes four cumulative findings:
 
-- Early behavioural signals predict future online attention [5][9]
-- Prediction is possible before engagement accumulates, using content and propagation features [10][9][11]
-- Sentiment extracted from social media carries predictive value in financial contexts [12][13]
-- Reddit financial communities generate measurable signals that precede market activity [15][16][17]
+- Early behavioural signals predict future online attention [@szabo2010predicting; @cheng2014cascades]
+- Prediction is possible before engagement accumulates, using content and propagation features [@bandari2012pulse; @cheng2014cascades; @yuan2019forecasting]
+- Sentiment extracted from social media carries predictive value in financial contexts [@bollen2011twitter; @hutto2014vader]
+- Reddit financial communities generate measurable signals that precede market activity [@long2023stock; @costola2022selfinduced; @mancini2024pumpdump]
 
 Against these findings, four key gaps remain unaddressed, each of which this project targets directly ([@tbl:research-gaps]).
 
 | # | Gap | What prior work lacks | How this project addresses it |
 |---|---------|-----------------------------|--------------------|
 | 1 | Prediction target | Studies predict *eventual outcomes* (total popularity, cascade size, market returns), not the *onset* of rapid growth in a bounded window; no formulation for a composite volume-and-sentiment surge per entity | Composite surge metric defines a binary onset target within a strict 24-hour window ([@sec:surge-definition]) |
-| 2 | Signal integration | Each strand shows one feature category in isolation, temporal [5], content [10], sentiment [12], structural [9], with little empirical integration, despite evidence they interact [6][8] | Feature set combines temporal, activity-frequency, sentiment, and textual signals ([@sec:feature-engineering]) |
-| 3 | Domain specificity | General research [5][10][9] neglects financial dynamics (event-driven reactions, domain language, speculation); Reddit finance work [15][16][17] predicts market consequences, not whether surges *occur* | Pipeline applied to two Reddit financial communities at opposite ends of the data-density spectrum |
-| 4 | Temporal validity | Random or unspecified splits [5][10][9][15] may inflate reported performance; rigorous temporal methods [18][19] remain unadopted in this domain | Expanding-window temporal cross-validation ensures no future information leaks into training |
+| 2 | Signal integration | Each strand shows one feature category in isolation, temporal [@szabo2010predicting], content [@bandari2012pulse], sentiment [@bollen2011twitter], structural [@cheng2014cascades], with little empirical integration, despite evidence they interact [@lerman2010social; @kong2014predicting] | Feature set combines temporal, activity-frequency, sentiment, and textual signals ([@sec:feature-engineering]) |
+| 3 | Domain specificity | General research [@szabo2010predicting; @bandari2012pulse; @cheng2014cascades] neglects financial dynamics (event-driven reactions, domain language, speculation); Reddit finance work [@long2023stock; @costola2022selfinduced; @mancini2024pumpdump] predicts market consequences, not whether surges *occur* | Pipeline applied to two Reddit financial communities at opposite ends of the data-density spectrum |
+| 4 | Temporal validity | Random or unspecified splits [@szabo2010predicting; @bandari2012pulse; @cheng2014cascades; @long2023stock] may inflate reported performance; rigorous temporal methods [@tashman2000outofsample; @bergmeir2012crossvalidation] remain unadopted in this domain | Expanding-window temporal cross-validation ensures no future information leaks into training |
 
 : The four research gaps and the design response to each. {#tbl:research-gaps}
 
@@ -285,7 +294,7 @@ Before any design detail, this subsection fixes what the system must achieve. Th
 
 ### Operational Context {#sec:operational-context}
 
-The system is a daily screening tool, not an autonomous decision-maker: each cycle it ranks active tickers by predicted surge probability and surfaces the top-$k$ for human review, as classifiers do in fraud detection and medical screening [2][23]. This serves the three user groups ([@tbl:pain-points]) and the research question ([@sec:problem-motivation]), and, with the objectives and assumptions ([@tbl:assumptions]), sets two kinds of requirement.
+The system is a daily screening tool, not an autonomous decision-maker: each cycle it ranks active tickers by predicted surge probability and surfaces the top-$k$ for human review, as classifiers do in fraud detection and medical screening [@fawcett2006roc; @vickers2006decision]. This serves the three user groups ([@tbl:pain-points]) and the research question ([@sec:problem-motivation]), and, with the objectives and assumptions ([@tbl:assumptions]), sets two kinds of requirement.
 
 ### Requirements {#sec:design-goals}
 
@@ -310,14 +319,14 @@ G4 sets operational usefulness as a goal; the concrete bar follows from the revi
 
 | Criterion | Requirement | Rationale |
 |--------------|-------|----------------------|
-| Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [2] |
-| Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [22] |
-| Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive (derived from the 0.10 bound); precision-recall analysis is the appropriate lens under severe imbalance [3] |
+| Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [@fawcett2006roc] |
+| Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [@he2009imbalanced] |
+| Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive (derived from the 0.10 bound); precision-recall analysis is the appropriate lens under severe imbalance [@saito2015precisionrecall] |
 | Daily alert volume | 20–30 flags | Matches analyst throughput |
 
 : Operational acceptance criteria, derived from the reviewer's workflow (Assumption 2, [@tbl:assumptions]) and the user scenarios ([@sec:problem-motivation]). {#tbl:acceptance-criteria}
 
-These criteria are shaped by two considerations. First, errors are asymmetric: a missed surge (false negative) costs more than an unnecessary review (false positive), since a compliance team missing a pump-and-dump faces regulatory risk while investigating a benign ticker costs only analyst-hours, which motivates recall-oriented thresholds and cost-sensitive learning [4][22]. Second, the prediction is deliberately narrow in scope: a high surge probability means discussion is statistically likely to escalate within 24 hours, not that price will move or manipulation is occurring, so the system flags candidates while humans determine causality and response [23]. The criteria therefore assume human-in-the-loop review; fully automated action would demand precision ≥ 0.80 and formal probability calibration, and whether the built system meets even the human-in-the-loop bar is tested in [@sec:operational-precision].
+These criteria are shaped by two considerations. First, errors are asymmetric: a missed surge (false negative) costs more than an unnecessary review (false positive), since a compliance team missing a pump-and-dump faces regulatory risk while investigating a benign ticker costs only analyst-hours, which motivates recall-oriented thresholds and cost-sensitive learning [@elkan2001costsensitive; @he2009imbalanced]. Second, the prediction is deliberately narrow in scope: a high surge probability means discussion is statistically likely to escalate within 24 hours, not that price will move or manipulation is occurring, so the system flags candidates while humans determine causality and response [@vickers2006decision]. The criteria therefore assume human-in-the-loop review; fully automated action would demand precision ≥ 0.80 and formal probability calibration, and whether the built system meets even the human-in-the-loop bar is tested in [@sec:operational-precision].
 
 With the context, requirements, and acceptance bar established, the remaining subsections work through the design in pipeline order, each returning to the goal it serves. One prerequisite comes first: the design can only be built on data that actually exists and can support a surge label, so [@sec:eda] establishes that data before the architecture is settled.
 
@@ -352,7 +361,7 @@ With the dataset established in [@sec:eda], the prediction system is designed as
 
 : Six pipeline stages and their responsibilities. {#tbl:pipeline-stages}
 
-![Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).](figures/2-data-pipeline-v0.1.png){#fig:pipeline}
+![Pipeline architecture. Shading indicates critical design points: target labelling (leakage prevention), model training (temporal validation), and evaluation (statistical rigour).](figures/2-data-pipeline.png){#fig:pipeline}
 
 Every stage honours goal G2: no stage may access future information relative to a record's observation time. How this is enforced at each stage, backward-only windows, train-frozen z-scores, and time-ordered folds, is detailed in the subsections that follow.
 
@@ -387,12 +396,14 @@ A single fixed posting-count cutoff cannot compare surges across tickers, becaus
 
 Computing $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ strictly from the training partition (step 4) prevents test-set distribution information from leaking into the target labels.
 
+![Observation, prediction, and surge-label windows. Every feature is computed only from the backward observation window $[t-k, t]$; the forward window $(t, t+h]$ is used solely to determine the surge label $y \in \{0,1\}$ and is never visible to the model. This separation is what makes the target leakage-free.](figures/5-observation-prediction-label-windows.png){#fig:label-windows}
+
 The definition has three free parameters, set once and held fixed across the pipeline ([@tbl:surge-parameters]).
 
 | Parameter | Value | Rationale |
 |-------|-----|-----------------|
 | Observation window | 24 h | Aligns with daily trading cycles. Shorter (6h) is expected to give sparse, unstable counts and longer (72h) to blur surge onset; these are design rationales, not tested outcomes, and multi-scale windows are future work ([@sec:proposed-improvements]) |
-| Weights $w_1, w_2$ | $0.5, 0.5$ (composite) | $\Delta S$ is included to catch discussion that grows polarised before volume spikes [4][10]; whether it earns its place is tested against a volume-only target ($w_2 = 0$) in [@sec:sentiment-contribution], and the VADER signal behind $\Delta S$ is screened in the EDA ([@sec:eda-tooling]) |
+| Weights $w_1, w_2$ | $0.5, 0.5$ (composite) | $\Delta S$ is included to catch discussion that grows polarised before volume spikes [@elkan2001costsensitive; @bandari2012pulse]; whether it earns its place is tested against a volume-only target ($w_2 = 0$) in [@sec:sentiment-contribution], and the VADER signal behind $\Delta S$ is screened in the EDA ([@sec:eda-tooling]) |
 | Threshold $\tau$ | $1.5$ (primary), $1.0$ (secondary) | $\tau$ trades anomaly purity against class balance: higher isolates rarer, clearer surges but leaves fewer positives. $\tau = 1.5$ balances the two; the EDA viability gate ([@sec:eda]) confirms a workable positive class survives, and surge counts across $\tau$ appear in [@sec:eval-objectives] |
 
 : The three parameters of the surge definition and their fixed values. {#tbl:surge-parameters}
@@ -417,7 +428,9 @@ All eleven features satisfy a strict backward-looking constraint: each is derive
 
 : Feature definitions. All features use backward-looking or concurrent information only. {#tbl:feature-definitions}
 
-The four categories (content, temporal, activity, interaction) draw on the signal families supported by the literature ([@tbl:signal-families]); activity features in particular operationalise the popularity-prediction evidence that early volume and growth rate predict later attention [5][9]. The two interaction terms are cross-feature products that give the models an explicit signal for combined dynamics, such as long analytical posts arriving at peak trading hours, without relying on deep tree splits to discover them; their empirical value is assessed by ablation ([@sec:feature-implementation]).
+The four categories (content, temporal, activity, interaction) draw on the signal families supported by the literature ([@tbl:signal-families]); activity features in particular operationalise the popularity-prediction evidence that early volume and growth rate predict later attention [@szabo2010predicting; @cheng2014cascades]. The two interaction terms are cross-feature products that give the models an explicit signal for combined dynamics, such as long analytical posts arriving at peak trading hours, without relying on deep tree splits to discover them; their empirical value is assessed by ablation ([@sec:feature-implementation]).
+
+![Feature engineering architecture. A raw record–ticker pair observed at time $t$ is transformed into eleven backward-looking features across four categories (content, temporal, activity, interaction), assembled into the feature vector $X(t)$ and passed to the classifier. Post-hoc engagement signals (upvotes, comments) are excluded because they would leak future information.](figures/6-feature-engineering-architecture.png){#fig:feature-architecture}
 
 ## Model Selection {#sec:model-selection}
 
@@ -426,8 +439,8 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 | Model | Role | Rationale |
 |-----|------|-------------|
 | Logistic Regression (LR) | Interpretable linear baseline (Elastic Net, $L_1+L_2$) | Strong performance would indicate approximate linear separability of the surge feature space |
-| Random Forest (RF) | Bagged tree ensemble | Captures non-linear relationships; consistent top-tier tabular performance [20] |
-| XGBoost | Gradient-boosted trees ($L_1/L_2$ leaf-weight regularisation) | Each tree corrects prior errors; boosting is among the strongest tabular families when labelled positives are sufficient [20] |
+| Random Forest (RF) | Bagged tree ensemble | Captures non-linear relationships; consistent top-tier tabular performance [@fernandezdelgado2014classifiers] |
+| XGBoost | Gradient-boosted trees ($L_1/L_2$ leaf-weight regularisation) | Each tree corrects prior errors; boosting is among the strongest tabular families when labelled positives are sufficient [@fernandezdelgado2014classifiers] |
 
 : Three classifier families spanning the complexity spectrum. {#tbl:model-families}
 
@@ -437,7 +450,7 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 
 ## Temporal Validation Design {#sec:temporal-validation}
 
-Standard $k$-fold cross-validation violates chronological ordering by permitting models to train on future observations while validating on past ones, systematically overestimating performance [19]. The evaluation pipeline employs the two-level temporal partitioning scheme in [@tbl:temporal-partitioning].
+Standard $k$-fold cross-validation violates chronological ordering by permitting models to train on future observations while validating on past ones, systematically overestimating performance [@bergmeir2012crossvalidation]. The evaluation pipeline employs the two-level temporal partitioning scheme in [@tbl:temporal-partitioning].
 
 | Level | Scheme | Partitioning | Temporal guarantee |
 |---|--------|---------------------|-----------------|
@@ -449,6 +462,10 @@ Standard $k$-fold cross-validation violates chronological ordering by permitting
 ![Expanding-window CV. The training partition is divided into four temporal blocks, producing three validation splits. Each fold trains on all data up to a cutoff and validates on the next block, mimicking deployment where more history accumulates over time.](figures/3-expanding-window-cv.png){#fig:expanding-cv}
 
 A fold count of $k = 4$ is chosen to balance two competing needs: enough positive surge instances per validation window for stable AUC estimation, and adequate initial training depth in the first fold. Following hyperparameter optimisation, $F_1$-optimised decision thresholds are locked on validation folds and applied unchanged to the test set, ensuring uncontaminated final evaluation. Temporal non-stationarity (shifting community behaviour across 2021) is mitigated by the expanding-window design but remains a structural risk; empirical evidence is detailed in [@sec:temporal-stability].
+
+[@fig:model-development] situates this two-level partitioning within the end-to-end development workflow: models are developed and tuned using only the training partition and its expanding-window folds, the single winning configuration is retrained on the full training partition, and it is then scored exactly once on the strictly-later held-out test set before analysis.
+
+![Chronological model development and evaluation workflow. The 80/20 split and expanding-window CV (levels 1 and 2 of [@tbl:temporal-partitioning]) feed a develop → select and tune → retrain → test-once → analyse pipeline. Every test record occurs strictly after every training record (goal G2), so no future information leaks into training, tuning, or threshold selection.](figures/7-chronological-model-development.png){#fig:model-development}
 
 ## Evaluation Framework {#sec:evaluation-framework}
 
@@ -596,7 +613,7 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 
 : EDA notebooks, in run order, with their inputs and outputs. All three are standalone and share no code with the pipeline package. {#tbl:eda-notebooks}
 
-**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 from Kaggle, 10 from HuggingFace). Because these search APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a relevance score that blends that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel whose output is a draft shortlist, not a decision, and it degrades gracefully to an empty result if the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [21] appears in this shortlist alongside several Twitter and tweet-based alternatives.
+**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 from Kaggle, 10 from HuggingFace). Because these search APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a relevance score that blends that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel whose output is a draft shortlist, not a decision, and it degrades gracefully to an empty result if the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [@leukipp2021reddit] appears in this shortlist alongside several Twitter and tweet-based alternatives.
 
 **Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap-to-compute properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields needed to build a surge label (text, timestamp, engagement) are present. Profiling runs on a 20,000-row sample per dataset for speed and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets have no engagement fields at all and cannot support a surge label regardless of their ticker vocabulary.
 
@@ -1177,7 +1194,7 @@ As a standalone feature, `sentiment_score` achieves modest AUC (0.559–0.587), 
 
 This also explains Phase 1 vs Phase 2 divergence. With sentiment excluded from the target ($w_2 = 0$), volume-only surges exhibit higher variance and prove harder to forecast. Incorporating sentiment ($w_2 \ge 0.50$) yields surges with more structured precursors. While part of the +0.182 AUC gain stems from altered task difficulty, its disproportionate magnitude evidences genuine predictive structure.
 
-The performance ceiling is constrained by VADER's limitations: it fails on domain-specific semantics ("short" as bearish, "moon" as bullish) and sarcasm. FinBERT [14] represents a promising improvement avenue.
+The performance ceiling is constrained by VADER's limitations: it fails on domain-specific semantics ("short" as bearish, "moon" as bullish) and sarcasm. FinBERT [@araci2019finbert] represents a promising improvement avenue.
 
 ### Error Analysis {#sec:error-analysis}
 
@@ -1218,9 +1235,9 @@ The system meets ranking quality and precision requirements but catches only 23.
 
 **Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, ~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
 
-**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold, a mathematical consequence of the base rate, not a model failure [22]. Saito and Rehmsmeier [3] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. PR-AUC of approximately 0.14 (14× above random) confirms this: strong discrimination across the full score range, but false alarms dominate at any threshold permissive enough for reasonable recall.
+**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold, a mathematical consequence of the base rate, not a model failure [@he2009imbalanced]. Saito and Rehmsmeier [@saito2015precisionrecall] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. PR-AUC of approximately 0.14 (14× above random) confirms this: strong discrimination across the full score range, but false alarms dominate at any threshold permissive enough for reasonable recall.
 
-The operationally correct deployment is rank-based: sort tickers by predicted probability, review the top-$k$ daily, and accept that some surges fall outside the review window [2]. Full automation, which as [@sec:operational-criteria] noted would demand far higher precision and formal calibration, is not supported by these results ([@sec:proposed-improvements]).
+The operationally correct deployment is rank-based: sort tickers by predicted probability, review the top-$k$ daily, and accept that some surges fall outside the review window [@fawcett2006roc]. Full automation, which as [@sec:operational-criteria] noted would demand far higher precision and formal calibration, is not supported by these results ([@sec:proposed-improvements]).
 
 ### Temporal Stability and Distribution Shift {#sec:temporal-stability}
 
@@ -1238,7 +1255,7 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 **Smaller concerns**: survivorship bias (deleted posts absent); fixed temporal split (~June 2021) makes test difficulty regime-dependent; training variance only partially characterised (0.019 AUC range across 5 seeds).
 
-**Class imbalance as deployment constraint**: The 102:1 ratio fundamentally constrains what the system can deliver. Even a perfect ranker (AUC = 1.0) faces a precision ceiling when forced into binary decisions at sub-1% prevalence. Surge prediction at this level must operate as either (a) a ranking layer with human top-$k$ review, or (b) a first-stage filter combined with a higher-precision second stage [3][22]. Neither metric alone captures operational value; both must be reported with deployment context. For communities with higher surge prevalence (e.g., $\tau = 1.0$ producing ~5% surge rate), precision constraints relax substantially, suggesting the "right" surge definition should be co-designed with end-users based on alert-handling capacity.
+**Class imbalance as deployment constraint**: The 102:1 ratio fundamentally constrains what the system can deliver. Even a perfect ranker (AUC = 1.0) faces a precision ceiling when forced into binary decisions at sub-1% prevalence. Surge prediction at this level must operate as either (a) a ranking layer with human top-$k$ review, or (b) a first-stage filter combined with a higher-precision second stage [@saito2015precisionrecall; @he2009imbalanced]. Neither metric alone captures operational value; both must be reported with deployment context. For communities with higher surge prevalence (e.g., $\tau = 1.0$ producing ~5% surge rate), precision constraints relax substantially, suggesting the "right" surge definition should be co-designed with end-users based on alert-handling capacity.
 
 ### Proposed Improvements {#sec:proposed-improvements}
 
@@ -1267,7 +1284,7 @@ The resulting framework evaluates raw Reddit data through statistically validate
 
 This project makes three contributions.
 
-First, a **leakage-free methodology applied where neglected**. The literature review ([@sec:methodological-weaknesses], [@tbl:temporal-practices]) shows temporal leakage is the norm in social media prediction studies. This project applies established temporal evaluation principles [18][19] end-to-end, showing that performance of AUC = 0.753–0.892 is both achievable and trustworthy. The framework is reusable for any timestamped prediction problem.
+First, a **leakage-free methodology applied where neglected**. The literature review ([@sec:methodological-weaknesses], [@tbl:temporal-practices]) shows temporal leakage is the norm in social media prediction studies. This project applies established temporal evaluation principles [@tashman2000outofsample; @bergmeir2012crossvalidation] end-to-end, showing that performance of AUC = 0.753–0.892 is both achievable and trustworthy. The framework is reusable for any timestamped prediction problem.
 
 Second, a **composite surge metric** integrating normalised volume growth with sentiment change, fully parameterised by threshold and weights. The Phase 1 vs Phase 2 experiment ([@tbl:phase-comparison]) confirms it captures a richer phenomenon than volume alone (+0.182 AUC on WSB).
 
@@ -1299,7 +1316,7 @@ All three objectives were met ([@sec:eval-objectives]), but four limitations bou
 
 **2021 may not be representative.** The GameStop episode makes this one of the most unusual periods of retail speculation in memory. Running on 2020 or 2022 data would matter more for credibility than any model improvement.
 
-**VADER does not speak Reddit finance.** It misreads domain-specific terms ("short" as negative, "moon" as neutral). FinBERT [14] would handle this, though applying it across 1.3M records requires GPU infrastructure.
+**VADER does not speak Reddit finance.** It misreads domain-specific terms ("short" as negative, "moon" as neutral). FinBERT [@araci2019finbert] would handle this, though applying it across 1.3M records requires GPU infrastructure.
 
 **The models rank surges well but flag them poorly.** At extreme imbalance, probability outputs compress so much that useful thresholds sit near 0.16. Post-training calibration (Platt scaling or isotonic regression) would make scores interpretable without changing discriminative power.
 
@@ -1311,57 +1328,15 @@ Two directions would extend the methodology:
 
 ---
 
-# References {.unnumbered}
+# References {#sec:ref}
 
-[1] FINRA. 2025. Social Media-Influenced Investing. Financial Industry Regulatory Authority. Retrieved from https://www.finra.org/rules-guidance/key-topics/fintech/report/social-media-influenced-investing
-
-[2] Tom Fawcett. 2006. An introduction to ROC analysis. *Pattern Recognition Letters* 27, 8 (June 2006), 861–874. https://doi.org/10.1016/j.patrec.2005.10.010
-
-[3] Takaya Saito and Marc Rehmsmeier. 2015. The precision-recall plot is more informative than the ROC plot when evaluating binary classifiers on imbalanced datasets. *PLoS ONE* 10, 3 (March 2015), e0118432. https://doi.org/10.1371/journal.pone.0118432
-
-[4] Charles Elkan. 2001. The foundations of cost-sensitive learning. In *Proceedings of the 17th International Joint Conference on Artificial Intelligence (IJCAI '01)*. Morgan Kaufmann, Seattle, WA, 973–978.
-
-[5] Gabor Szabo and Bernardo A. Huberman. 2010. Predicting the popularity of online content. *Commun. ACM* 53, 8 (August 2010), 80–88. https://doi.org/10.1145/1787234.1787254
-
-[6] Kristina Lerman and Tad Hogg. 2010. Using a model of social dynamics to predict popularity of news. In *Proceedings of the 19th International Conference on World Wide Web (WWW '10)*. ACM, New York, NY, USA, 621–630. https://doi.org/10.1145/1772690.1772754
-
-[7] Fang Wang and Bernardo A. Huberman. 2013. Quantifying long-term scientific impact. *Science* 342, 6154 (October 2013), 127–132. https://doi.org/10.1126/science.1237825
-
-[8] Shoubin Kong, Qiaozhu Mei, Ling Feng, Fei Ye, and Zhe Zhao. 2014. Predicting bursts and popularity of hashtags in real-time. In *Proceedings of the 37th International ACM SIGIR Conference on Research and Development in Information Retrieval (SIGIR '14)*. ACM, New York, NY, USA, 927–930. https://doi.org/10.1145/2600428.2609476
-
-[9] Justin Cheng, Lada Adamic, P. Alex Dow, Jon M. Kleinberg, and Jure Leskovec. 2014. Can cascades be predicted? In *Proceedings of the 23rd International Conference on World Wide Web (WWW '14)*. ACM, New York, NY, USA, 925–936. https://doi.org/10.1145/2566486.2567997
-
-[10] Roja Bandari, Sitaram Asur, and Bernardo A. Huberman. 2012. The pulse of news in social media: Forecasting popularity. In *Proceedings of the 6th International AAAI Conference on Weblogs and Social Media (ICWSM '12)*. AAAI Press, 26–33.
-
-[11] Chao Yuan and Wentao Li. 2019. Forecasting the development trend of early-stage information diffusion based on empirical data. *Physica A* 524 (June 2019), 157–167. https://doi.org/10.1016/j.physa.2019.04.053
-
-[12] Johan Bollen, Huina Mao, and Xiaojun Zeng. 2011. Twitter mood predicts the stock market. *J. Comput. Sci.* 2, 1 (March 2011), 1–8. https://doi.org/10.1016/j.jocs.2010.12.007
-
-[13] Clayton J. Hutto and Eric Gilbert. 2014. VADER: A parsimonious rule-based model for sentiment analysis of social media text. In *Proceedings of the 8th International AAAI Conference on Weblogs and Social Media (ICWSM '14)*. AAAI Press, Ann Arbor, MI, 216–225.
-
-[14] Dogu Araci. 2019. FinBERT: Financial sentiment analysis with pre-trained language models. Retrieved from https://arxiv.org/abs/1908.10063
-
-[15] Cathy Long, Brian Lucey, and Larisa Yarovaya. 2023. I just like the stock: The role of Reddit sentiment in the GameStop share rally. *Financ. Rev.* 58, 1 (February 2023), 19–37. https://doi.org/10.1111/fire.12328
-
-[16] Michele Costola, Matteo Iacopini, and Carlo R. M. A. Santagiustina. 2022. Self-induced consensus of Reddit users to characterise the GameStop short squeeze. *Sci. Rep.* 12, 1 (August 2022), Article 13780. https://doi.org/10.1038/s41598-022-17925-2
-
-[17] Adriano Mancini, Aldo Desiderio, Brendan Marafino, and Alessandro Navigli. 2024. Detecting pump and dump stock market manipulation from online forums. *Digital Finance* 6 (2024), 365–393. https://doi.org/10.1007/s42521-024-00113-6
-
-[18] Leonard J. Tashman. 2000. Out-of-sample tests of forecasting accuracy: An analysis and review. *Int. J. Forecast.* 16, 4 (October–December 2000), 437–450. https://doi.org/10.1016/S0169-2070(00)00065-0
-
-[19] Christoph Bergmeir and José M. Benítez. 2012. On the use of cross-validation for time series predictor evaluation. *Inf. Sci.* 191 (May 2012), 192–213. https://doi.org/10.1016/j.ins.2011.12.028
-
-[20] Manuel Fernández-Delgado, Eva Cernadas, Senén Barro, and Dinani Amorim. 2014. Do we need hundreds of classifiers to solve real world classification problems? *J. Mach. Learn. Res.* 15, 1 (January 2014), 3133–3181.
-
-[21] Leukipp. 2021. Reddit Finance Data. Kaggle. Retrieved from https://www.kaggle.com/datasets/leukipp/reddit-finance-data
-
-[22] Haibo He and Edwardo A. Garcia. 2009. Learning from imbalanced data. *IEEE Trans. Knowl. Data Eng.* 21, 9 (September 2009), 1263–1284. https://doi.org/10.1109/TKDE.2008.239
-
-[23] Andrew J. Vickers and Elena B. Elkin. 2006. Decision curve analysis: A novel method for evaluating prediction models. *Medical Decision Making* 26, 6 (November 2006), 565–574. https://doi.org/10.1177/0272989X06295361
+```{=typst}
+#bibliography("references.bib", title: none, style: "association-for-computing-machinery")
+```
 
 ---
 
-# Appendix {.unnumbered}
+# Appendices {#sec:appendcies}
 
 ## Project Timeline {#sec:appendix-timeline}
 
