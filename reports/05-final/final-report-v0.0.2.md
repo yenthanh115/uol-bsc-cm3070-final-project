@@ -559,6 +559,8 @@ eda/                             # Standalone EDA notebooks
 src/
 ├── surge_pipeline/              # Core library (16 modules, ~4,450 LOC)
 │   ├── config.py                # Configuration dataclass + JSON I/O
+|   └── data/                    #
+|       └── ticker_stopwords.txt # stopword lexicon (NLTK base + supplement)
 │   ├── loader.py                # CSV ingestion, ticker extraction, explosion
 │   ├── windowing.py             # Per-ticker 24h counts (searchsorted)
 │   ├── sentiment.py             # VADER scoring with title-fallback
@@ -581,8 +583,6 @@ src/
 ├── generate_figures.py          # CLI: regenerate figures from saved artefacts
 ├── generate_prediction_examples.py  # CLI: worked prediction examples
 └── build_stopwords.py           # Regenerates ticker_stopwords.txt
-input/reference/
-└── ticker_stopwords.txt         # stopword lexicon (NLTK base + supplement)
 ```
 
 Each pipeline stage maps directly to one or two library modules, with a few small modules holding shared utilities (`timestamps.py`, `cli_logging.py`) and data contracts (`training_models.py`, `evaluation_models.py`). This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
@@ -705,25 +705,29 @@ After the remaining stages (labelling also drops records whose forward window is
 
 ## Feature Engineering (Implementation) {#sec:feature-implementation}
 
-Eleven features feed the classifiers. The governing constraint is that every feature must be computable from data *at or before* the current record's timestamp. Nothing may peek into the future.
+The eleven design features ([@tbl:feature-definitions]) are computed here under one constraint: each must be derivable from information available *at or before* the record's timestamp $t$, never from the forward window that builds the label. Content features (`sentiment_score`, `word_count`, `title_length`, `num_tickers_mentioned`) read only the record's own text and temporal features (`hour_of_day`, `day_of_week`) come straight from `created_utc`, so both are trivially backward-safe. The activity features and their interaction terms are where the constraint bites: they count and compare *prior* same-ticker posts, which the windowing and boundary logic below enforces. Post-hoc engagement metrics (Reddit `score`, `num_comments`) are excluded entirely, as verified by [@lst:feature-contract].
 
-| # | Feature | Category | Computation Method |
-|---|---------|------|---------------------------|
-| 1 | `ticker_post` \ `_rate_24h` | Activity | Reuses `backward_count` produced upstream by `windowing.compute_windowed_counts()` (the feature module copies the column rather than recomputing it). For each record mentioning ticker $X$ at time $t$, the windowing stage counts all other posts mentioning $X$ with timestamps in the half-open interval $(t - 24\text{h},\; t)$. Counting is performed there via `np.searchsorted` on the chronologically sorted per-ticker timestamp array, yielding $O(n \log n)$ complexity per ticker group; the self-post is excluded by using `side='left'` at the right boundary. |
-| 2 | `time_since_` \ `previous` | Activity | Computed by `features._compute_time_` \ `since_previous()`. For each chronologically sorted per-ticker group (`groupby('ticker')`), the gap to the immediately preceding same-ticker post is the successive time difference, obtained in a single vectorised `np.diff(times)` call rather than a per-record loop. Computes elapsed hours: $(t - t_{\text{prev}}) / 3600$. Returns $-1$ for the first occurrence of a ticker (no prior history). Uses epoch-second conversion for numeric subtraction. |
-| 3 | `ticker_post_` \ `acceleration` | Activity | Computed by `features._compute_ticker_` \ `post_acceleration()`. Splits the backward 24 h window into two 12 h halves: recent $(t - 12\text{h},\; t)$ (self excluded) and older $(t - 24\text{h},\; t - 12\text{h}]$. Counts posts in each half using `np.searchsorted` (4 boundary lookups per record, $O(n \log n)$ per ticker group). Computes ratio: `count_recent / max(count_older, 1)`. Values $> 1.0$ indicate accelerating discussion; values $< 1.0$ indicate deceleration. The `max(..., 1)` denominator guard prevents division by zero when no posts exist in the older half. Boundary semantics: `side='right'` yields an exclusive-left boundary (first index where $\text{time} > $ bound), while `side='left'` at the recent-half right boundary excludes the self-post at $t$. |
-| 4 | `sentiment_` \ `score` | Content | Reuses `sentiment_polarity` produced by `sentiment.compute_sentiment()` via `_compute_polarity_vader()`. VADER's `polarity_scores()` is applied to the post's selftext; if selftext is empty or absent, the title is used as fallback. The compound score ranges from $-1$ (most negative) to $+1$ (most positive). Computed strictly from the record's own text at creation time, no forward window information. |
-| 5 | `word_count` | Content | Computed inline in `features.compute_features()`. Concatenates `title + " " + selftext`, splits on whitespace (`str.split().str.len()`), counts resulting tokens. Empty/null selftext is replaced with empty string before concatenation. Measures post effort/depth as a proxy for informational content. |
-| 6 | `title_length` | Content | Computed inline in `features.compute_features()`. Splits title on whitespace (`str.split().str.len()`) and counts tokens. Captures headline effort independently of body length. Null titles treated as empty string (0 tokens). |
-| 7 | `num_tickers_` \ `mentioned` | Content | Computed by `features._compute_num_` \ `tickers_mentioned()`. Groups the exploded DataFrame by original post `id` and counts distinct ticker values per group using `groupby('id')['ticker']` \ `.transform('nunique')`. A post mentioning 3 tickers will have value 3 in all its exploded rows. Captures whether a post is ticker-specific or broad market commentary. |
-| 8 | `hour_of_` \ `day` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts UTC hour (0–23) from `created_utc` via `pd.to_datetime(..., utc=True)` \ `.dt.hour`. Captures intraday cyclicality aligned with US market hours (pre-market activity typically spikes 13:00–14:00 UTC). |
-| 9 | `day_of_week` | Temporal | Computed inline in `features.compute_` \ `features()`. Extracts day-of-week index (Monday=0, Sunday=6) from `created_utc` via `.dt.dayofweek`. Captures weekly periodicity: weekday posts cluster near market sessions; weekend posts are predominantly speculative. |
-| 10 | `word_count_` \ `x_hour` | Interaction | Computed inline in `features.compute_` \ `features()` via element-wise multiplication: `word_count × hour_of_` \ `day`. Encodes the hypothesis that long analytical posts at peak trading hours (high word count × high hour value in UTC afternoon) are stronger surge precursors than either signal alone. Gives tree models an explicit split surface without requiring deep multi-level branching. |
-| 11 | `accel_x_time_` \ `since_prev` | Interaction | Computed inline in `features.compute_` \ `features()`. Multiplicative interaction: `ticker_post_acceleration × time_` \ `since_previous`. Captures the pattern of sudden acceleration after prolonged silence, a ticker dormant for many hours that suddenly attracts rapid posting. For first-occurrence records (`time_since_previous = -1`), the value is clamped to 0 via `np.where(tsp < 0, 0, tsp)` to avoid spurious negative products. |
+[@tbl:feature-detail] maps each feature to the function that produces it and how it is computed.
 
-: Feature engineering detail. Each row specifies what the feature captures and how it is computed, including the responsible function. {#tbl:feature-detail}
+| # | Feature | Produced by | Computation |
+|---|--------|-------------|--------------------------|
+| 1 | `ticker_post` \ `_rate_24h` | `windowing.compute` \ `_windowed_counts()` (reused) | `np.searchsorted` count over $(t-24\text{h},\,t)$; `side='left'` at $t$ excludes the self-post |
+| 2 | `time_since` \ `_previous` | `features._compute` \ `_time_since_` \ `previous()` | Per-ticker `np.diff(times)`; $-1$ for a ticker's first occurrence |
+| 3 | `ticker_post_` \ `acceleration` | `features._compute` \ `_ticker_post_` \ `acceleration()` | Recent/older 12h split counted by binary search (see below) |
+| 4 | `sentiment_` \ `score` | `sentiment.compute` \ `_sentiment()` (reused) | VADER on own text only, title-fallback when selftext empty |
+| 5 | `word_count` | `features.compute` \ `_features()` inline | Token count of own `title + selftext` |
+| 6 | `title_length` | `features.comput` \ `e_features()` inline | Token count of own title |
+| 7 | `num_tickers` \ `_mentioned` | `features._compute_` \ `num_tickers_` \ `mentioned()` | `groupby('id')['ticker'].transform('nunique')` on the record's own post |
+| 8 | `hour_of` \ `_day` | `features.compute` \ `_features()` inline | `created_utc.dt.hour` |
+| 9 | `day_of` \ `_week` | `features.compute` \ `_features()` inline | `created_utc.dt.dayofweek` |
+| 10 | `word_count` \ `_x_hour` | `features.compute` \ `_features()` inline | Element-wise product of `word_count` and `hour_of_day` |
+| 11 | `accel_x_time` \ `_since_prev` | `features.compute` \ `_features()` inline | Element-wise product of `ticker_post_acceleration` and `time_since_previous` (clamped to 0) |
 
-The most algorithmically involved feature is `ticker_post_acceleration` ([@tbl:feature-detail], row 3). Working on pre-sorted per-ticker timestamp arrays, it counts posts in the recent and older 12-hour halves with four `np.searchsorted` calls, giving $O(n \log n)$ interval counting per ticker group:
+: How each feature is produced and computed. Definitions and categories are given in the design ([@tbl:feature-definitions]); this table records the implementation. {#tbl:feature-detail}
+
+Three points are worth drawing out; the remaining features are direct column operations.
+
+**Acceleration is the most involved computation.** `ticker_post_acceleration` splits the backward 24-hour window into a recent half $(t-12\text{h},\,t)$ and an older half $(t-24\text{h},\,t-12\text{h}]$ and takes the ratio of their post counts, so a value above 1.0 marks accelerating discussion. On pre-sorted per-ticker timestamp arrays, four `np.searchsorted` calls count both halves in $O(n \log n)$ per ticker group, avoiding a per-record loop:
 
 ```python {#lst:acceleration caption="Ticker post acceleration via split-window binary search (from features.py). The backward 24-hour window is bisected into recent and older halves. Four searchsorted calls per ticker group compute counts in each half; the ratio detects whether posting is accelerating (>1.0) or decelerating (<1.0). The max(..., 1) guard prevents division by zero when the older half is empty."}
 # Count posts in recent half (t-12h, t) excluding self
@@ -739,7 +743,9 @@ count_older = older_right - older_left
 acceleration = count_recent / np.maximum(count_older, 1)
 ```
 
-The two interaction terms (`word_count_x_hour` and `accel_x_time_since_prev`) provide models with an explicit signal for combined dynamics, such as a sudden surge in post volume following a period of silence, without requiring multi-level decision tree splits to discover the interaction. An ablation study confirmed a consistent +1.4pp AUC lift from including these terms.
+**Boundary conventions make the backward-only guarantee exact.** `side='left'` at the right edge ($t$) excludes the record's own post, so a feature never sees the event it predicts; `side='right'` at the left edge gives an exclusive-left boundary. The `max(count_older, 1)` guard prevents division by zero when the older half is empty, common for a newly discussed ticker. The same count, computed once in `windowing.py`, is reused for `ticker_post_rate_24h` rather than recomputed, keeping a single source of truth.
+
+**Interaction terms are a deliberate design choice.** `word_count_x_hour` and `accel_x_time_since_prev` are explicit products (long analytical posts at peak trading hours; sudden acceleration after silence) given to the models rather than left for deep tree splits to reconstruct. Since `time_since_previous` is $-1$ for a ticker's first occurrence, it is clamped to 0 before forming `accel_x_time_since_prev` so a missing history never becomes a spurious negative product. An ablation confirmed a consistent +1.4pp AUC lift from both terms.
 
 ## Surge Labelling
 
