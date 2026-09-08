@@ -36,7 +36,8 @@ USAGE
     python src/build_stopwords.py            # writes the default data file
     python src/build_stopwords.py --check    # verify file is up to date (CI)
 
-The default output path is ``input/reference/ticker_stopwords.txt``.
+The default output path is ``src/surge_pipeline/data/ticker_stopwords.txt``,
+inside the package so the lexicon ships with the installed wheel.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ from pathlib import Path
 # Paths
 # --------------------------------------------------------------------------- #
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_OUTPUT = _PROJECT_ROOT / "input" / "reference" / "ticker_stopwords.txt"
+_DEFAULT_OUTPUT = _PROJECT_ROOT / "src" / "surge_pipeline" / "data" / "ticker_stopwords.txt"
 
 # Only tokens the ticker regexes could ever produce are worth filtering.
 _TICKER_SHAPED = re.compile(r"^[A-Z]{1,5}$")
