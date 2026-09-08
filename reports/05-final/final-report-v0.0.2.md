@@ -82,10 +82,6 @@ link-citations: true
 #v(0.6cm)
 ```
 
-# Abstract {.unnumbered}
-
-Social media discussions in financial communities can shift from quiet to frenzied within hours. This project develops a screening pipeline that predicts whether discussion around an individual stock ticker will surge during the following 24 hours, using only information available when each post is observed. The predictions are intended for market surveillance and compliance teams prioritising unusual activity for investigation, quantitative researchers selecting tickers for deeper analysis, and platform moderators allocating monitoring capacity. The pipeline combines backward-looking activity, textual, temporal, and sentiment features with a composite target based on future volume growth and sentiment change, then evaluates Logistic Regression, Random Forest, and XGBoost using expanding-window validation and a chronological held-out test period. This design tests whether the predictions remain useful when applied to genuinely later data rather than allowing future observations into training. XGBoost achieved the strongest ranking performance on the high-volume `r/wallstreetbets` community (AUC-ROC 0.892), while Random Forest performed best on the sparser `r/pennystocks` community (0.753), indicating that data density constrains performance more than model complexity. On `r/wallstreetbets`, the best operating point produced 21.7% precision and 23.5% recall: approximately one in five flagged cases was a surge, but most surges were missed. This trade-off can support selective human review, particularly for quantitative research, but is insufficient for broad surveillance or moderation coverage and does not justify autonomous action. Cross-community transfer remained above chance (AUC 0.684 from `r/wallstreetbets` to `r/pennystocks`) but requires community-specific recalibration. The main contribution is therefore a temporally valid ranking and screening framework, with performance strong enough to prioritise attention but limited by class imbalance, threshold calibration, sparse-community uncertainty, and the use of a single 2021 observation period.
-
 ```{=typst}
 #pagebreak()
 #outline(depth: 2, indent: auto)
@@ -499,6 +495,23 @@ Ranking quality is scored against the tiers in [@tbl:success-tiers], using the m
 
 : Evaluation metrics. {#tbl:eval-metrics}
 
+## Experiment Plan {#sec:experiment-plan}
+
+The framework above fixes *how* a run is judged; this subsection fixes *which* runs are performed. The study is a matrix of configurations, each varying one factor (dataset, sentiment weight, threshold, seed, or transfer direction) around a fixed baseline, so every result is attributable to a deliberate change. Each carries a short code that the Implementation and Evaluation sections cite when reporting results ([@tbl:experiment-plan]).
+
+| Group | Config(s) | Held fixed / varied | Question it answers |
+|--------|---------------|-----------------|--------------------|
+| Baselines | A1 (`r/pennystocks`), A2 (`WSB`) | Default settings ($\tau=1.5$, $w_1=w_2=0.5$, seed 42); dataset varied | Can surges be predicted on sparse vs dense data? (O1, [@sec:eval-objectives]) |
+| Sentiment contribution | B1/B3 (volume-only, $w_2=0$) vs baselines | Weight varied to $w_2=0$ on each dataset | Does sentiment in the target improve over volume alone? ([@sec:sentiment-contribution]) |
+| Weight sensitivity | Baseline + G-series ($w_2 \in \{0,0.25,0.5,0.75,1.0\}$ on `WSB`) | Sentiment weight swept; dataset and $\tau$ fixed | How does the volume/sentiment balance affect predictability? ([@tbl:weight-sensitivity]) |
+| Threshold sensitivity | C1 (`WSB`), C2 (`r/pennystocks`), $\tau=1.0$ | Threshold lowered from 1.5 to 1.0 | How does the surge threshold affect class balance and performance? ([@sec:eval-objectives]) |
+| Robustness | Baseline + 4 additional seeds (`r/pennystocks`) | Seed varied over {42, 123, 456, 789, 2024} | Are results stable across random seeds? ([@sec:reproducibility]) |
+| Cross-dataset transfer | D1 (`WSB`→`r/pennystocks`), D2 (`r/pennystocks`→`WSB`) | Train community and test community swapped, no retraining | Do surge patterns generalise across communities? (Q4, [@sec:cross-community]) |
+
+: Planned experiment matrix, grouped by the question each set of runs answers. {#tbl:experiment-plan}
+
+Where groups overlap (the volume-only and full weight sweep coincide at $w_2=0$), the shared point is reused rather than re-run. All runs use the same seeded, deterministic pipeline (Section 4), each logged with its configuration and Git commit for traceability ([@sec:reproducibility]).
+
 ## Design Trade-offs and Alternatives {#sec:design-alternatives}
 
 Several plausible design choices were considered and deliberately not taken. [@tbl:design-alternatives] records each alternative, why it was rejected, and the constraint that drove the decision, so the chosen design is legible as a set of trade-offs rather than defaults. The unifying theme is feasibility under a fixed archival dataset, a strict no-leakage requirement, and a single-developer time and compute budget: where an option added capability at the cost of leakage risk, scope creep, or data the archive cannot supply, it was set aside.
@@ -707,8 +720,6 @@ After the remaining stages (labelling also drops records whose forward window is
 
 The eleven design features ([@tbl:feature-definitions]) are computed here under one constraint: each must be derivable from information available *at or before* the record's timestamp $t$, never from the forward window that builds the label. Content features (`sentiment_score`, `word_count`, `title_length`, `num_tickers_mentioned`) read only the record's own text and temporal features (`hour_of_day`, `day_of_week`) come straight from `created_utc`, so both are trivially backward-safe. The activity features and their interaction terms are where the constraint bites: they count and compare *prior* same-ticker posts, which the windowing and boundary logic below enforces. Post-hoc engagement metrics (Reddit `score`, `num_comments`) are excluded entirely, as verified by [@lst:feature-contract].
 
-[@tbl:feature-detail] maps each feature to the function that produces it and how it is computed.
-
 | # | Feature | Produced by | Computation |
 |---|--------|-------------|--------------------------|
 | 1 | `ticker_post` \ `_rate_24h` | `windowing.compute` \ `_windowed_counts()` (reused) | `np.searchsorted` count over $(t-24\text{h},\,t)$; `side='left'` at $t$ excludes the self-post |
@@ -749,27 +760,19 @@ acceleration = count_recent / np.maximum(count_older, 1)
 
 ## Surge Labelling
 
-The labelling module converts raw windowing and sentiment outputs into binary surge/no-surge labels while enforcing strict temporal isolation.
+The labelling module turns windowing and sentiment outputs into binary surge labels under strict temporal isolation.
 
-**Temporal Split** 
+**Temporal Split.** Records are split chronologically at the 80th-percentile timestamp (no shuffling): those at or before the cutpoint go to training, the rest to test. Ties are resolved to training, the leakage-safe choice when many per-second timestamps share the split instant, so the realised train fraction can drift slightly from 0.80.
 
-Records are partitioned chronologically at the 80th percentile of timestamps (sorted by time without shuffling).  All records occurring at or before the cutpoint are assigned to the training set; the rest to test.
+**Z-score Normalisation.** The mean ($\mu$) and standard deviation ($\sigma$) of both the volume growth ratio and the sentiment shift are computed from training records only, then applied unchanged to both partitions: $$z = \frac{x - \mu_{\text{train}}}{\sigma_{\text{train}}}$$ Standardising the test set against training-derived distributions prevents future data leaking into historical baselines.
 
-**Z-score Normalisation** 
-
-The mean ($\mu$) and standard deviation ($\sigma$) for both the volume growth ratio and sentiment shift are computed exclusively from training set records. These frozen parameters are then applied to standardise both partitions: $$z = \frac{x - \mu_{\text{train}}}{\sigma_{\text{train}}}$$
-
-Measuring the test set against training-derived distributions prevents future data leakage into historical baselines.
-
-**Composite Metric and Thresholding.** 
-
-The surge composite score combines the standardised metrics:
+**Composite Metric and Thresholding.** The composite combines the standardised metrics:
 
 $$\text{composite} = (w_{\text{volume}} \cdot z_{\text{volume}}) + (w_{\text{sentiment}} \cdot z_{\text{sentiment}})$$
 
-A record is labelled as a surge ($y = 1$) if its composite score exceeds threshold $\tau$, and non-surge ($y = 0$) otherwise. 
+where $z_{\text{sentiment}}$ standardises the *absolute* shift $|\Delta S|$ ([@sec:surge-definition]), so a surge tracks how much sentiment moves, not its direction. A record is labelled a surge ($y = 1$) when its composite exceeds threshold $\tau$, else non-surge ($y = 0$). 
 
-```python {#lst:surge-labelling caption="Surge labelling pipeline (from labelling.py). Steps 1-2 establish the leakage-prevention mechanism: mean and standard deviation are estimated exclusively from the training partition, then applied unchanged to all records including the test set. Steps 3-4 combine the normalised volume growth and sentiment shift into a weighted composite and threshold it into a binary target. Because test-set records are normalised against a distribution they never contributed to, the target labels encode no future information. Population standard deviation (ddof=0) is used because the training partition constitutes the entire reference population for normalisation, not a sample drawn from a larger one."}
+```python {#lst:surge-labelling caption="Surge labelling pipeline (from labelling.py). Steps 1-2 establish the leakage-prevention mechanism: mean and standard deviation are estimated exclusively from the training partition, then applied unchanged to all records including the test set. Steps 3-4 combine the normalised volume growth and sentiment shift into a weighted composite and threshold it into a binary target. Because test-set records are normalised against a distribution they never contributed to, the target labels encode no future information. Population standard deviation (ddof=0) is used because the training partition constitutes the entire reference population for normalisation, not a sample drawn from a larger one. Normalisation is delegated to a helper (`_compute_z_scores`) that returns zeros when a standard deviation is zero, and excluded records are marked NaN rather than dropped."}
 # Step 1: Temporal split at 80th percentile timestamp
 epoch_seconds = to_epoch_seconds(df["created_utc"])
 split_ts = np.percentile(epoch_seconds, ratio * 100)
@@ -785,9 +788,10 @@ sigma_vol = float(np.std(train_volume, ddof=0))   # population std
 mu_sent = float(np.mean(train_sentiment))
 sigma_sent = float(np.std(train_sentiment, ddof=0))
 
-# Step 3: Z-score normalise ALL records using frozen training stats
-z_volume = (all_volume - mu_vol) / sigma_vol
-z_sentiment = (all_sentiment - mu_sent) / sigma_sent
+# Step 3: Z-score normalise ALL records using frozen training stats.
+# _compute_z_scores() guards the σ=0 edge case by returning zeros.
+z_volume = _compute_z_scores(all_volume, mu_vol, sigma_vol)
+z_sentiment = _compute_z_scores(all_sentiment, mu_sent, sigma_sent)
 
 # Step 4: Composite metric and binary labelling
 composite = (w1 * z_volume) + (w2 * z_sentiment)
@@ -795,22 +799,23 @@ surge_label = np.where(composite > tau, 1.0, 0.0)
 ```
 
 
-Records are excluded as unlabellable under two conditions:
-1. The 24-hour forward window contains fewer than two same-ticker posts (preventing division-by-zero or meaningless growth ratios).
-2. The record's forward window extends beyond the dataset's final timestamp boundary.
-
-These filtering rules account for the dataset attrition from 577,872 exploded records to 457,072 usable records on `WSB` ([@tbl:dataset-characteristics]). For sensitivity analysis, sweep_thresholds() evaluates $\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$ in a single vectorised pass. Setting $w_{\text{sentiment}} = 0$ yields the volume-only variant evaluated in the Phase 1 ablation.
+A record is excluded as unlabellable when its forward window holds fewer than two same-ticker posts (avoiding meaningless growth ratios) or extends past the dataset's final timestamp. Excluded records are not dropped: their z-scores, composite, and label are set to `NaN` and skipped in class-distribution tallies, so exclusion never adds a spurious non-surge. These rules drive the attrition from 577,872 exploded records to 457,072 usable ones on `WSB` ([@tbl:dataset-characteristics]). For sensitivity analysis, `sweep_thresholds()` evaluates $\tau \in \{0.5, 1.0, 1.5, 2.0, 2.5\}$ in one vectorised pass; setting $w_{\text{sentiment}} = 0$ gives the volume-only Phase 1 variant.
 
 ## Model Training
 
 **Expanding-window Cross-validation** 
 
-The training partition is divided into four chronological blocks to construct three expanding validation splits:
-1. Split 1: Train on Block 1; validate on Block 2
-2. Split 2: Train on Blocks 1–2; validate on Block 3
-3. Split 3: Train on Blocks 1–3; validate on Block 4
+The training partition is split into four chronological blocks, giving three expanding validation splits ([@tbl:expanding-splits-impl]).
 
-An explicit temporal check enforces $\max(t_{\text{train}}) < \min(t_{\text{val}})$ in every split to prevent lookahead bias. [@lst:expanding-splits] shows the split construction and temporal validation framework:
+| Split | Train | Validate |
+|-------|------------|---------|
+| 1 | Block 1 | Block 2 |
+| 2 | Blocks 1–2 | Block 3 |
+| 3 | Blocks 1–3 | Block 4 |
+
+: Expanding-window validation splits. {#tbl:expanding-splits-impl}
+
+An explicit check enforces $\max(t_{\text{train}}) < \min(t_{\text{val}})$ in every split to prevent lookahead bias, as [@lst:expanding-splits] shows:
 
 ```python {#lst:expanding-splits caption="Expanding-window split construction and temporal verification (from training.py). The expanding window concatenates all preceding folds as training data, validating on the immediately subsequent fold. The hard assertion max_train > min_val triggers a ValueError if any split violates chronological ordering, making lookahead leakage a crash rather than a silent corruption."}
 def get_expanding_window_splits(folds):
@@ -835,7 +840,7 @@ def _verify_temporal_ordering(df, folds, splits):
             )
 ```
 
-Hyperparameters are tuned via grid search across each model class (see [@tbl:hyperparams] for complete search spaces).
+Hyperparameters are tuned by grid search per model class ([@tbl:hyperparams]).
 
 | Model | Parameters Searched | Grid Size |
 |-------------|--------------------|--------| 
@@ -845,7 +850,7 @@ Hyperparameters are tuned via grid search across each model class (see [@tbl:hyp
 
 : Hyperparameter search spaces. {#tbl:hyperparams}
 
-To eliminate validation leakage, a `StandardScaler` is fitted exclusively on the training fold of each split before transforming the validation fold. [@lst:grid-search] shows the inner training loop:
+To prevent validation leakage, a `StandardScaler` is fitted on each split's training fold only, then applied to its validation fold ([@lst:grid-search]):
 
 ```python {#lst:grid-search caption="Grid search with per-fold scaler isolation (from training.py). Each fold fits a fresh StandardScaler on training indices only, then transforms the validation fold using those frozen statistics. This prevents mean/variance leakage across the temporal boundary. The best configuration is retrained on the entire training partition before test-set evaluation, maximising the data available to the final model."}
 for params in param_grid:
@@ -857,6 +862,12 @@ for params in param_grid:
         X_fold_val = scaler.transform(X_train_full[val_idx])
         y_fold_train = y_train_full[train_idx]
         y_fold_val = y_train_full[val_idx]
+
+        # Under severe imbalance a fold may hold no positives; AUC is
+        # then undefined, so score it as chance (0.5) and skip.
+        if len(np.unique(y_fold_val)) < 2:
+            fold_aucs.append(0.5)
+            continue
 
         model = make_model_fn(params, random_seed)
         model.fit(X_fold_train, y_fold_train)
@@ -879,7 +890,7 @@ final_model.fit(X_train_scaled, y_train_full)
 
 **Model Instantiation and Class Imbalance Handling**
 
-Each model family is constructed via a factory function that injects the class-imbalance strategy directly into the loss function. [@lst:model-factory] shows the three model constructors:
+Each model is built by a factory function that injects the class-imbalance strategy into the loss ([@lst:model-factory]):
 
 ```python {#lst:model-factory caption="Model factory functions (from training.py). All three models handle class imbalance through cost-sensitive learning rather than synthetic oversampling. Logistic Regression and Random Forest use class_weight balanced (sklearn automatically computes inverse frequency weights). XGBoost uses scale_pos_weight, grid-searched over {1, ratio/2, ratio} where ratio = n_negative / n_positive (typically 19:1 to 105:1 in this dataset). This avoids SMOTE incompatibility with temporal data, where synthetic records lack meaningful timestamps."}
 def _make_lr(params, random_seed):
@@ -914,7 +925,7 @@ def _make_xgb(params, random_seed):
     )
 ```
 
-The base ratio $r$ for `scale_pos_weight` is computed dynamically from the training partition's actual class distribution:$$r = \frac{N_{\text{negative}}}{N_{\text{positive}}}$$
+The base ratio $r$ for `scale_pos_weight` is derived from the training partition's class distribution:$$r = \frac{N_{\text{negative}}}{N_{\text{positive}}}$$
 
 ```python {#lst:imbalance-ratio caption="Dynamic imbalance ratio computation (from training.py). The negative-to-positive ratio is calculated from the actual training partition class distribution, then used to construct a three-level grid for XGBoost scale_pos_weight: no reweighting (1.0), moderate (ratio/2), and full (ratio). This data-driven approach adapts automatically to different surge thresholds and datasets without manual tuning."}
 n_positive = int(np.sum(y_train_full == 1))
@@ -925,7 +936,9 @@ imbalance_ratio = float(n_negative) / max(n_positive, 1)
 weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
 ```
 
-The hyperparameter configuration yielding the highest mean validation Area Under the ROC Curve (AUC) across all three splits is selected as the winning model. This optimal configuration is then retrained on the entire 80% training partition, using a freshly fitted `StandardScaler`, prior to generating final predictions on the held-out test set.
+The configuration with the highest mean validation AUC across the three expanding splits ([@sec:temporal-validation]) wins, and is retrained on the full 80% training partition with a freshly fitted `StandardScaler` before scoring the held-out test set.
+
+Training also fixes the operating point: the retrained model scores the last validation fold, from which an $F_1$-maximising threshold is chosen ([@sec:eval-pipeline]) and applied unchanged to the test set, so no test information informs it. Each model is serialised to a versioned `.joblib` bundling the estimator, scaler, best parameters, and this threshold, alongside a `latest_models.json` manifest so downstream evaluation and cross-dataset transfer can load a run without retraining.
 
 ## Evaluation Pipeline Implementation {#sec:eval-pipeline}
 
@@ -955,11 +968,9 @@ At $\tau = 1.5$, extreme class imbalance (1.44% surge rate; 102:1 ratio) led XGB
 
 ## Implementation Status
 
-All six pipeline stages ([@tbl:pipeline-stages]) are fully implemented and execute end-to-end on both datasets to produce reproducible artefacts. Both the `r/pennystocks` and `WSB` datasets process completely through the pipeline with deterministic results. Execution runtime (from target labelling through final evaluation) is approximately 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a standard laptop CPU, with VADER sentiment computation accounting for the majority of compute time.
+All six pipeline stages ([@tbl:pipeline-stages]) execute end-to-end on both datasets to produce reproducible artefacts, directly serving goal G5. Execution runtime (from target labelling through final evaluation) is approximately 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a standard laptop CPU, with VADER sentiment computation accounting for the majority of compute time.
 
-Determinism was verified empirically: running configuration A1 (seed 42) on July 13 and July 19 produced identical AUC values (0.753) and byte-identical execution logs. Results are robust to seed choice across five seeds (42, 123, 456, 789, 2024) on `r/pennystocks`, with AUC scores spanning 0.734 to 0.753 (a 0.019 margin). All 30+ experimental runs are fully trackable via logged configuration JSONs, Git commit SHAs, and timestamped output paths.
-
-Advanced pipeline features, including cross-dataset transfer evaluation, 1,000-sample bootstrap confidence intervals, and McNemar's pairwise significance tests, are fully operational. 
+Determinism was verified empirically: running the `r/pennystocks` baseline (configuration A1, [@tbl:experiment-plan], seed 42) on July 13 and July 19 produced identical AUC values (0.753) and byte-identical execution logs. Results are robust to seed choice across the five robustness seeds (42, 123, 456, 789, 2024) on `r/pennystocks`, with AUC scores spanning 0.734 to 0.753 (a 0.019 margin). All 30+ experimental runs across the planned matrix ([@tbl:experiment-plan]) are fully trackable via logged configuration JSONs, Git commit SHAs, and timestamped output paths, so any reported result can be traced back to the exact configuration and code revision that produced it.
 
 ## Testing Strategy
 
@@ -992,6 +1003,8 @@ class TestZScoreNormalisation:
         # Test [8..9]: values = [15, 20]
         volumes = [0,0,0,0, 10,10,10,10, 15, 20]
         ...
+        # Multi-ticker explosion expands these into more rows, so the
+        # test-set records land at iloc 11 and 15 in the labelled frame.
         result = apply_labelling(df, config)
 
         # Test z-scores MUST use training stats: z(15)=(15-5)/5=2.0
@@ -1009,20 +1022,8 @@ A second critical test suite (`test_features.py`) enforces strict backward-only 
 - Inter-arrival features (e.g., time_since_previous) depend strictly on preceding timestamps $t' \le t$.
 - Post-hoc engagement signals (e.g., upvotes or comments accumulated after publication time $t$) are structurally excluded from the feature design matrix.
 
-```python {#lst:feature-contract caption="Backward-only feature contract tests (from test_features.py). The first test verifies that time_since_previous computes inter-arrival time using only preceding records. The second test asserts that post-hoc engagement metrics (which accumulate after publication) are structurally excluded from the feature set."}
+```python {#lst:feature-contract caption="Engagement-exclusion contract test (from test_features.py). The test asserts that post-hoc engagement metrics, which accumulate after publication time $t$, are structurally excluded from the feature set. The backward-only inter-arrival check is verified by a companion test in the same suite."}
 class TestNoFutureLeakage:
-    def test_time_since_previous_is_backward_only(self, base_timestamp):
-        """time_since_previous should only look at records before t."""
-        # AAPL at t=0h, t=6h, t=12h
-        result = compute_features(df)
-
-        # Record 0: first occurrence ? -1 (no prior history)
-        assert result["time_since_previous"].iloc[0] == -1.0
-        # Record 1: 6 hours since record 0 (looks backward only)
-        assert result["time_since_previous"].iloc[5] == approx(6.0)
-        # Record 2: 6 hours since record 1 (not 12h since record 0)
-        assert result["time_since_previous"].iloc[6] == approx(6.0)
-
     def test_features_exclude_score_and_num_comments(self, labelled_df):
         """Post-hoc engagement metrics must NOT appear in features."""
         assert "score" not in FEATURE_COLUMNS
@@ -1284,7 +1285,7 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 The core question driving this project addresses a critical gap in the existing literature: can volume and sentiment surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To prevent the future-engagement feature leakage common in prior work, such as reliance on post-hoc upvote or comment counts, the proposed pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
 
-The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs. Ultimately, this work provides three core contributions: a rigorous leakage-free forecasting methodology, a composite surge metric, and empirical evidence identifying data density as the primary constraint on predictive performance.
+The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs spanning the planned matrix ([@tbl:experiment-plan]). Ultimately, this work provides three core contributions: a rigorous leakage-free forecasting methodology, a composite surge metric, and empirical evidence identifying data density as the primary constraint on predictive performance.
 
 ## Originality and Contribution
 
