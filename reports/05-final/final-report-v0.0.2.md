@@ -286,15 +286,15 @@ Whether this integration yields meaningful predictive performance is the empiric
 
 ## Context, Requirements, and Acceptance Criteria {#sec:requirements}
 
-Before any design detail, this subsection fixes what the system must achieve. The design follows from its operational context, which sets the requirements and, in turn, a measurable acceptance bar.
+Before any design detail, this subsection fixes what the system must achieve. Everything flows from the operational context: it sets the requirements, which in turn set a measurable acceptance bar.
 
 ### Operational Context {#sec:operational-context}
 
-The system is a daily screening tool, not an autonomous decision-maker: each cycle it ranks active tickers by predicted surge probability and surfaces the top-$k$ for human review, as classifiers do in fraud detection and medical screening [@fawcett2006roc; @vickers2006decision]. This serves the three user groups ([@tbl:pain-points]) and the research question ([@sec:problem-motivation]), and, with the objectives and assumptions ([@tbl:assumptions]), sets two kinds of requirement.
+The system is a daily screening tool, not an autonomous decision-maker: each cycle it ranks active tickers by predicted surge probability and surfaces the top-$k$ for human review, as classifiers do in fraud detection and medical screening [@fawcett2006roc; @vickers2006decision]. This serves the three user groups ([@tbl:pain-points]) and the research question ([@sec:problem-motivation]). Together with the objectives and assumptions ([@tbl:assumptions]), it sets two kinds of requirement: functional and data-science.
 
 ### Requirements {#sec:design-goals}
 
-*Functional* requirements fix what the system does; *data-science* requirements govern how it learns and is judged, chief among them that no feature, label, or statistic may draw on future data ([@sec:methodological-weaknesses]). [@tbl:design-goals] consolidates both into six goals, tracing each from need, through requirement, to design response; the targets they are judged against follow in [@tbl:success-tiers] and [@tbl:acceptance-criteria].
+*Functional* requirements fix what the system does. *Data-science* requirements govern how it learns and is judged, chief among them that no feature, label, or statistic may draw on future data ([@sec:methodological-weaknesses]). [@tbl:design-goals] consolidates both into six goals, tracing each from need, through requirement, to design response; the targets they are judged against follow in [@tbl:success-tiers] and [@tbl:acceptance-criteria].
 
 | # | User / domain need | Requirement | Design response |
 |---|------------------|---------------|-----------------|
@@ -317,12 +317,12 @@ G4 sets operational usefulness as a goal; the concrete bar follows from the revi
 |--------------|-------|----------------------|
 | Ranking quality (AUC-ROC) | ≥ 0.80 | True surges must appear near the top of the ranked list [@fawcett2006roc] |
 | Recall at operating threshold | ≥ 0.50 | Catch at least half of genuine surges [@he2009imbalanced] |
-| Precision at operating threshold | ≥ 0.10 | No more than ~9 false alarms per true positive (derived from the 0.10 bound); precision-recall analysis is the appropriate lens under severe imbalance [@saito2015precisionrecall] |
+| Precision at operating threshold | ≥ 0.10 | At least 1 real surge per 10 flags (≤ 9 false alarms per true positive); precision-recall analysis is the right lens under severe imbalance [@saito2015precisionrecall] |
 | Daily alert volume | 20–30 flags | Matches analyst throughput |
 
 : Operational acceptance criteria, derived from the reviewer's workflow (Assumption 2, [@tbl:assumptions]) and the user scenarios ([@sec:problem-motivation]). {#tbl:acceptance-criteria}
 
-These criteria are shaped by two considerations. First, errors are asymmetric: a missed surge (false negative) costs more than an unnecessary review (false positive), since a compliance team missing a pump-and-dump faces regulatory risk while investigating a benign ticker costs only analyst-hours, which motivates recall-oriented thresholds and cost-sensitive learning [@elkan2001costsensitive; @he2009imbalanced]. Second, the prediction is deliberately narrow in scope: a high surge probability means discussion is statistically likely to escalate within 24 hours, not that price will move or manipulation is occurring, so the system flags candidates while humans determine causality and response [@vickers2006decision]. The criteria therefore assume human-in-the-loop review; fully automated action would demand precision ≥ 0.80 and formal probability calibration, and whether the built system meets even the human-in-the-loop bar is tested in [@sec:operational-precision].
+These criteria are shaped by two considerations. First, errors are asymmetric: a missed surge costs more than an unnecessary review. A compliance team that misses a pump-and-dump faces regulatory risk, whereas investigating a benign ticker costs only analyst-hours. This favours recall-oriented thresholds and cost-sensitive learning [@elkan2001costsensitive; @he2009imbalanced]. Second, the prediction is deliberately narrow: a high surge probability means discussion is likely to escalate within 24 hours, not that price will move or manipulation is occurring, so the system flags candidates while humans judge cause and response [@vickers2006decision]. The criteria therefore assume human-in-the-loop review; fully automated action would demand precision ≥ 0.80 and formal probability calibration. Whether the built system meets even the human-in-the-loop bar is tested in [@sec:operational-precision].
 
 With the context, requirements, and acceptance bar established, the remaining subsections work through the design in pipeline order, each returning to the goal it serves. One prerequisite comes first: the design can only be built on data that actually exists and can support a surge label, so [@sec:eda] establishes that data before the architecture is settled.
 
@@ -616,7 +616,7 @@ Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, whi
 
 ## Exploratory Data Analysis Tooling {#sec:eda-tooling}
 
-The dataset-selection decisions in [@sec:eda] are backed by a separate exploratory toolset that is intentionally kept outside the pipeline package. It consists of three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each notebook re-implements the small amount of shared logic it needs (ticker extraction, VADER scoring) inline, so the screening remains reproducible on its own without coupling to pipeline internals. Each writes a standalone CSV (and, for the last, figures) to `eda/output/` for the record. [@tbl:eda-notebooks] lists the three, and the stages below map them onto the design decisions in [@sec:eda].
+The dataset-selection decisions in [@sec:eda] are backed by a separate toolset kept outside the pipeline package: three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each re-implements inline the little shared logic it needs (ticker extraction, VADER scoring), so the screening stays reproducible on its own, and each writes a standalone CSV (plus figures, for the last) to `eda/output/`. [@tbl:eda-notebooks] lists the three; the stages below map them onto the decisions in [@sec:eda].
 
 | Notebook | Screening stage | Input | Output artefact |
 |--------------|-----------|-----------|---------------|
@@ -626,9 +626,9 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 
 : EDA notebooks, in run order, with their inputs and outputs. All three are standalone and share no code with the pipeline package. {#tbl:eda-notebooks}
 
-**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 from Kaggle, 10 from HuggingFace). Because these search APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a relevance score that blends that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel whose output is a draft shortlist, not a decision, and it degrades gracefully to an empty result if the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [@leukipp2021reddit] appears in this shortlist alongside several Twitter and tweet-based alternatives.
+**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 Kaggle, 10 HuggingFace). Since these APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a score blending that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel: its output is a draft shortlist, not a decision, and it degrades gracefully to an empty result when the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [@leukipp2021reddit] appears in the shortlist alongside several Twitter and tweet-based alternatives.
 
-**Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap-to-compute properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields needed to build a surge label (text, timestamp, engagement) are present. Profiling runs on a 20,000-row sample per dataset for speed and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets have no engagement fields at all and cannot support a surge label regardless of their ticker vocabulary.
+**Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields a surge label needs (text, timestamp, engagement) are present. Profiling reads a 20,000-row sample per dataset (ticker diversity and the sentiment ratio use smaller 5,000- and 2,000-row sub-samples) and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets carry none and cannot support a surge label whatever their ticker vocabulary.
 
 | Dataset | Records (sampled) | Date span | Engagement fields | Surge-label ready |
 |--------------------------|------------|---------------------|---------|---------|
@@ -639,9 +639,9 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate explorato
 
 : High-level dataset comparison from the EDA screening. Profiled on a 20,000-row sample per dataset; the Twitter-derived datasets are excluded because they carry no engagement fields and cannot support a surge label. {#tbl:eda-highlevel}
 
-The `leukipp/reddit-finance-data` archive bundles several financial subreddits. A preliminary screening of these communities against the subreddit criteria from [@sec:eda], carried out ahead of and outside the committed notebooks, narrowed the field to the two most suitable for the experiments: `WSB` as the high-density community and `r/pennystocks` as the sparse one. This pair spans opposite ends of the posting-density spectrum, which serves the abundance-versus-scarcity and cross-dataset-transfer goals; single-ticker or predominantly long-form communities were set aside because they do not support the per-ticker surge design. The high-level profiling above ([@tbl:eda-highlevel]) is therefore reported for this selected pair, and their full-run sizes are given later in [@tbl:loader-attrition].
+The `leukipp/reddit-finance-data` archive bundles several financial subreddits. A preliminary screening of these against the subreddit criteria from [@sec:eda], done ahead of and outside the committed notebooks, narrowed the field to the two most suitable: `WSB` (high-density) and `r/pennystocks` (sparse). This pair spans opposite ends of the posting-density spectrum, serving the abundance-versus-scarcity and cross-dataset-transfer goals; single-ticker or mostly long-form communities were set aside as unfit for the per-ticker surge design. The profiling above ([@tbl:eda-highlevel]) is therefore reported for this pair, with full-run sizes given later in [@tbl:loader-attrition].
 
-**Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement as a reliability check on the sentiment signal, then runs a surge-viability sweep across nine candidate surge definitions formed by crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition yields a positive class above a minimum viable rate. Both datasets pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
+**Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement (on a 3,000-row sample) as a reliability check, then runs a surge-viability sweep across nine candidate definitions crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition puts over 2% of posts in the positive class. Both pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
 
 | Property | `r/pennystocks` | `WSB` |
 |----------------|------------|------------|
@@ -649,19 +649,19 @@ The `leukipp/reddit-finance-data` archive bundles several financial subreddits. 
 | Date range (sampled) | 2021-01-01 to 2021-12-31 | 2021-01-01 to 2021-01-28 |
 | Coverage / gaps (>7 days) | 364 days / 0 | 27 days / 0 |
 | Sentiment agreement (VADER vs TextBlob) | 0.723 (good) | 0.661 (moderate) |
-| Viable surge definitions | 4 / 9 | 3 / 9 |
-| Best positive-class rate | 5.8% | 5.0% |
+| Viable surge definitions (>2% positive) | 4 / 9 | 3 / 9 |
+| Best (loosest-definition) positive rate | 5.8% | 5.0% |
 | Recommendation | Suitable | Suitable |
 
-: Deep viability assessment from the EDA screening. Both Reddit datasets clear the viability bar; the sweep and quality metrics confirm a workable positive class exists before any pipeline development. {#tbl:eda-deep}
+: Deep viability assessment from the EDA screening. A definition is viable when over 2% of posts qualify; the "best" rate is the maximum across the sweep, at the loosest definition (percentile 0.90, multiplier 0.5). Both datasets clear the bar, confirming a workable positive class before any pipeline development. {#tbl:eda-deep}
 
-[@fig:eda-viability] shows the surge-viability sweep for `WSB` and how the positive-class rate shrinks as the definition gets stricter, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties that motivate the sparse-versus-dense framing used throughout the evaluation.
+[@fig:eda-viability] shows the `WSB` sweep and how the positive-class rate shrinks as the definition tightens, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties behind the sparse-versus-dense framing used throughout the evaluation.
 
 ![Surge-viability sweep for `WSB` from the EDA screening. Each cell reports the positive-class rate for a candidate surge definition (a volume percentile crossed with a standard-deviation multiplier). Shaded cells clear the minimum viable positive-class threshold, confirming that a usable surge signal exists before any pipeline development.](../../eda/output/figures/surge_viability_leukipp_wallstreetbets_submissions_reddit.png){#fig:eda-viability}
 
 ![Cross-dataset comparison from the EDA phase, setting `r/pennystocks` and `WSB` side by side on volume, coverage, and signal properties. This exploratory contrast is what motivates the sparse-versus-dense experimental design later formalised in the evaluation.](../../eda/output/figures/cross_dataset_comparison.png){#fig:eda-cross-dataset}
 
-Two boundaries separate this tooling from the pipeline. First, the sampling caps above mean the EDA's record counts and date spans are screening artefacts; they do not match the full-run figures the pipeline produces on the complete data ([@tbl:dataset-characteristics]). Second, the surge-viability sweep is a simple percentile-and-standard-deviation heuristic used only to confirm that some viable positive class exists; it is deliberately distinct from the leakage-free composite z-score target the pipeline uses for actual labelling ([@sec:surge-definition]).
+These figures are screening artefacts, not pipeline results: the sampling caps and the deliberately simple sweep heuristic ([@sec:surge-definition]) mean the EDA's counts and labels differ from the full-run pipeline's ([@tbl:dataset-characteristics]).
 
 ## Data Loading and Preprocessing
 
@@ -803,6 +803,8 @@ A record is excluded as unlabellable when its forward window holds fewer than tw
 
 ## Model Training
 
+Training tunes each model family on past-only validation, then locks a decision threshold before the test set is touched, following the develop → tune → retrain → test-once workflow of [@fig:model-development]. The blocks below cover cross-validation, class-imbalance handling, and the retrain-and-lock step.
+
 **Expanding-window Cross-validation** 
 
 The training partition is split into four chronological blocks, giving three expanding validation splits ([@tbl:expanding-splits-impl]).
@@ -815,7 +817,7 @@ The training partition is split into four chronological blocks, giving three exp
 
 : Expanding-window validation splits. {#tbl:expanding-splits-impl}
 
-An explicit check enforces $\max(t_{\text{train}}) < \min(t_{\text{val}})$ in every split to prevent lookahead bias, as [@lst:expanding-splits] shows:
+Every split enforces $\max(t_{\text{train}}) < \min(t_{\text{val}})$ to prevent lookahead bias ([@lst:expanding-splits]):
 
 ```python {#lst:expanding-splits caption="Expanding-window split construction and temporal verification (from training.py). The expanding window concatenates all preceding folds as training data, validating on the immediately subsequent fold. The hard assertion max_train > min_val triggers a ValueError if any split violates chronological ordering, making lookahead leakage a crash rather than a silent corruption."}
 def get_expanding_window_splits(folds):
@@ -850,7 +852,9 @@ Hyperparameters are tuned by grid search per model class ([@tbl:hyperparams]).
 
 : Hyperparameter search spaces. {#tbl:hyperparams}
 
-To prevent validation leakage, a `StandardScaler` is fitted on each split's training fold only, then applied to its validation fold ([@lst:grid-search]):
+The XGBoost grid ($3 \times 3 \times 3 \times 2\text{–}3$ = 54–81 configs, fewer when ratio/2 collides with 1) is truncated to 50 to bound search time.
+
+A `StandardScaler` is fitted on each split's training fold only, then applied to its validation fold, preventing leakage ([@lst:grid-search]):
 
 ```python {#lst:grid-search caption="Grid search with per-fold scaler isolation (from training.py). Each fold fits a fresh StandardScaler on training indices only, then transforms the validation fold using those frozen statistics. This prevents mean/variance leakage across the temporal boundary. The best configuration is retrained on the entire training partition before test-set evaluation, maximising the data available to the final model."}
 for params in param_grid:
@@ -890,7 +894,7 @@ final_model.fit(X_train_scaled, y_train_full)
 
 **Model Instantiation and Class Imbalance Handling**
 
-Each model is built by a factory function that injects the class-imbalance strategy into the loss ([@lst:model-factory]):
+A factory function per model injects the class-imbalance strategy into training ([@lst:model-factory]):
 
 ```python {#lst:model-factory caption="Model factory functions (from training.py). All three models handle class imbalance through cost-sensitive learning rather than synthetic oversampling. Logistic Regression and Random Forest use class_weight balanced (sklearn automatically computes inverse frequency weights). XGBoost uses scale_pos_weight, grid-searched over {1, ratio/2, ratio} where ratio = n_negative / n_positive (typically 19:1 to 105:1 in this dataset). This avoids SMOTE incompatibility with temporal data, where synthetic records lack meaningful timestamps."}
 def _make_lr(params, random_seed):
@@ -925,7 +929,7 @@ def _make_xgb(params, random_seed):
     )
 ```
 
-The base ratio $r$ for `scale_pos_weight` is derived from the training partition's class distribution:$$r = \frac{N_{\text{negative}}}{N_{\text{positive}}}$$
+That factory's `scale_pos_weight` grid is anchored on the base ratio $r$ from the training partition's class distribution:$$r = \frac{N_{\text{negative}}}{N_{\text{positive}}}$$
 
 ```python {#lst:imbalance-ratio caption="Dynamic imbalance ratio computation (from training.py). The negative-to-positive ratio is calculated from the actual training partition class distribution, then used to construct a three-level grid for XGBoost scale_pos_weight: no reweighting (1.0), moderate (ratio/2), and full (ratio). This data-driven approach adapts automatically to different surge thresholds and datasets without manual tuning."}
 n_positive = int(np.sum(y_train_full == 1))
@@ -936,35 +940,33 @@ imbalance_ratio = float(n_negative) / max(n_positive, 1)
 weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
 ```
 
-The configuration with the highest mean validation AUC across the three expanding splits ([@sec:temporal-validation]) wins, and is retrained on the full 80% training partition with a freshly fitted `StandardScaler` before scoring the held-out test set.
-
-Training also fixes the operating point: the retrained model scores the last validation fold, from which an $F_1$-maximising threshold is chosen ([@sec:eval-pipeline]) and applied unchanged to the test set, so no test information informs it. Each model is serialised to a versioned `.joblib` bundling the estimator, scaler, best parameters, and this threshold, alongside a `latest_models.json` manifest so downstream evaluation and cross-dataset transfer can load a run without retraining.
+The configuration with the highest mean validation AUC across the three splits ([@sec:temporal-validation]) wins, and is retrained on the full 80% training partition with a freshly fitted `StandardScaler`. The operating point is fixed here too: the retrained model scores the last validation fold to pick an $F_1$-maximising threshold ([@sec:eval-pipeline]), applied unchanged to the test set. Each model is serialised to a versioned `.joblib` (estimator, scaler, best parameters, threshold) with a `latest_models.json` manifest, so evaluation and cross-dataset transfer load a run without retraining.
 
 ## Evaluation Pipeline Implementation {#sec:eval-pipeline}
 
-Evaluation is implemented as a reusable set of functions (`evaluation.py`), figure generators (`evaluation_figures.py`), and an append-only run tracker (`experiment_log.py`), so that every reported number and plot derives from a single, re-runnable path rather than ad-hoc analysis.
+So that every reported number and plot derives from a single re-runnable path rather than ad-hoc analysis, evaluation is implemented as a reusable set of functions (`evaluation.py`), figure generators (`evaluation_figures.py`), and an append-only run tracker (`experiment_log.py`).
 
-**Metric computation.** For each trained model, held-out predictions are scored for AUC-ROC (the primary metric), plus precision, recall, $F_1$, and PR-AUC at both the default 0.5 threshold and the validation-tuned threshold. Threshold tuning maximises $F_1$ on the last validation fold and is applied unchanged to the test set, so no test information informs the operating point. Uncertainty is quantified by 1,000 bootstrap resamples of the test set, yielding 95% confidence intervals for every metric, and pairwise model differences are tested with McNemar's test under a Bonferroni-corrected $\alpha$.
+**Metric computation.** For each trained model, held-out predictions are scored for AUC-ROC (the primary metric), plus precision, recall, $F_1$, and PR-AUC at both the default 0.5 threshold and the validation-tuned threshold (fixed during training, [@sec:temporal-validation]). Uncertainty is quantified by 1,000 bootstrap resamples of the test set, yielding 95% confidence intervals for every metric, and pairwise model differences are tested with McNemar's test under a Bonferroni-corrected $\alpha$.
 
 **Experiment orchestration.** A run is fully specified by a `PipelineConfig` (dataset, weights $w_1/w_2$, threshold $\tau$, seed). The CLI entry points ([@tbl:cli-entry-points]) execute a run end-to-end; each writes its resolved configuration, metrics, and environment to a timestamped directory and appends one line to a JSONL log recording the config, the Git commit SHA, and the output path. Because a run is reproducible from its config and seed, model comparisons, threshold sweeps ($\tau$), and sentiment-weight sweeps ($w_2$) are executed by re-running with different configs rather than by editing code, and the cross-dataset transfer experiment simply loads a model trained on one community and scores it on the other's test set.
 
-**Artefacts and figures.** Each run emits machine-readable JSON (metrics, confidence intervals, per-model confusion counts) alongside the figures used in Section 5, ROC curves, confusion matrices, threshold-sensitivity and feature-importance plots, regenerated deterministically from the saved evaluation JSON by `surge-figures`. Separating figure generation from metric computation means the reported tables and plots cannot diverge: both read the same artefacts.
+**Artefacts and figures.** Each run emits machine-readable JSON (metrics, confidence intervals, per-model confusion counts) alongside the figures used in Section 5: ROC curves, confusion matrices, threshold-sensitivity and feature-importance plots, regenerated deterministically from the saved evaluation JSON by `surge-figures`. Separating figure generation from metric computation means the reported tables and plots cannot diverge: both read the same artefacts.
 
 ## Implementation Decisions Driven by Empirical Findings
 
-Iterative development uncovered several dataset and pipeline edge cases, driving key architectural decisions:
+Iterative development surfaced three failures serious enough to reshape the design; each is recorded here with the diagnosis and the safeguard it produced:
 
 **Timestamp Unit Mismatch & Temporal Integrity** 
 
-An early timestamp conversion error during temporal splitting caused an unintended 89% record exclusion, leaving only 7 positive surge instances in the test set. Beyond fixing the unit bug, this failure mode prompted the inclusion of explicit automated assertions, such as enforcing $\max(t_{\text{train}}) < \min(t_{\text{val}})$, directly inside the expanding-window training pipeline to guarantee data integrity.
+A timestamp-unit conversion error during temporal splitting silently excluded 89% of records, leaving just 7 positive surges in the test set. Beyond fixing the bug, the scare motivated automated assertions, such as $\max(t_{\text{train}}) < \min(t_{\text{val}})$, baked into the training pipeline ([@lst:expanding-splits]) so any future violation crashes rather than corrupts.
 
 **Data Sparsity and Dataset Scaling** 
 
-Initial experiments on `r/pennystocks` (~80,000 records) produced as few as 7 positive test examples at higher threshold settings ($\tau \ge 2.0$), rendering AUC estimates highly sensitive to noise. Scaling up data ingestion to `WSB` (577,872 records produced 668 test surges at $\tau = 1.5$) provided stable metric estimation and enabled robust cross-dataset transfer experiments.
+Early `r/pennystocks` runs (~80,000 records) yielded as few as 7 positive test examples at stricter thresholds ($\tau \ge 2.0$), leaving AUC estimates at the mercy of noise. Scaling up to `WSB` (577,872 records, 668 test surges at $\tau = 1.5$) stabilised the metrics and made the cross-dataset transfer experiments viable.
 
 **Class Imbalance and Decision Boundary Calibration** 
 
-At $\tau = 1.5$, extreme class imbalance (1.44% surge rate; 102:1 ratio) led XGBoost to achieve a high AUC of 0.888 while predicting zero positive surges at the standard 0.5 decision threshold. This was identified as a probability calibration issue rather than a structural model failure. Lowering $\tau = 1.0$ (~5% surge rate) and adding XGBoost's scale_pos_weight parameter to the hyperparameter search grid successfully restored probability alignment and recall.
+At $\tau = 1.5$, extreme imbalance (1.44% surge rate; 102:1) led an early XGBoost run to a strong AUC of 0.888 (near the final 0.892) yet zero positive predictions at the 0.5 threshold, a calibration issue, not a model failure. Lowering $\tau$ to 1.0 (~5% surge rate) and adding scale_pos_weight to the search grid ([@lst:imbalance-ratio]) restored both probability alignment and recall.
 
 ## Implementation Status
 
