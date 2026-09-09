@@ -1285,9 +1285,9 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 ## Current Achievements
 
-The core question driving this project addresses a critical gap in the existing literature: can volume and sentiment surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To prevent the future-engagement feature leakage common in prior work, such as reliance on post-hoc upvote or comment counts, the proposed pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
+This project set out to answer a question the existing literature leaves open: can volume and sentiment surges in Reddit financial communities be predicted using only information available at the exact moment of post creation? To avoid the future-engagement leakage common in prior work, such as reliance on post-hoc upvote or comment counts, the pipeline enforces strict temporal ordering across surge definition, feature extraction, and model evaluation.
 
-The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs spanning the planned matrix ([@tbl:experiment-plan]). Ultimately, this work provides three core contributions: a rigorous leakage-free forecasting methodology, a composite surge metric, and empirical evidence identifying data density as the primary constraint on predictive performance.
+The resulting framework evaluates raw Reddit data through statistically validated classifiers across two communities, three models, and over thirty experimental runs spanning the planned matrix ([@tbl:experiment-plan]). It answers the question in the affirmative; the subsections below set out the contributions and what they reveal.
 
 ## Originality and Contribution
 
@@ -1303,17 +1303,15 @@ Direct comparison with published baselines is not possible, as no reviewed study
 
 ## Key Findings
 
-The short answer to the central research question is yes: surges can be predicted from backward-looking signals alone. How well depends almost entirely on how much data the community generates. On WSB, XGBoost and Random Forest both reached the stretch tier (AUC = 0.892 and 0.880). On sparser r/pennystocks, Random Forest managed 0.753, clearing target but with wide confidence intervals over only 31 test surges.
-
-Three findings were not obvious going in:
+Surges can be predicted from backward-looking signals alone, but how well depends almost entirely on how much data the community generates: both tree models reached the stretch tier on WSB (AUC 0.892 and 0.880), while on sparser r/pennystocks Random Forest managed only 0.753 over just 31 test surges. Beyond that headline, three findings were not obvious going in:
 
 **Having more data matters more than having a better model.** The gap between datasets (13–14 AUC points) is larger than the gap between any two models on the same dataset. For surge detection on smaller communities, invest in data collection before model tuning.
 
 **The advantage of more complex models is not guaranteed.** On WSB, gradient boosting earns its complexity. On pennystocks the picture flips: Random Forest beats XGBoost. With only a few hundred positive examples, boosting's sequential corrections fit noise, while averaging independent trees is more forgiving.
 
-**Sentiment does more than add a useful feature; it changes what a surge is.** When sentiment is stripped from the target definition, XGBoost's AUC on `WSB` drops 18 points. Sentiment is the most important feature by permutation importance, yet poor alone. The signal is interactive: accelerating discussion combined with rising emotional intensity is a meaningful pattern, but either one alone is not.
+**Sentiment does more than add a useful feature; it changes what a surge is.** When sentiment is stripped from the target definition, XGBoost's AUC on `WSB` drops 18 points. Sentiment is the most important feature by permutation importance, yet weak as a standalone predictor. The signal is interactive: accelerating discussion combined with rising emotional intensity is a meaningful pattern, but either one alone is not.
 
-Cross-dataset transfer revealed an asymmetry. Training on pennystocks and testing on `WSB` yields AUC 0.871, nearly matching the native result, but training on `WSB` and testing on pennystocks yields only 0.684. `WSB` models lean heavily on word count, long analytical posts precede surges there, and that pattern does not exist in the other community. Models trained on sparse data spread reliance across weaker signals and learn something closer to universal.
+Transfer between communities is asymmetric. A pennystocks-trained model scores AUC 0.871 on `WSB`, nearly its native result, but the reverse direction reaches only 0.684. `WSB` models lean on word count (long "due diligence" posts precede surges there), a cue absent elsewhere; models trained on sparse data spread their reliance across weaker signals and generalise better.
 
 For teams monitoring financial communities, the practical takeaway is to invest in data coverage before model sophistication.
 
@@ -1345,7 +1343,7 @@ Two directions would extend the methodology:
 
 ---
 
-# Appendices {#sec:appendcies}
+# Appendices {#sec:appendices}
 
 ## Project Timeline {#sec:appendix-timeline}
 
