@@ -114,8 +114,8 @@
   line("xt.east", "model.west", stroke: ok-col + 1.3pt)
   line("model.east", "psurge.west", stroke: ok-col + 1.3pt)
 
-  // dotted feed from observation window down to X(t)
-  line(((xL + xM) / 2, featY - 1.3), (xL + 1.6, flowY + 0.4),
+  // dotted feed from observation window down to X(t), starting just under "etc."
+  line(((xL + xM) / 2, featY - 2), (xL + 1.6, flowY + 0.4),
        stroke: (paint: obs-stroke, thickness: 1pt, dash: "dotted"),
        mark: (end: "stealth", fill: obs-stroke, scale: 0.5))
 

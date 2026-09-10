@@ -42,8 +42,8 @@
   rect((x0, srcY), (x0 + totalW, srcY + 1.35),
        fill: src-fill, stroke: src-stroke + 1.4pt, radius: 4pt, name: "src")
   content(((x0 + x0 + totalW) / 2, srcY + 0.68), align(center)[
-    #text(weight: "bold", size: 11pt)[Raw Reddit record–ticker pair  @ time t] \
-    #text(size: 8.5pt)[text • title • timestamp • ticker • prior same-ticker posts]
+    #text(weight: "bold", size: 11pt)[Raw Reddit record–ticker pair at time t] \
+    #text(size: 8.5pt)[text + title + timestamp + ticker + prior same-ticker posts]
   ])
 
   // excluded-signals note (above, right-aligned over the source)
@@ -117,7 +117,7 @@
   rect((x0, vecY - vecH), (x0 + totalW, vecY),
        fill: cat-fill.darken(3%), stroke: cat-stroke + 1.4pt, radius: 4pt, name: "vec")
   content(((x0 + x0 + totalW) / 2, vecY - vecH / 2), align(center)[
-    #text(weight: "bold", size: 10pt, fill: cat-stroke)[Feature vector  X(t)  —  11 backward-looking features] \
+    #text(weight: "bold", size: 10pt, fill: cat-stroke)[Feature vector  X(t) - 11 backward-looking features] \
     #text(size: 7.5pt, style: "italic")[all computed from information at or before t (no lookahead)]
   ])
 
