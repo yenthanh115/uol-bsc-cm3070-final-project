@@ -440,7 +440,7 @@ The prediction objective is a supervised binary classification task ($y \in \{0,
 
 : Three classifier families spanning the complexity spectrum. {#tbl:model-families}
 
-**Primary metric (AUC-ROC):** At the sub-1% to ~5% surge rates the target actually produces ([@tbl:dataset-characteristics], [@tbl:weight-sensitivity]), accuracy is uninformative, a naive "no surge" predictor scores 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, $F_1$, and PR-AUC are reported as secondary metrics at default and validation-optimised thresholds.
+**Primary metric (AUC-ROC):** At the sub-1% to ~5% surge rates the target actually produces ([@tbl:dataset-characteristics], [@tbl:weight-sensitivity]), accuracy is uninformative, a naive "no surge" predictor scores 95–99%. AUC-ROC measures ranking quality across all thresholds. Precision, Recall, and $F_1$ are reported as secondary metrics at default and validation-optimised thresholds.
 
 **Handling class imbalance:** SMOTE is unsuitable for temporal data because synthetic instances lack meaningful timestamps and risk local data leakage. Instead, imbalance is addressed via cost-sensitive learning: `class_weight='balanced'` for LR and RF, and `scale_pos_weight` (negative-to-positive ratio) for XGBoost.
 
@@ -711,10 +711,12 @@ After the remaining stages (labelling also drops records whose forward window is
 | After ticker extraction (exploded) | 80,212 | 577,872 |
 | Usable records (post-exclusion) | 24,827 | 457,072 |
 | Train / Test split | 21,549 / 3,278 | 388,149 / 68,923 |
+| Train surges | 667 | 5,934 |
 | Test surges | 31 | 668 |
+| Train imbalance ratio | 31:1 | 64:1 |
 | Test imbalance ratio | 105:1 | 102:1 |
 
-: Dataset characteristics. {#tbl:dataset-characteristics}
+: Dataset characteristics. Surge counts and imbalance ratios are at the primary threshold ($\tau = 1.5$, $w_1 = w_2 = 0.5$). {#tbl:dataset-characteristics}
 
 ## Feature Engineering (Implementation) {#sec:feature-implementation}
 
@@ -946,7 +948,7 @@ The configuration with the highest mean validation AUC across the three splits (
 
 So that every reported number and plot derives from a single re-runnable path rather than ad-hoc analysis, evaluation is implemented as a reusable set of functions (`evaluation.py`), figure generators (`evaluation_figures.py`), and an append-only run tracker (`experiment_log.py`).
 
-**Metric computation.** For each trained model, held-out predictions are scored for AUC-ROC (the primary metric), plus precision, recall, $F_1$, and PR-AUC at both the default 0.5 threshold and the validation-tuned threshold (fixed during training, [@sec:temporal-validation]). Uncertainty is quantified by 1,000 bootstrap resamples of the test set, yielding 95% confidence intervals for every metric, and pairwise model differences are tested with McNemar's test under a Bonferroni-corrected $\alpha$.
+**Metric computation.** For each trained model, held-out predictions are scored for AUC-ROC (the primary metric), plus precision, recall, and $F_1$ at both the default 0.5 threshold and the validation-tuned threshold (fixed during training, [@sec:temporal-validation]). Uncertainty is quantified by 1,000 bootstrap resamples of the test set, yielding 95% confidence intervals for every metric, and pairwise model differences are tested with McNemar's test under a Bonferroni-corrected $\alpha$.
 
 **Experiment orchestration.** A run is fully specified by a `PipelineConfig` (dataset, weights $w_1/w_2$, threshold $\tau$, seed). The CLI entry points ([@tbl:cli-entry-points]) execute a run end-to-end; each writes its resolved configuration, metrics, and environment to a timestamped directory and appends one line to a JSONL log recording the config, the Git commit SHA, and the output path. Because a run is reproducible from its config and seed, model comparisons, threshold sweeps ($\tau$), and sentiment-weight sweeps ($w_2$) are executed by re-running with different configs rather than by editing code, and the cross-dataset transfer experiment simply loads a model trained on one community and scores it on the other's test set.
 
@@ -1073,7 +1075,7 @@ On `WSB`, XGBoost achieved AUC-ROC 0.892 [0.881–0.902] and Random Forest 0.880
 | | RF | 0.753 [0.673–0.824] | 0.068 | 0.194 | 0.101 | Target |
 | | XGB | 0.734 [0.641–0.821] | 0.000 | 0.000 | 0.000 | Target |
 
-: Test-set performance at default classification threshold (0.5). 95% bootstrap CIs from 1,000 resamples. {#tbl:perf-default}
+: Test-set performance at default classification threshold (0.5). 95% bootstrap CIs from 1,000 resamples. Tier reflects AUC-ROC only ([@tbl:success-tiers]), which is why XGBoost on `r/pennystocks` is still "Target" (AUC 0.734) despite 0.000 precision, recall, and F1 at this threshold. {#tbl:perf-default}
 
 AUC scores are strong but precision is near zero everywhere at the default 0.5 threshold. With sub-1% surge rates, probability outputs cluster far below 0.5, models rank surges correctly but the threshold is too conservative. This is a calibration problem, not a discrimination failure. On pennystocks, RF and XGB confidence intervals overlap substantially; McNemar's test ([@sec:statistical-validation]) nonetheless confirms significant prediction differences.
 
@@ -1162,6 +1164,8 @@ Models were evaluated on the other community's test set without retraining ([@tb
 
 ### Sentiment Contribution (Phase 1 vs Phase 2) {#sec:sentiment-contribution}
 
+Does adding sentiment to the surge target actually help, or would volume alone do just as well? To find out, the same XGBoost model was trained on two target definitions: **Phase 1**, volume growth only ($w_2 = 0$), and **Phase 2**, the composite of volume and sentiment ($w_1 = w_2 = 0.5$). [@tbl:phase-comparison] compares them.
+
 | Dataset | Phase 1 (volume only) | Phase 2 (composite) | $\Delta$ AUC |
 |---------|-----------------------|--------------------:|------:|
 | WSB | 0.710 | 0.892 | +0.182 |
@@ -1169,7 +1173,7 @@ Models were evaluated on the other community's test set without retraining ([@tb
 
 : Volume-only ($w_{2}=0$) vs composite ($w_{1}=w_{2}=0.5$), XGBoost AUC-ROC. {#tbl:phase-comparison}
 
-Adjusting the target weight also alters the base surge rate (0.53% to 1.44% on `WSB`), so the gain reflects both richer signal and slightly higher class balance. The full weight sweep:
+Sentiment clearly helps, adding +0.182 AUC on `WSB` and +0.049 on `r/pennystocks`. One caveat: changing the weight also shifts the base surge rate (0.53% to 1.44% on `WSB`), so part of the gain could simply come from a slightly more balanced target rather than from richer signal. To separate the two effects, the full weight sweep varies $w_2$ from 0 to 1:
 
 | $w_{2}$ | $w_{1}$ | AUC-ROC | Surge Rate | Tier |
 |----|-----|---------|------------|------|
@@ -1181,7 +1185,7 @@ Adjusting the target weight also alters the base surge rate (0.53% to 1.44% on `
 
 : Weight sensitivity, XGBoost AUC-ROC on WSB ($\tau = 1.5$). {#tbl:weight-sensitivity}
 
-The +0.184 AUC jump between $w_2 = 0.25$ (0.708) and $w_2 = 0.50$ (0.892) is disproportionate to the 0.43pp surge-rate increase over the same step, providing strong evidence of genuine predictive structure from sentiment. The relationship is non-monotonic: pure sentiment ($w_2 = 1.0$, AUC 0.872) outperforms $w_2 = 0.75$ (0.861), indicating volume contributions are most effective at equal balance.
+The sweep confirms the gain is real, not just a balance artefact. Its $w_2 = 0$ row (0.710) is the Phase 1 volume-only result from [@tbl:phase-comparison]; the sharpest move, however, is higher up the sweep. Between $w_2 = 0.25$ (AUC 0.708) and $w_2 = 0.50$ (0.892), AUC leaps +0.184 while the surge rate rises only 0.43pp, far too small a balance change to explain the jump. Sentiment is carrying genuine predictive signal. The curve is also non-monotonic: pure sentiment ($w_2 = 1.0$, 0.872) beats the volume-heavy $w_2 = 0.75$ (0.861), so an equal volume-sentiment balance ($w_2 = 0.50$) works best.
 
 ## Critical Analysis
 
@@ -1189,17 +1193,17 @@ The +0.184 AUC jump between $w_2 = 0.25$ (0.708) and $w_2 = 0.50$ (0.892) is dis
 
 XGBoost leads on `WSB` (0.892 vs. RF's 0.880), whereas Random Forest leads on `r/pennystocks` (0.753 vs. XGBoost's 0.734). Three factors explain this inversion:
 
-First, XGBoost's sequential boosting requires sufficient positive examples to distinguish signal from noise. `WSB` provides 5,934 training surges versus 667 in pennystocks; with fewer positives, later boosting iterations fit noise, a risk bagging mitigates by averaging independent trees.
+First, XGBoost's sequential boosting requires sufficient positive examples to distinguish signal from noise. `WSB` provides 5,934 training surges versus 667 in pennystocks ([@tbl:dataset-characteristics]); with fewer positives, later boosting iterations fit noise, a risk bagging mitigates by averaging independent trees.
 
 Second, Random Forest distributes splits more evenly across features. On pennystocks, Gini importances span six features above 0.06 with none exceeding 0.21, offering robustness when individual signals are unreliable.
 
-Third, XGBoost's probability calibration degrades under extreme imbalance. At 31:1 training ratio in pennystocks (105:1 in test), its logistic output saturates near zero, yielding zero positive predictions at threshold 0.5. RF's vote-fraction probabilities produce less extreme skew.
+Third, XGBoost's probability calibration degrades under extreme imbalance. At 31:1 training ratio in pennystocks (105:1 in test, [@tbl:dataset-characteristics]), its logistic output saturates near zero, yielding zero positive predictions at threshold 0.5. RF's vote-fraction probabilities produce less extreme skew.
 
 On this evidence, below roughly 5,000 positive training instances Random Forest was the more robust choice than gradient boosting.
 
 ### The Sentiment Signal {#sec:sentiment-signal}
 
-As a standalone feature, `sentiment_score` achieves modest AUC (0.559–0.587), yet dominates permutation importance (+0.146 to +0.203). This discrepancy arises because permutation importance measures contribution *in context of other features*. Sentiment becomes highly discriminative when conditioned on activity rates: accelerating volume combined with elevated emotional tone is a stronger surge precursor than either signal alone.
+As a standalone feature, `sentiment_score` achieves only modest AUC (0.559 on `r/pennystocks`, 0.587 on `WSB`; from the single-feature baselines, [@sec:statistical-validation] and [@tbl:cross-community-features]), yet dominates permutation importance (+0.146 to +0.203). This discrepancy arises because permutation importance measures contribution *in context of other features*. Sentiment becomes highly discriminative when conditioned on activity rates: accelerating volume combined with elevated emotional tone is a stronger surge precursor than either signal alone.
 
 This also explains Phase 1 vs Phase 2 divergence. With sentiment excluded from the target ($w_2 = 0$), volume-only surges exhibit higher variance and prove harder to forecast. Incorporating sentiment ($w_2 \ge 0.50$) yields surges with more structured precursors. While part of the +0.182 AUC gain stems from altered task difficulty, its disproportionate magnitude evidences genuine predictive structure.
 
@@ -1219,7 +1223,14 @@ These patterns are systematic rather than random, and they point back to specifi
 
 The pennystocks-trained model (21,549 records) transfers upward to `WSB` at AUC 0.871, whereas the WSB-trained model (388,149 records) achieves only 0.684 downward. This contradicts the assumption that larger datasets yield better transferability.
 
-Distributional mismatch explains the asymmetry. On `WSB`, `word_count` alone achieves AUC 0.805, reflecting community culture where surges are preceded by lengthy "due diligence" posts. On pennystocks, `word_count` yields only 0.573. WSB-trained models heavily leverage this community-specific artefact, causing performance drops when transferred. Conversely, pennystocks-trained models cannot rely on a single dominant feature; they learn broader representations combining sentiment and activity metrics that generalise across domains.
+Distributional mismatch explains the asymmetry, and it shows up in how a single feature behaves across the two communities ([@tbl:cross-community-features]). On `WSB`, `word_count` alone achieves AUC 0.805, reflecting a community culture where surges are preceded by lengthy "due diligence" posts; on `r/pennystocks` the same feature manages only 0.573. WSB-trained models lean heavily on this community-specific artefact, so they lose ground when transferred. Conversely, pennystocks-trained models cannot rely on any single dominant feature; they learn broader representations combining sentiment and activity that generalise across domains.
+
+| Single feature (AUC-ROC) | WSB | pennystocks |
+|--------------------------|-----|-------------|
+| `word_count` | 0.805 | 0.573 |
+| `sentiment_score` | 0.587 | 0.559 |
+
+: Two single-feature AUCs contrasted across communities, drawn from the single-feature baselines ([@sec:statistical-validation]). `word_count` is strongly community-specific (dominant on `WSB`, weak on `r/pennystocks`), whereas `sentiment_score` is modest but stable, which is why the sparse-community model transfers better. {#tbl:cross-community-features}
 
 This suggests that, for cross-community use, training on the more signal-constrained community forces broader feature reliance and transfers better than training on the larger one; the practical implication for deployment is taken up in [@sec:proposed-improvements].
 
@@ -1232,25 +1243,25 @@ The best operating point (XGBoost, threshold 0.85 on `WSB`) is evaluated against
 | AUC-ROC | ≥ 0.80 | 0.892 | Yes |
 | Recall | ≥ 0.50 | 0.235 | No |
 | Precision | ≥ 0.10 | 0.217 | Yes |
-| Daily alert volume | 20–30 | ~10.5 flags/day* | Partial |
+| Daily alert volume | 20–30 | ~3.7 flags/day* | Below target |
 
 : Best model evaluated against operational acceptance criteria ([@sec:operational-criteria]). {#tbl:acceptance-eval}
 
-\* Computed from 722 total flags (157 TP + 565 FP) over the 68-day test period – 10.6 flags per day.
+\* With 722 total flags (157 TP + 565 FP) spread across the 197-day test partition (2021-06-18 to 2021-12-31), the daily average is ~3.7 flags.
 
-The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~584 flags/day, operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
+The system meets ranking quality and precision requirements but catches only 23.5% of surges rather than the targeted 50%. Lowering the threshold to achieve recall ≥ 0.50 (at default 0.50: recall = 0.819) produces ~65 flags/day (12,843 flags over 197 days), operationally unusable. No single threshold simultaneously satisfies all three criteria at 102:1 class imbalance.
 
 ![Classification threshold sensitivity for XGBoost on WSB. As the decision threshold varies, precision and recall trade off sharply. No single threshold simultaneously achieves recall ≥ 0.50 and precision ≥ 0.10, illustrating the fundamental constraint imposed by the 102:1 class imbalance.](../../output/figures/evaluation/20260905_A2/12_classification_threshold_sensitivity_xgboost.png){#fig:threshold-sensitivity}
 
-**Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, ~2 genuine surges surfaced daily among 10 flags. *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
+**Implications by user scenario.** *Compliance teams*: insufficient as standalone surveillance, but complementary to rule-based volume alerts. *Quantitative researchers*: well-suited, at ~0.8 genuine surges surfaced daily among ~3.7 flags (precision 0.217). *Platform moderators*: rank-based deployment (top-$k$ tickers daily) avoids the threshold problem entirely.
 
-**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold, a mathematical consequence of the base rate, not a model failure [@he2009imbalanced]. Saito and Rehmsmeier [@saito2015precisionrecall] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. PR-AUC of approximately 0.14 (14× above random) confirms this: strong discrimination across the full score range, but false alarms dominate at any threshold permissive enough for reasonable recall.
+**Why ranking matters more than binary decisions.** The model ranks surges effectively (AUC = 0.892) but struggles to produce calibrated binary predictions at any single threshold, a mathematical consequence of the base rate, not a model failure [@he2009imbalanced]. Saito and Rehmsmeier [@saito2015precisionrecall] demonstrated that under severe imbalance, precision-recall analysis reveals limitations that ROC curves mask. The precision-recall trade-off here confirms this ([@fig:threshold-sensitivity]): the model discriminates well across the full score range, yet at the 0.97% base rate a precision of only 0.217 at the best operating point means false alarms dominate at any threshold permissive enough for reasonable recall.
 
 The operationally correct deployment is rank-based: sort tickers by predicted probability, review the top-$k$ daily, and accept that some surges fall outside the review window [@fawcett2006roc]. Full automation, which as [@sec:operational-criteria] noted would demand far higher precision and formal calibration, is not supported by these results ([@sec:proposed-improvements]).
 
 ### Temporal Stability and Distribution Shift {#sec:temporal-stability}
 
-The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs test F1 = 0.210 at that same threshold) suggests temporal non-stationarity, where surge dynamics shifted as the post-GameStop wave subsided. The gap is even starker at the default threshold (test F1 = 0.145). Importantly, AUC remains high (0.880) on the test set, indicating that ranking ability transfers intact; the F1 collapse reflects threshold miscalibration under distribution shift rather than wholesale model failure. This distinction matters: overfitting would degrade both AUC and F1, whereas a shift in class balance or surge characteristics affects only the calibrated threshold. A deployed system would need periodic retraining or adaptive threshold selection. However, cross-dataset transfer at 0.871 suggests core patterns are stable enough to cross community boundaries; instability is concentrated in threshold calibration rather than underlying ranking.
+The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs test F1 = 0.079 at that same threshold, [@tbl:perf-tuned]) suggests temporal non-stationarity, where surge dynamics shifted as the post-GameStop wave subsided. The gap persists at the default threshold (test F1 = 0.145, [@tbl:perf-default]). Importantly, AUC remains high (0.880) on the test set, indicating that ranking ability transfers intact; the F1 collapse reflects threshold miscalibration under distribution shift rather than wholesale model failure. This distinction matters: overfitting would degrade both AUC and F1, whereas a shift in class balance or surge characteristics affects only the calibrated threshold. A deployed system would need periodic retraining or adaptive threshold selection. However, cross-dataset transfer at 0.871 suggests core patterns are stable enough to cross community boundaries; instability is concentrated in threshold calibration rather than underlying ranking.
 
 ## Limitations and Proposed Improvements
 
