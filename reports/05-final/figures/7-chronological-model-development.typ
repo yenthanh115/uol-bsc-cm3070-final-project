@@ -49,7 +49,7 @@
        fill: test-fill, stroke: test-stroke + 1.4pt, radius: 3pt, name: "test")
   content((x((splitP + 100) / 2), (bandTop + bandBot) / 2), align(center)[
     #text(weight: "bold", size: 9.5pt, fill: test-stroke)[HELD-OUT TEST] \
-    #text(size: 7.5pt)[final 20% • scored once]
+    #text(size: 7.5pt)[final 20% - scored once]
   ])
 
   // chronological split marker
@@ -67,10 +67,10 @@
   content((x(100), ay - 0.28), anchor: "north", text(size: 7pt, fill: axis-col)[latest])
 
   // "every test record is strictly later" guarantee
-  content((x(splitP), bandBot - 4.15), anchor: "north", box(
-    inset: 5pt, radius: 3pt, fill: rgb("#c8e6c9"), stroke: val-stroke + 1pt,
+  content((x(splitP) - 4.5, bandBot - 4.15), anchor: "north", box(
+    width: 8.5cm, inset: 5pt, radius: 3pt, fill: rgb("#c8e6c9"), stroke: val-stroke + 1pt,
     text(size: 7.5pt, fill: val-stroke)[
-      #text(weight: "bold")[Guarantee (G2):] every test record occurs strictly after every training record — no future information leaks into training or tuning.
+      #text(weight: "bold")[Guarantee (G2):] every test record occurs strictly after every training record, so no future information leaks into training or tuning.
     ]))
 
   // ---------- LEVEL 2: expanding-window CV inside the training band ----------
@@ -80,8 +80,11 @@
   let rowGap = 0.18
   let cvLabelX = x(0) - 0.35
 
-  content((cvLabelX, cvTop + 0.15), anchor: "south-east",
-          text(size: 7.5pt, weight: "bold", fill: cv-stroke)[Expanding-window CV (k = 4 → 3 splits)])
+  // vertical CV label to the left of the three split rows
+  let cvRowsMid = cvTop - (1.5 * (rowH + rowGap)) + rowH / 2
+  content((cvLabelX - 1.4, cvRowsMid),
+          std.rotate(-90deg, reflow: true,
+            align(center, text(size: 7.5pt, weight: "bold", fill: cv-stroke)[Expanding-window CV \ (k = 4 → 3 splits)])))
 
   // each split: train blocks (cv-fill) then one validation block (val-fill).
   // training partition spans 0..80; divide into 4 chronological blocks of 20.
@@ -111,10 +114,10 @@
   // WORKFLOW STRIP (below): develop -> select -> retrain -> test -> analyse
   // ======================================================================
   let wY = bandBot - 5.6
-  let boxW = 3.5
-  let boxH = 1.4
-  let gap  = 0.7
-  let startX = x(0)
+  let boxW = 4.2
+  let boxH = 2.0
+  let gap  = 0.8
+  let startX = x(0) - 4.5
 
   let steps = (
     (title: "1 · Develop",
@@ -139,16 +142,16 @@
     let lx = sx(i)
     rect((lx, wY - boxH), (lx + boxW, wY),
          fill: st.fill, stroke: st.stroke + 1.3pt, radius: 4pt, name: "st" + str(i))
-    content((lx + boxW / 2, wY - 0.32), text(weight: "bold", size: 8.5pt, fill: st.stroke)[#st.title])
-    content((lx + boxW / 2, wY - boxH / 2 - 0.18),
-            align(center)[#text(size: 7pt)[#st.body]])
+    content((lx + boxW / 2, wY - 0.4), text(weight: "bold", size: 9pt, fill: st.stroke)[#st.title])
+    content((lx + boxW / 2, wY - boxH / 2 - 0.25),
+            align(center)[#text(size: 7.5pt)[#st.body]])
     if i > 0 {
       arrow((sx(i - 1) + boxW, wY - boxH / 2), (lx, wY - boxH / 2))
     }
   }
 
   // connect the data bands to the workflow: training band -> develop; test band -> test-once
-  arrow((x(splitP / 2), bandBot - 4.9), (sx(0) + boxW / 2, wY),
+  arrow((x(splitP / 2), bandBot), (sx(0) + boxW / 2, wY),
         stroke: (paint: train-stroke, thickness: 1pt, dash: "dotted"),
         mark: (end: "stealth", fill: train-stroke, scale: 0.5))
   arrow((x((splitP + 100) / 2), bandBot), (sx(3) + boxW / 2, wY),
