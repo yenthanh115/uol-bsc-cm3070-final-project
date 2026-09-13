@@ -42,6 +42,9 @@ surge-examples = "generate_prediction_examples:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"surge_pipeline" = ["data/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 pythonpath = ["src"]
