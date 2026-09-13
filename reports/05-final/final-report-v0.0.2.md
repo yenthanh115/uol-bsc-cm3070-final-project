@@ -505,12 +505,12 @@ The framework above fixes *how* a run is judged; this subsection fixes *which* r
 | Sentiment contribution | B1/B3 (volume-only, $w_2=0$) vs baselines | Weight varied to $w_2=0$ on each dataset | Does sentiment in the target improve over volume alone? ([@sec:sentiment-contribution]) |
 | Weight sensitivity | Baseline + G-series ($w_2 \in \{0,0.25,0.5,0.75,1.0\}$ on `WSB`) | Sentiment weight swept; dataset and $\tau$ fixed | How does the volume/sentiment balance affect predictability? ([@tbl:weight-sensitivity]) |
 | Threshold sensitivity | C1 (`WSB`), C2 (`r/pennystocks`), $\tau=1.0$ | Threshold lowered from 1.5 to 1.0 | How does the surge threshold affect class balance and performance? ([@sec:eval-objectives]) |
-| Robustness | Baseline + 4 additional seeds (`r/pennystocks`) | Seed varied over {42, 123, 456, 789, 2024} | Are results stable across random seeds? ([@sec:reproducibility]) |
+| Robustness | Baseline + 4 additional seeds (`r/pennystocks`) | Seed varied over {42, 123, 456, 789, 2024} | Are results stable across random seeds? |
 | Cross-dataset transfer | D1 (`WSB`→`r/pennystocks`), D2 (`r/pennystocks`→`WSB`) | Train community and test community swapped, no retraining | Do surge patterns generalise across communities? (Q4, [@sec:cross-community]) |
 
 : Planned experiment matrix, grouped by the question each set of runs answers. {#tbl:experiment-plan}
 
-Where groups overlap (the volume-only and full weight sweep coincide at $w_2=0$), the shared point is reused rather than re-run. All runs use the same seeded, deterministic pipeline (Section 4), each logged with its configuration and Git commit for traceability ([@sec:reproducibility]).
+Where groups overlap (the volume-only and full weight sweep coincide at $w_2=0$), the shared point is reused rather than re-run. All runs use the same seeded, deterministic pipeline (Section 4), each logged with its configuration and Git commit for traceability.
 
 ## Design Trade-offs and Alternatives {#sec:design-alternatives}
 
@@ -560,45 +560,22 @@ The plan is derived from the CRISP-DM data-mining process model, whose stages (b
 
 The pipeline is packaged as a standard Python 3.10+ library (`surge-pipeline`, built with setuptools via `pyproject.toml`). Dependencies are declared as minimum-version ranges in both `pyproject.toml` and `requirements.txt` (listed in full in [@sec:appendix-dependencies]), and the resolved environment is logged with each experiment run so a run can be reproduced against the versions actually used.
 
-The pipeline source resides under `src/`, split into core library modules and executable CLI scripts. Alongside it, a separate top-level `eda/` directory holds the standalone data-selection notebooks (kept outside the pipeline package; see [@sec:eda-tooling]):
+The pipeline source resides under `src/` ([@lst:source-org]), split into core library modules and executable CLI scripts.  (see [@sec:eda-tooling]). The `surge_pipeline/` package holds one module per pipeline stage (16 modules, ~4,450 LOC), plus a few shared-utility (`timestamps.py`, `cli_logging.py`) and data-contract modules (`training_models.py`, `evaluation_models.py`), with a matching test file per stage under `tests/`. Alongside it, a separate top-level `eda/` directory holds the standalone data-selection notebooks, kept outside the pipeline package and sharing no code with it. The full repository tree is given in [@sec:appendix-repo-structure].
 
-```default {#lst:source-org caption="Repository code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage (plus a few shared-utility and data-contract modules), enforcing separation of concerns. Each stage module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves. The \`eda/\` notebooks sit outside \`src/\` and share no code with the pipeline package."}
-eda/                             # Standalone EDA notebooks
-├── 01_discovery.ipynb           # Candidate discovery (Kaggle + HuggingFace APIs)
-├── 02_highlevel_eval.ipynb      # High-level comparative profiling
-├── 03_deep_assessment.ipynb     # Deep viability assessment
-├── input/                       # Manually downloaded candidate datasets
-└── output/                      # Screening CSVs + figures
+```default {#lst:source-org caption="Repository code organisation."}
 src/
 ├── surge_pipeline/              # Core library (16 modules, ~4,450 LOC)
-│   ├── config.py                # Configuration dataclass + JSON I/O
-|   └── data/                    #
-|       └── ticker_stopwords.txt # stopword lexicon (NLTK base + supplement)
-│   ├── loader.py                # CSV ingestion, ticker extraction, explosion
-│   ├── windowing.py             # Per-ticker 24h counts (searchsorted)
-│   ├── sentiment.py             # VADER scoring with title-fallback
-│   ├── labelling.py             # Temporal split, z-scores, thresholding
-│   ├── normalisation.py         # Z-score parameter persistence
-│   ├── features.py              # 11 backward-only features
-│   ├── training.py              # Expanding-window CV + grid search
-│   ├── training_models.py       # Training result / model-container dataclasses
-│   ├── evaluation.py            # Metrics, bootstrap CI, McNemar's
-│   ├── evaluation_models.py     # Evaluation result dataclasses + tier constants
-│   ├── evaluation_figures.py    # ROC curves, confusion matrices, plots
-│   ├── experiment_log.py        # Append-only JSONL tracker
-│   ├── timestamps.py            # Portable datetime -> epoch-seconds conversion
-│   ├── cli_logging.py           # Tee-style console + log-file output
-│   ├── pipeline.py              # Orchestrator: chains all stages
+│   └── ...
 ├── tests/                       # 10 test modules (pytest)
-├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
-├── run_training.py              # CLI: model training + evaluation (stages 5–6)
-├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
-├── generate_figures.py          # CLI: regenerate figures from saved artefacts
-├── generate_prediction_examples.py  # CLI: worked prediction examples
-└── build_stopwords.py           # Regenerates ticker_stopwords.txt
+│   └── ...
+│   ├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
+│   ├── run_training.py              # CLI: model training + evaluation (stages 5–6)
+...
+eda/                             # Standalone EDA notebooks
+└── ...
 ```
 
-Each pipeline stage maps directly to one or two library modules, with a few small modules holding shared utilities (`timestamps.py`, `cli_logging.py`) and data contracts (`training_models.py`, `evaluation_models.py`). This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
+This modular separation ensures that changes to one stage (e.g., swapping out the sentiment backend) cannot touch another's logic, and any stage can be unit-tested in isolation.
 
 Executable commands are exposed via entry-point CLI scripts (declared in `pyproject.toml`) to streamline individual stages and end-to-end runs.
 
@@ -1387,3 +1364,42 @@ Two directions would extend the methodology:
 
 : Declared software dependencies of the `surge-pipeline` package, from `pyproject.toml` and `requirements.txt`. {#tbl:dependencies}
 
+## Repository Structure {#sec:appendix-repo-structure}
+
+[@lst:full-source-org] gives the full repository code organisation summarised in the Implementation section (Code Organisation). The `surge_pipeline/` package contains one module per pipeline stage (plus a few shared-utility and data-contract modules), enforcing separation of concerns. Each stage module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves. The `eda/` notebooks sit outside `src/` and share no code with the pipeline package.
+
+```default {#lst:full-source-org caption="Repository code organisation. The \`surge_pipeline/\` package contains one module per pipeline stage (plus a few shared-utility and data-contract modules), enforcing separation of concerns. Each stage module has a corresponding test file. CLI entry points orchestrate multi-stage runs without embedding logic themselves. The \`eda/\` notebooks sit outside \`src/\` and share no code with the pipeline package."}
+eda/                             # Standalone EDA notebooks
+├── 01_discovery.ipynb           # Candidate discovery (Kaggle + HuggingFace APIs)
+├── 02_highlevel_eval.ipynb      # High-level comparative profiling
+├── 03_deep_assessment.ipynb     # Deep viability assessment
+├── input/                       # Manually downloaded candidate datasets
+└── output/                      # Screening CSVs + figures
+src/
+├── surge_pipeline/              # Core library (16 modules, ~4,450 LOC)
+│   ├── config.py                # Configuration dataclass + JSON I/O
+|   └── data/                    #
+|       └── ticker_stopwords.txt # stopword lexicon (NLTK base + supplement)
+│   ├── loader.py                # CSV ingestion, ticker extraction, explosion
+│   ├── windowing.py             # Per-ticker 24h counts (searchsorted)
+│   ├── sentiment.py             # VADER scoring with title-fallback
+│   ├── labelling.py             # Temporal split, z-scores, thresholding
+│   ├── normalisation.py         # Z-score parameter persistence
+│   ├── features.py              # 11 backward-only features
+│   ├── training.py              # Expanding-window CV + grid search
+│   ├── training_models.py       # Training result / model-container dataclasses
+│   ├── evaluation.py            # Metrics, bootstrap CI, McNemar's
+│   ├── evaluation_models.py     # Evaluation result dataclasses + tier constants
+│   ├── evaluation_figures.py    # ROC curves, confusion matrices, plots
+│   ├── experiment_log.py        # Append-only JSONL tracker
+│   ├── timestamps.py            # Portable datetime -> epoch-seconds conversion
+│   ├── cli_logging.py           # Tee-style console + log-file output
+│   ├── pipeline.py              # Orchestrator: chains all stages
+├── tests/                       # 10 test modules (pytest)
+├── run_labeling.py              # CLI: full labelling pipeline (stages 1–4)
+├── run_training.py              # CLI: model training + evaluation (stages 5–6)
+├── run_cross_validation.py      # CLI: cross-dataset transfer evaluation
+├── generate_figures.py          # CLI: regenerate figures from saved artefacts
+├── generate_prediction_examples.py  # CLI: worked prediction examples
+└── build_stopwords.py           # Regenerates ticker_stopwords.txt
+```

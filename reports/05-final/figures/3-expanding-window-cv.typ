@@ -35,7 +35,7 @@
 
   // ---- title ----
   content((x(50), row), anchor: "south",
-          text(weight: "bold", size: 12pt)[Expanding-Window Temporal CV (k = 3)])
+          text(weight: "bold", size: 12pt)[Expanding-Window Temporal CV (k = 4 → 3 splits)])
 
   // ---- light vertical grid at each 25-unit boundary ----
   for g in (0, 25, 50, 75, 100) {

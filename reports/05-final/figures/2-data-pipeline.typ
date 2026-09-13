@@ -102,6 +102,9 @@
 
   // ---- endpoints: raw input (top) and results (bottom) ----
   let ry = top-y(0) + gap
+  // ---- title (centred, above the top endpoint) ----
+  content((cx, ry + 0.9), anchor: "south",
+          text(weight: "bold", size: 12pt)[Data Pipeline Architecture])
   content((cx, ry), anchor: "south",
           text(size: 8.5pt, weight: "bold", fill: rgb("#455a64"))[Raw Reddit submissions (CSV)])
   line((cx, ry - 0.28), (cx, top-y(0)), stroke: 1.3pt)
