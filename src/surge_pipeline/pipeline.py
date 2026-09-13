@@ -1,6 +1,6 @@
-"""Pipeline orchestrator — chains all stages and manages outputs.
+"""Pipeline orchestrator - chains all stages and manages outputs.
 
-Chains: load → window → sentiment → label.
+Chains: load -> window -> sentiment -> label.
 Supports threshold sweep mode for sensitivity analysis.
 Ensures deterministic execution via seeded randomness.
 
@@ -40,7 +40,7 @@ def _run_through_sentiment(
     config: PipelineConfig,
     stage_progress: tqdm | None = None,
 ) -> tuple:
-    """Execute pipeline stages 1–3: load → window → sentiment.
+    """Execute pipeline stages 1-3: load -> window -> sentiment.
 
     This is the shared backbone used by both run_pipeline (full execution)
     and run_threshold_sweep (sweep-only mode), eliminating duplicated
@@ -100,7 +100,7 @@ def _run_through_sentiment(
         excluded_count = df["excluded"].sum()
         exclusion_rate = excluded_count / len(df) * 100 if len(df) > 0 else 0
         logger.info(
-            "Exclusion summary — excluded: %d (%.1f%%)",
+            "Exclusion summary - excluded: %d (%.1f%%)",
             excluded_count,
             exclusion_rate,
         )
@@ -133,7 +133,7 @@ def _run_through_sentiment(
 def run_pipeline(config: PipelineConfig) -> dict:
     """Execute the full surge-labelling pipeline.
 
-    Chains all stages in order: load → window → sentiment → label.
+    Chains all stages in order: load -> window -> sentiment -> label.
     Seeds numpy/random at start for reproducibility (R7-AC1, AC2).
     Logs record counts after each stage (R7-AC4).
 
@@ -165,7 +165,7 @@ def run_pipeline(config: PipelineConfig) -> dict:
     stage_progress = tqdm(stages, desc="Pipeline", unit="stage", leave=True)
 
     # ------------------------------------------------------------------
-    # Stages 1–3: Load → Window → Sentiment (shared)
+    # Stages 1-3: Load -> Window -> Sentiment (shared)
     # ------------------------------------------------------------------
     df, stage_counts, stage_durations = _run_through_sentiment(config, stage_progress)
 
@@ -173,7 +173,7 @@ def run_pipeline(config: PipelineConfig) -> dict:
     # Stage 4: Labelling
     # ------------------------------------------------------------------
     logger.info("=" * 60)
-    logger.info("STAGE 4: Applying labelling (τ=%.2f)", config.threshold_tau)
+    logger.info("STAGE 4: Applying labelling (tau=%.2f)", config.threshold_tau)
     logger.info("=" * 60)
 
     t0 = time.perf_counter()
@@ -195,7 +195,7 @@ def run_pipeline(config: PipelineConfig) -> dict:
     t0 = time.perf_counter()
     sweep_results = sweep_thresholds(df, config)
     stage_durations["threshold_sweep"] = time.perf_counter() - t0
-    logger.info("Threshold sweep complete — %d thresholds evaluated (%.2fs).",
+    logger.info("Threshold sweep complete - %d thresholds evaluated (%.2fs).",
                 len(sweep_results), stage_durations["threshold_sweep"])
     stage_progress.set_postfix_str(f"{len(sweep_results)} thresholds, {stage_durations['threshold_sweep']:.1f}s")
     stage_progress.update(1)
@@ -230,7 +230,7 @@ def run_pipeline(config: PipelineConfig) -> dict:
 def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     """Run pipeline through sentiment, then sweep thresholds.
 
-    Executes load → window → sentiment stages (via shared helper), then
+    Executes load -> window -> sentiment stages (via shared helper), then
     applies labelling at each threshold in config.thresholds. Returns a
     summary table with class distribution metrics and viability flags.
 
@@ -249,7 +249,7 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
 
-    # Run stages 1–3 via shared helper
+    # Run stages 1-3 via shared helper
     df, _, _ = _run_through_sentiment(config)
 
     # Sweep thresholds
@@ -264,7 +264,7 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
     logger.info("-" * 70)
     logger.info(
         "%-10s %-12s %-14s %-12s %-16s %-8s",
-        "τ", "Surge", "No-Surge", "Rate(%)", "Imbalance", "Viable",
+        "tau", "Surge", "No-Surge", "Rate(%)", "Imbalance", "Viable",
     )
     logger.info("-" * 70)
     for _, row in sweep_df.iterrows():
@@ -275,7 +275,7 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
             row["no_surge_count"],
             row["surge_rate"],
             row["imbalance_ratio"],
-            "✓" if row["viable"] else "✗",
+            "[OK]" if row["viable"] else "[X]",
         )
     logger.info("-" * 70)
 
@@ -287,7 +287,7 @@ def run_threshold_sweep(config: PipelineConfig) -> pd.DataFrame:
         )
     else:
         logger.warning(
-            "No viable thresholds found — no threshold produced surge rate 5-10%%."
+            "No viable thresholds found - no threshold produced surge rate 5-10%%."
         )
 
     return sweep_df
@@ -328,7 +328,7 @@ def save_outputs(results: dict, config: PipelineConfig) -> dict:
     output_paths: dict[str, str] = {}
 
     # ------------------------------------------------------------------
-    # 1. Labelled dataset (CSV) — includes engineered features
+    # 1. Labelled dataset (CSV) - includes engineered features
     # ------------------------------------------------------------------
     labelled_df = compute_features(results["labelled_df"])
     labelled_path = output_dir / f"{prefix}_labelled_dataset.csv"

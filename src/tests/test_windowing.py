@@ -241,9 +241,9 @@ class TestExclusionFlagging:
 
         result = compute_windowed_counts(df, config)
 
-        # Record 0: forward=1 (only record 1 within 24h), < 2 → excluded
+        # Record 0: forward=1 (only record 1 within 24h), < 2 -> excluded
         assert result.iloc[0]["excluded"] == True
-        # Record 2: forward=0, < 2 → excluded
+        # Record 2: forward=0, < 2 -> excluded
         assert result.iloc[2]["excluded"] == True
 
     def test_min_window_count_zero_excludes_nothing(self, base_ts):
@@ -265,7 +265,7 @@ class TestBackwardOnlyMethod:
     """Verify the backward_only surge method."""
 
     def test_backward_only_first_record_ratio_zero(self, base_ts):
-        """First record for a ticker has no history → ratio = 0."""
+        """First record for a ticker has no history -> ratio = 0."""
         ts = [base_ts, base_ts + 3600, base_ts + 2 * 3600]
         df = _make_df(ts, ["AAPL"] * 3)
         config = PipelineConfig(min_window_count=0, surge_method="backward_only")
@@ -282,11 +282,11 @@ class TestBackwardOnlyMethod:
 
         result = compute_windowed_counts(df, config)
 
-        # Record 0: backward=0, < 2 → excluded
+        # Record 0: backward=0, < 2 -> excluded
         assert result.iloc[0]["excluded"] == True
-        # Record 1: backward=1, < 2 → excluded
+        # Record 1: backward=1, < 2 -> excluded
         assert result.iloc[1]["excluded"] == True
-        # Record 2: backward=2, >= 2 → not excluded
+        # Record 2: backward=2, >= 2 -> not excluded
         assert result.iloc[2]["excluded"] == False
 
     def test_backward_only_single_ticker_record(self, base_ts):

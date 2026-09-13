@@ -7,7 +7,7 @@ final summary generation.
 
 Requirements: R15 (Evaluation Metrics), R19 (Statistical Significance),
               R21 (Success Tiers)
-Design Decision: D12 — Evaluation output structure.
+Design Decision: D12 - Evaluation output structure.
 """
 
 from __future__ import annotations

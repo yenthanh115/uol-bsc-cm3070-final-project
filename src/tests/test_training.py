@@ -3,10 +3,10 @@
 Tests:
   1. Temporal cross-validation respects chronological ordering
   2. Expanding-window splits have correct structure
-  3. Hyperparameter grid sizes respect ≤50 limit
+  3. Hyperparameter grid sizes respect <=50 limit
   4. Training produces expected model types
   5. Phase 1 vs Phase 2 mode distinction
-  6. Reproducibility (same seed → same results)
+  6. Reproducibility (same seed -> same results)
 
 Requirements: R13, R14
 """
@@ -129,7 +129,7 @@ class TestTemporalOrdering:
     def test_folds_are_chronologically_ordered(
         self, training_df: pd.DataFrame
     ):
-        """Max timestamp in fold i must be ≤ min timestamp in fold i+1."""
+        """Max timestamp in fold i must be <= min timestamp in fold i+1."""
         from surge_pipeline.timestamps import to_epoch_seconds
         folds = create_temporal_folds(training_df, n_folds=N_FOLDS)
         epoch = to_epoch_seconds(training_df["created_utc"])
@@ -144,7 +144,7 @@ class TestTemporalOrdering:
     def test_cv_splits_respect_temporal_ordering(
         self, training_df: pd.DataFrame
     ):
-        """In each split, max train ts ≤ min val ts."""
+        """In each split, max train ts <= min val ts."""
         from surge_pipeline.timestamps import to_epoch_seconds
         folds = create_temporal_folds(training_df, n_folds=N_FOLDS)
         splits = get_expanding_window_splits(folds)
@@ -227,7 +227,7 @@ class TestExpandingWindowSplits:
         expected_size = n // 4
 
         for fold in folds:
-            # Allow ±1 difference for uneven division
+            # Allow +/-1 difference for uneven division
             assert abs(len(fold) - expected_size) <= 1
 
 
@@ -237,20 +237,20 @@ class TestExpandingWindowSplits:
 
 
 class TestHyperparameterGrids:
-    """Verify hyperparameter grid respects ≤50 limit (R13-AC6)."""
+    """Verify hyperparameter grid respects <=50 limit (R13-AC6)."""
 
     def test_lr_grid_has_10_configs(self):
-        """LR: C(5) × penalty(2) = 10."""
+        """LR: C(5) x penalty(2) = 10."""
         grid = _get_lr_param_grid()
         assert len(grid) == 10
 
     def test_rf_grid_has_36_configs(self):
-        """RF: n_estimators(3) × max_depth(4) × min_samples_leaf(3) = 36."""
+        """RF: n_estimators(3) x max_depth(4) x min_samples_leaf(3) = 36."""
         grid = _get_rf_param_grid()
         assert len(grid) == 36
 
     def test_xgb_grid_within_75_configs(self):
-        """XGBoost grid should have ≤75 configs (raised for P6 scale_pos_weight)."""
+        """XGBoost grid should have <=75 configs (raised for P6 scale_pos_weight)."""
         grid = _get_xgb_param_grid(random_seed=42)
         assert len(grid) <= 75
 
@@ -380,7 +380,7 @@ class TestReproducibility:
     def test_same_seed_produces_same_cv_scores(
         self, small_training_df: pd.DataFrame, tmp_path
     ):
-        """Same seed, data, config → identical CV scores (R14-AC2)."""
+        """Same seed, data, config -> identical CV scores (R14-AC2)."""
         config = PipelineConfig(
             random_seed=42,
             weight_sentiment=0.5,

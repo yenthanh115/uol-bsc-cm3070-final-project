@@ -10,8 +10,8 @@ Supports two sentiment backends:
   - "textblob": TextBlob polarity. Simpler, general-purpose.
 
 Requirements: R4 (Sentiment Computation)
-Design Decision: D5 — Sentiment on combined text with fallback logic.
-                 D13 — VADER as default sentiment model for Reddit text.
+Design Decision: D5 - Sentiment on combined text with fallback logic.
+                 D13 - VADER as default sentiment model for Reddit text.
 """
 
 from __future__ import annotations
@@ -230,7 +230,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
             neutral_count += 1
 
     logger.info(
-        "Polarity computed — %d records (of %d total) | title-only fallback: %d | "
+        "Polarity computed - %d records (of %d total) | title-only fallback: %d | "
         "neutral (empty text): %d",
         n_included,
         n,
@@ -253,7 +253,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
     epoch_seconds = to_epoch_seconds(df["created_utc"])
 
     # Only process included records in the forward-window computation.
-    # Build a lookup from DataFrame index label → positional index to
+    # Build a lookup from DataFrame index label -> positional index to
     # correctly address the full-length arrays (epoch_seconds, polarities).
     if n_included > 0:
         index_to_pos = pd.Series(
@@ -275,13 +275,13 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
             group_polarities = group_polarities[sort_order]
             sorted_pos = pos[sort_order]
 
-            # Forward window: (t, t + 24h] — same logic as windowing.py
+            # Forward window: (t, t + 24h] - same logic as windowing.py
             forward_left = np.searchsorted(times, times, side="right")
             forward_right = np.searchsorted(
                 times, times + _WINDOW_SECONDS, side="right"
             )
 
-            # Vectorized mean via prefix sums — O(n) instead of per-record slicing
+            # Vectorized mean via prefix sums - O(n) instead of per-record slicing
             cumsum_padded = np.concatenate([[0.0], np.cumsum(group_polarities)])
             window_sums = cumsum_padded[forward_right] - cumsum_padded[forward_left]
             window_counts = forward_right - forward_left
@@ -318,7 +318,7 @@ def compute_sentiment(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
 
     # Log summary statistics
     logger.info(
-        "Sentiment summary — mean polarity: %.4f | mean future: %.4f | "
+        "Sentiment summary - mean polarity: %.4f | mean future: %.4f | "
         "mean |change|: %.4f",
         polarities.mean(),
         mean_future.mean(),

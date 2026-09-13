@@ -5,7 +5,7 @@ ROC curve, classification threshold sensitivity plot, and feature
 importance comparison chart.
 
 Requirements: R16 (Evaluation Visualisations)
-Design Decision: D12 — Evaluation output structure.
+Design Decision: D12 - Evaluation output structure.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from surge_pipeline.evaluation_models import FeatureImportanceResult
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Figure configuration — matches eda_pipeline.py style
+# Figure configuration - matches eda_pipeline.py style
 # ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -141,7 +141,7 @@ def plot_confusion_matrix(
 
     ax.set_xlabel("Predicted Label")
     ax.set_ylabel("True Label")
-    ax.set_title(f"Confusion Matrix — {model_name}")
+    ax.set_title(f"Confusion Matrix - {model_name}")
 
     return _save_figure(fig, f"10_confusion_matrix_{model_name}", figures_dir)
 
@@ -195,7 +195,7 @@ def plot_roc_curve(
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title(f"ROC Curve — {model_name}")
+    ax.set_title(f"ROC Curve - {model_name}")
     ax.legend(loc="lower right")
     ax.set_xlim((-0.02, 1.02))
     ax.set_ylim((-0.02, 1.02))
@@ -245,7 +245,7 @@ def plot_roc_curve_combined(
 
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curves — Model Comparison")
+    ax.set_title("ROC Curves - Model Comparison")
     ax.legend(loc="lower right")
     ax.set_xlim((-0.02, 1.02))
     ax.set_ylim((-0.02, 1.02))
@@ -262,7 +262,7 @@ def plot_classification_threshold_sensitivity(
     """Produce a classification threshold sensitivity figure (R16-AC6).
 
     Shows precision, recall, and F1-score as functions of the decision
-    probability threshold (0.01–0.99).
+    probability threshold (0.01-0.99).
 
     Parameters
     ----------
@@ -326,7 +326,7 @@ def plot_classification_threshold_sensitivity(
 
     ax.set_xlabel("Classification Threshold")
     ax.set_ylabel("Score")
-    ax.set_title(f"Classification Threshold Sensitivity — {model_name}")
+    ax.set_title(f"Classification Threshold Sensitivity - {model_name}")
     ax.legend(loc="center left", bbox_to_anchor=(0.0, 0.45))
     ax.set_xlim((0.0, 1.0))
     ax.set_ylim((-0.02, 1.05))
@@ -450,7 +450,7 @@ def generate_evaluation_figures(
     # ROC curve and threshold sensitivity require two classes
     if n_classes < 2:
         logger.warning(
-            "Only one class in y_true — skipping ROC curve and threshold "
+            "Only one class in y_true - skipping ROC curve and threshold "
             "sensitivity figures for %s.",
             model_name,
         )

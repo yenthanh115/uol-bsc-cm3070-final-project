@@ -166,7 +166,7 @@ def extract_tickers(title: str, selftext: str) -> list[str]:
     # mixed-type CSV columns) that would otherwise be scanned as "nan".
     combined_text = f"{title!s} {selftext!s}"
 
-    # 1. Dollar-sign pattern (highest priority — always included)
+    # 1. Dollar-sign pattern (highest priority - always included)
     dollar_matches = _DOLLAR_SIGN_PATTERN.findall(combined_text)
     for match in dollar_matches:
         ticker = match.upper()
@@ -344,7 +344,7 @@ def compute_dataset_fingerprint(file_path: Path) -> dict[str, object]:
     }
 
     logger.info(
-        "Dataset fingerprint — SHA256: %.16s... | rows: %d | ts_col: %s | "
+        "Dataset fingerprint - SHA256: %.16s... | rows: %d | ts_col: %s | "
         "has_tickers: %s",
         sha256,
         num_rows,
@@ -397,10 +397,10 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
     else:
         if file_path:
             logger.warning(
-                "File not found: %s — falling back to synthetic data.", file_path
+                "File not found: %s - falling back to synthetic data.", file_path
             )
         else:
-            logger.info("No file_path configured — using synthetic data.")
+            logger.info("No file_path configured - using synthetic data.")
         df = generate_synthetic_data(n_records=500, seed=config.random_seed)
         is_synthetic = True
         fingerprint = {"sha256": "synthetic", "num_rows": len(df), "columns": sorted(df.columns.tolist())}
@@ -412,7 +412,7 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
     # Step 2: Handle ticker extraction for real data (no 'tickers' column)
     # ------------------------------------------------------------------
     if "tickers" not in df.columns and not is_synthetic:
-        logger.info("No 'tickers' column found — extracting tickers from title/selftext.")
+        logger.info("No 'tickers' column found - extracting tickers from title/selftext.")
 
         missing_cols = [c for c in ("title", "selftext") if c not in df.columns]
         if missing_cols:
@@ -449,7 +449,7 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
         zero_ticker_pct = (ticker_counts == 0).sum() / len(df) * 100
 
         logger.info(
-            "Ticker extraction stats — Avg tickers per record: %.2f | "
+            "Ticker extraction stats - Avg tickers per record: %.2f | "
             "Records with 0 tickers: %.1f%%",
             avg_tickers,
             zero_ticker_pct,
@@ -535,7 +535,7 @@ def load_data(config: PipelineConfig) -> pd.DataFrame:
     # Summary log (AC5)
     # ------------------------------------------------------------------
     logger.info(
-        "Loader summary — Loaded: %d | Excluded: %d | Retained records: %d | "
+        "Loader summary - Loaded: %d | Excluded: %d | Retained records: %d | "
         "Exploded rows: %d",
         total_loaded,
         excluded_count,

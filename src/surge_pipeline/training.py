@@ -72,7 +72,7 @@ def _get_xgb_param_grid(
     """XGBoost grid with scale_pos_weight for class imbalance handling (P6).
 
     n_estimators(3) x max_depth(3) x learning_rate(3) x scale_pos_weight(2-3)
-    = 54-81 → capped at 50 to respect R13-AC6 grid size limit.
+    = 54-81 -> capped at 50 to respect R13-AC6 grid size limit.
 
     The scale_pos_weight values are:
       - 1.0: no reweighting (baseline)
@@ -82,7 +82,7 @@ def _get_xgb_param_grid(
     Subsample fixed at 1.0 to make room for the weight dimension while
     keeping the grid manageable.
     """
-    # Deduplicate weight values in case imbalance_ratio ≈ 1.0
+    # Deduplicate weight values in case imbalance_ratio ~= 1.0
     weight_values = sorted(set([1.0, imbalance_ratio / 2, imbalance_ratio]))
 
     grid = [
@@ -351,7 +351,7 @@ def _train_single_model(
     duration = time.time() - start_time
 
     logger.info(
-        "%s — best CV AUC: %.4f (± %.4f) | params: %s | %.2fs",
+        "%s - best CV AUC: %.4f (+/- %.4f) | params: %s | %.2fs",
         model_name, best_mean_auc, float(np.std(best_fold_scores)),
         best_params, duration,
     )
@@ -463,7 +463,7 @@ def train_models(
         X_train_full, y_train_full, splits, random_seed, _make_rf,
     )
 
-    # --- XGBoost (with scale_pos_weight grid for class imbalance — P6) ---
+    # --- XGBoost (with scale_pos_weight grid for class imbalance - P6) ---
     logger.info("Training XGBoost...")
     models["xgboost"] = _train_single_model(
         "xgboost", _get_xgb_param_grid(random_seed, imbalance_ratio=imbalance_ratio),
@@ -483,7 +483,7 @@ def train_models(
             )
             optimal_threshold = threshold_result.optimal_threshold
             logger.info(
-                "%s — optimal threshold: %.2f (F1=%.3f on validation fold)",
+                "%s - optimal threshold: %.2f (F1=%.3f on validation fold)",
                 name, optimal_threshold, threshold_result.f1_at_threshold,
             )
 
@@ -528,7 +528,7 @@ def train_models(
     )
 
     logger.info("=" * 60)
-    logger.info("TRAINING COMPLETE — %d models trained", len(models))
+    logger.info("TRAINING COMPLETE - %d models trained", len(models))
     logger.info("=" * 60)
 
     return result
@@ -652,7 +652,7 @@ def predict(
     Returns
     -------
     Tuple[np.ndarray, np.ndarray, np.ndarray]
-        (y_true, y_pred, y_prob) — true labels, predicted classes,
+        (y_true, y_pred, y_prob) - true labels, predicted classes,
         and predicted probabilities for the positive class.
     """
     mask = (df["partition"] == partition) & (~df["excluded"].astype(bool))

@@ -2,7 +2,7 @@
 
 Tests:
   1. No feature uses future information (backward-only computation)
-  2. Feature matrix has expected shape (n_records × 11 features)
+  2. Feature matrix has expected shape (n_records x 11 features)
   3. No NaN values exist in non-excluded records
   4. ticker_post_acceleration with zero denominator (AC10)
   5. time_since_previous first occurrence (AC11)
@@ -44,7 +44,7 @@ def base_timestamp() -> int:
 def labelled_df(base_timestamp: int) -> pd.DataFrame:
     """A synthetic labelled dataset matching pipeline output schema.
 
-    10 records, 2 tickers (AAPL × 6, TSLA × 4), chronologically ordered.
+    10 records, 2 tickers (AAPL x 6, TSLA x 4), chronologically ordered.
     Some records share the same 'id' (simulating multi-ticker explosion).
     """
     # Offsets from base in hours
@@ -182,7 +182,7 @@ class TestNoFutureLeakage:
 
         result = compute_features(df.copy())
 
-        # Record 0: first occurrence → -1
+        # Record 0: first occurrence -> -1
         assert result["time_since_previous"].iloc[0] == -1.0
         # Record 1: 6 hours since record 0
         assert result["time_since_previous"].iloc[1] == pytest.approx(6.0)
@@ -272,7 +272,7 @@ class TestNoNaNValues:
 
 
 # ============================================================================
-# 4. Ticker Post Acceleration — Zero Denominator (R11-AC10)
+# 4. Ticker Post Acceleration - Zero Denominator (R11-AC10)
 # ============================================================================
 
 
@@ -284,8 +284,8 @@ class TestTickerPostAcceleration:
 
         Setup: AAPL records at t=0h (first), t=6h (recent window only).
         For record at t=6h:
-          - count in (t-12h, t]: record at 0h is in (-6h, 6h] → count=1
-          - count in (t-24h, t-12h]: (-18h, -6h] → count=0
+          - count in (t-12h, t]: record at 0h is in (-6h, 6h] -> count=1
+          - count in (t-24h, t-12h]: (-18h, -6h] -> count=0
           - acceleration = 1 / max(0, 1) = 1.0 (AC10)
         """
         timestamps = [
@@ -305,9 +305,9 @@ class TestTickerPostAcceleration:
 
         result = compute_features(df.copy())
 
-        # Record 0: first post, no posts in either window → 0/max(0,1) = 0
+        # Record 0: first post, no posts in either window -> 0/max(0,1) = 0
         assert result["ticker_post_acceleration"].iloc[0] == pytest.approx(0.0)
-        # Record 1: 1 recent post, 0 older posts → 1/max(0,1) = 1.0
+        # Record 1: 1 recent post, 0 older posts -> 1/max(0,1) = 1.0
         assert result["ticker_post_acceleration"].iloc[1] == pytest.approx(1.0)
 
     def test_normal_acceleration_ratio(self, base_timestamp: int):
@@ -315,8 +315,8 @@ class TestTickerPostAcceleration:
 
         Setup: AAPL records at t=0h, t=6h, t=13h, t=20h.
         For record at t=20h:
-          - count in (t-12h, t]: (8h, 20h] → record at 13h → count=1
-          - count in (t-24h, t-12h]: (-4h, 8h] → records at 0h, 6h → count=2
+          - count in (t-12h, t]: (8h, 20h] -> record at 13h -> count=1
+          - count in (t-24h, t-12h]: (-4h, 8h] -> records at 0h, 6h -> count=2
           - acceleration = 1 / 2 = 0.5
         """
         timestamps = [
@@ -341,7 +341,7 @@ class TestTickerPostAcceleration:
 
 
 # ============================================================================
-# 5. Time Since Previous — First Occurrence (R11-AC11)
+# 5. Time Since Previous - First Occurrence (R11-AC11)
 # ============================================================================
 
 
@@ -367,9 +367,9 @@ class TestTimeSincePrevious:
 
         result = compute_features(df.copy())
 
-        # Record 0: first AAPL → -1
+        # Record 0: first AAPL -> -1
         assert result["time_since_previous"].iloc[0] == -1.0
-        # Record 1: first TSLA → -1
+        # Record 1: first TSLA -> -1
         assert result["time_since_previous"].iloc[1] == -1.0
         # Record 2: second AAPL, 12h since record 0
         assert result["time_since_previous"].iloc[2] == pytest.approx(12.0)

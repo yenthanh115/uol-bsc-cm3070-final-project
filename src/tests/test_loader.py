@@ -28,7 +28,7 @@ from surge_pipeline.loader import (
 )
 
 # ============================================================================
-# Ticker extraction — dollar-sign pattern
+# Ticker extraction - dollar-sign pattern
 # ============================================================================
 
 
@@ -64,7 +64,7 @@ class TestDollarSignPattern:
 
 
 # ============================================================================
-# Ticker extraction — uppercase word pattern
+# Ticker extraction - uppercase word pattern
 # ============================================================================
 
 
@@ -110,7 +110,7 @@ class TestUppercaseWordPattern:
 
 
 # ============================================================================
-# Ticker extraction — combined and edge cases
+# Ticker extraction - combined and edge cases
 # ============================================================================
 
 
@@ -216,7 +216,7 @@ class TestLoadData:
 
     @pytest.fixture
     def config_no_file(self) -> PipelineConfig:
-        """Config with no file_path → triggers synthetic data fallback."""
+        """Config with no file_path -> triggers synthetic data fallback."""
         return PipelineConfig(file_path="", random_seed=42)
 
     def test_returns_dataframe(self, config_no_file):

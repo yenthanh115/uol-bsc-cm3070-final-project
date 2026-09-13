@@ -47,7 +47,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--min-window-count", type=int, default=1, help="Minimum window count for filtering."
     )
     parser.add_argument(
-        "--threshold-tau", type=float, default=1.5, help="Surge threshold τ (tau)."
+        "--threshold-tau", type=float, default=1.5, help="Surge threshold tau."
     )
     parser.add_argument(
         "--weight-volume", type=float, default=0.5, help="Weight for volume in composite score."
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> None:
         print("=" * 60)
         print(f"  Random seed:       {config.random_seed}")
         print(f"  Sentiment model:   {config.sentiment_model}")
-        print(f"  Threshold τ:       {config.threshold_tau}")
+        print(f"  Threshold tau:     {config.threshold_tau}")
         print(f"  Sweep thresholds:  {config.thresholds}")
         print(f"  Output directory:  {config.output_dir}")
         print(f"  Input file:        {config.file_path or '(synthetic data)'}")
@@ -162,10 +162,10 @@ def main(argv: list[str] | None = None) -> None:
             # Print table to console (R8-AC3)
             print("\nThreshold Sensitivity Table:")
             print("-" * 70)
-            print(f"{'τ':<10} {'Surge':<12} {'No-Surge':<14} {'Rate(%)':<12} {'Imbalance':<16} {'Viable':<8}")
+            print(f"{'tau':<10} {'Surge':<12} {'No-Surge':<14} {'Rate(%)':<12} {'Imbalance':<16} {'Viable':<8}")
             print("-" * 70)
             for _, row in sweep_df.iterrows():
-                viable_flag = "✓" if row["viable"] else "✗"
+                viable_flag = "[OK]" if row["viable"] else "[X]"
                 print(
                     f"{row['threshold']:<10.2f} {int(row['surge_count']):<12d} "
                     f"{int(row['no_surge_count']):<14d} {row['surge_rate']:<12.2f} "
@@ -246,7 +246,7 @@ def main(argv: list[str] | None = None) -> None:
                 for stage_name, duration in stage_durations.items():
                     label = stage_name.replace("_", " ").capitalize()
                     print(f"    {label:20s}: {duration:>7.2f}s")
-                print(f"    {'─' * 30}")
+                print(f"    {'-' * 30}")
                 print(f"    {'Total':20s}: {total_duration:>7.2f}s")
 
             # Output paths

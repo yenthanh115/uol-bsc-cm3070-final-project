@@ -1,7 +1,7 @@
 """Load and apply normalisation parameters from pipeline summary.
 
 Provides a single entry point for the modelling stage to retrieve
-training-set normalisation statistics (μ, σ) without recomputing them.
+training-set normalisation statistics (mu, sigma) without recomputing them.
 This prevents data leakage by ensuring inference-time normalisation uses
 the same parameters fitted during pipeline execution.
 
@@ -67,7 +67,7 @@ class NormalisationParams:
         Returns
         -------
         np.ndarray
-            Z-score normalised values. Returns zeros if σ_volume == 0.
+            Z-score normalised values. Returns zeros if sigma_volume == 0.
         """
         if self.sigma_volume == 0.0:
             return np.zeros_like(values, dtype=np.float64)
@@ -84,7 +84,7 @@ class NormalisationParams:
         Returns
         -------
         np.ndarray
-            Z-score normalised values. Returns zeros if σ_sentiment == 0.
+            Z-score normalised values. Returns zeros if sigma_sentiment == 0.
         """
         if self.sigma_sentiment == 0.0:
             return np.zeros_like(values, dtype=np.float64)

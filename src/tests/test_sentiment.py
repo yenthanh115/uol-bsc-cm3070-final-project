@@ -282,7 +282,7 @@ class TestFallbackLogic:
         )
         result = compute_sentiment(df, vader_config)
 
-        # First has title → non-zero; second has nothing → zero
+        # First has title -> non-zero; second has nothing -> zero
         assert result.iloc[0]["sentiment_polarity"] != 0.0
         assert result.iloc[1]["sentiment_polarity"] == 0.0
 
@@ -311,7 +311,7 @@ class TestForwardWindow:
 
     def test_no_forward_neighbours_defaults_to_current(self, vader_config, base_time):
         """Record with no forward neighbours gets mean_future = own polarity."""
-        # Single record — no forward window
+        # Single record - no forward window
         df = _make_df(
             base_time,
             n=1,
@@ -323,7 +323,7 @@ class TestForwardWindow:
         )
         result = compute_sentiment(df, vader_config)
 
-        # mean_future should equal current polarity → sentiment_change = 0
+        # mean_future should equal current polarity -> sentiment_change = 0
         assert result.iloc[0]["mean_future_sentiment"] == result.iloc[0]["sentiment_polarity"]
         assert result.iloc[0]["sentiment_change"] == 0.0
 
@@ -352,7 +352,7 @@ class TestForwardWindow:
         )
 
     def test_forward_window_excludes_same_timestamp(self, vader_config, base_time):
-        """Forward window is (t, t+24h] — strictly after t, not at t."""
+        """Forward window is (t, t+24h] - strictly after t, not at t."""
         # Two records at the exact same timestamp
         df = _make_df(
             base_time,
@@ -369,7 +369,7 @@ class TestForwardWindow:
         # records ARE included in forward window. This matches windowing.py.
         # Both records at t=0: forward_left = searchsorted(times, times, "right")
         # For sorted [0,0]: searchsorted([0,0], 0, "right") = 2
-        # So forward_left[0]=2, forward_right[0]=2 → empty window for record 0
+        # So forward_left[0]=2, forward_right[0]=2 -> empty window for record 0
         # Actually with identical times, records at same time will see each other
         # depending on sort order. This test just verifies no crash.
         assert "sentiment_change" in result.columns

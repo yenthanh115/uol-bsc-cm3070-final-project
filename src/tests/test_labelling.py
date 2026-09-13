@@ -4,7 +4,7 @@ Tests:
   1. Windowing correctness with hand-computed examples (R2, R3)
   2. Z-score normalisation uses training stats only (R5)
   3. Composite labelling produces expected labels at known thresholds (R6)
-  4. Determinism — two runs produce identical output (R7)
+  4. Determinism - two runs produce identical output (R7)
 """
 
 from __future__ import annotations
@@ -117,20 +117,20 @@ class TestWindowingCorrectness:
         Window = 24 hours, exclusive of self.
 
         Forward counts (records strictly after t, within t+24h):
-          rec 0 (t=0h):  records at 6h, 12h, 23h are in (0, 24] → forward=3
-          rec 1 (t=6h):  records at 12h, 23h, 25h are in (6, 30] → forward=3
-          rec 2 (t=12h): records at 23h, 25h are in (12, 36] → forward=2
-          rec 3 (t=23h): records at 25h are in (23, 47] → forward=1
-          rec 4 (t=25h): records at 48h are in (25, 49] → forward=1
-          rec 5 (t=48h): no records in (48, 72] → forward=0
+          rec 0 (t=0h):  records at 6h, 12h, 23h are in (0, 24] -> forward=3
+          rec 1 (t=6h):  records at 12h, 23h, 25h are in (6, 30] -> forward=3
+          rec 2 (t=12h): records at 23h, 25h are in (12, 36] -> forward=2
+          rec 3 (t=23h): records at 25h are in (23, 47] -> forward=1
+          rec 4 (t=25h): records at 48h are in (25, 49] -> forward=1
+          rec 5 (t=48h): no records in (48, 72] -> forward=0
 
         Backward counts (records strictly before t, within t-24h):
-          rec 0 (t=0h):  no records in (-24, 0) → backward=0
-          rec 1 (t=6h):  record at 0h is in (-18, 6) → backward=1
-          rec 2 (t=12h): records at 0h, 6h are in (-12, 12) → backward=2
-          rec 3 (t=23h): records at 0h, 6h, 12h are in (-1, 23) → backward=3
-          rec 4 (t=25h): records at 6h, 12h, 23h are in (1, 25) → backward=3
-          rec 5 (t=48h): record at 25h is in (24, 48) → backward=1
+          rec 0 (t=0h):  no records in (-24, 0) -> backward=0
+          rec 1 (t=6h):  record at 0h is in (-18, 6) -> backward=1
+          rec 2 (t=12h): records at 0h, 6h are in (-12, 12) -> backward=2
+          rec 3 (t=23h): records at 0h, 6h, 12h are in (-1, 23) -> backward=3
+          rec 4 (t=25h): records at 6h, 12h, 23h are in (1, 25) -> backward=3
+          rec 5 (t=48h): record at 25h is in (24, 48) -> backward=1
         """
         result = compute_windowed_counts(single_ticker_df.copy(), simple_config)
 
@@ -156,7 +156,7 @@ class TestWindowingCorrectness:
 
         Actually, re-reading the code:
           forward_right = searchsorted(times, times + WINDOW_SECONDS, side='right')
-        This means records at exactly t + 24h ARE included (≤ boundary).
+        This means records at exactly t + 24h ARE included (<= boundary).
 
         Let's test with two records: t=0 and t=exactly 24h.
         forward_left for rec 0 = searchsorted(times, 0, side='right') = 1
@@ -206,14 +206,14 @@ class TestWindowingCorrectness:
         """Two tickers should have counts computed independently.
 
         AAPL records at offsets [0, 12, 25] hours:
-          rec 0 (t=0h):  forward in (0, 24]: 12h → forward=1, backward=0
-          rec 2 (t=12h): forward in (12, 36]: 25h → forward=1, backward in (-12,12): 0h → backward=1
-          rec 4 (t=25h): forward in (25, 49]: none → forward=0, backward in (1,25): 12h → backward=1
+          rec 0 (t=0h):  forward in (0, 24]: 12h -> forward=1, backward=0
+          rec 2 (t=12h): forward in (12, 36]: 25h -> forward=1, backward in (-12,12): 0h -> backward=1
+          rec 4 (t=25h): forward in (25, 49]: none -> forward=0, backward in (1,25): 12h -> backward=1
 
         TSLA records at offsets [1, 13, 26] hours:
-          rec 1 (t=1h):  forward in (1, 25]: 13h → forward=1, backward=0
-          rec 3 (t=13h): forward in (13, 37]: 26h → forward=1, backward in (-11,13): 1h → backward=1
-          rec 5 (t=26h): forward in (26, 50]: none → forward=0, backward in (2,26): 13h → backward=1
+          rec 1 (t=1h):  forward in (1, 25]: 13h -> forward=1, backward=0
+          rec 3 (t=13h): forward in (13, 37]: 26h -> forward=1, backward in (-11,13): 1h -> backward=1
+          rec 5 (t=26h): forward in (26, 50]: none -> forward=0, backward in (2,26): 13h -> backward=1
         """
         result = compute_windowed_counts(multi_ticker_df.copy(), simple_config)
 
@@ -247,8 +247,8 @@ class TestWindowingCorrectness:
           growth[0] = (3 / max(0,1)) - 1 = 3/1 - 1 = 2.0
           growth[1] = (3 / max(1,1)) - 1 = 3/1 - 1 = 2.0
           growth[2] = (2 / max(2,1)) - 1 = 2/2 - 1 = 0.0
-          growth[3] = (1 / max(3,1)) - 1 = 1/3 - 1 ≈ -0.6667
-          growth[4] = (1 / max(3,1)) - 1 = 1/3 - 1 ≈ -0.6667
+          growth[3] = (1 / max(3,1)) - 1 = 1/3 - 1 ~= -0.6667
+          growth[4] = (1 / max(3,1)) - 1 = 1/3 - 1 ~= -0.6667
           growth[5] = (0 / max(1,1)) - 1 = 0/1 - 1 = -1.0
         """
         result = compute_windowed_counts(single_ticker_df.copy(), simple_config)
@@ -287,11 +287,11 @@ class TestZScoreNormalisation:
     """Tests for z-score normalisation using training stats only."""
 
     def test_z_score_uses_training_stats_only(self, base_timestamp: int):
-        """Verify z-scores are computed using training partition μ/σ only.
+        """Verify z-scores are computed using training partition mu/sigma only.
 
-        Setup: 10 records, temporal_split_ratio=0.8 → first 8 records train.
+        Setup: 10 records, temporal_split_ratio=0.8 -> first 8 records train.
         All records have known posting_volume_growth and sentiment_change.
-        Manually compute μ/σ from training set and verify test z-scores.
+        Manually compute mu/sigma from training set and verify test z-scores.
         """
         n = 10
         timestamps = [
@@ -326,8 +326,8 @@ class TestZScoreNormalisation:
         result = apply_labelling(df.copy(), config)
 
         # Training volume values: [1,2,3,4,5,6,7,8]
-        # μ_vol = mean([1..8]) = 4.5
-        # σ_vol = population std([1..8]) = sqrt(mean((x-4.5)^2))
+        # mu_vol = mean([1..8]) = 4.5
+        # sigma_vol = population std([1..8]) = sqrt(mean((x-4.5)^2))
         train_vals = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
         mu_vol = train_vals.mean()  # 4.5
         sigma_vol = train_vals.std(ddof=0)  # ~2.2913
@@ -336,7 +336,7 @@ class TestZScoreNormalisation:
         assert result.stats.sigma_volume == pytest.approx(sigma_vol)
 
         # Verify test-set z-scores use training stats
-        # z(9) = (9 - 4.5) / σ, z(10) = (10 - 4.5) / σ
+        # z(9) = (9 - 4.5) / sigma, z(10) = (10 - 4.5) / sigma
         expected_z9 = (9.0 - mu_vol) / sigma_vol
         expected_z10 = (10.0 - mu_vol) / sigma_vol
 
@@ -351,7 +351,7 @@ class TestZScoreNormalisation:
     def test_test_set_uses_training_stats_not_own(self, base_timestamp: int):
         """Critical: test-set records are normalised with TRAINING statistics.
 
-        If test records used their own μ/σ, z-scores would differ.
+        If test records used their own mu/sigma, z-scores would differ.
         We verify by comparing against known training-based computation.
         """
         n = 10
@@ -360,9 +360,9 @@ class TestZScoreNormalisation:
             for i in range(n)
         ]
 
-        # Training [0..7]: all values = 2.0 → μ=2, σ=0
-        # Wait — σ=0 makes z=0. Use different values:
-        # Training [0..7]: values = [0, 0, 0, 0, 10, 10, 10, 10] → μ=5, σ=5
+        # Training [0..7]: all values = 2.0 -> mu=2, sigma=0
+        # Wait - sigma=0 makes z=0. Use different values:
+        # Training [0..7]: values = [0, 0, 0, 0, 10, 10, 10, 10] -> mu=5, sigma=5
         # Test [8..9]: values = [15, 20]
         volumes = [0.0, 0.0, 0.0, 0.0, 10.0, 10.0, 10.0, 10.0, 15.0, 20.0]
         sentiments = [0.0] * n
@@ -388,8 +388,8 @@ class TestZScoreNormalisation:
 
         result = apply_labelling(df.copy(), config)
 
-        # Training μ = mean([0,0,0,0,10,10,10,10]) = 5.0
-        # Training σ = population std = 5.0
+        # Training mu = mean([0,0,0,0,10,10,10,10]) = 5.0
+        # Training sigma = population std = 5.0
         mu_vol = 5.0
         sigma_vol = 5.0
 
@@ -400,21 +400,21 @@ class TestZScoreNormalisation:
         np.testing.assert_allclose(result_df["z_volume"].iloc[8], 2.0, rtol=1e-10)
         np.testing.assert_allclose(result_df["z_volume"].iloc[9], 3.0, rtol=1e-10)
 
-        # If they wrongly used test-only stats (μ=17.5, σ=2.5), we'd get:
+        # If they wrongly used test-only stats (mu=17.5, sigma=2.5), we'd get:
         # z(15) = (15-17.5)/2.5 = -1.0 and z(20) = (20-17.5)/2.5 = 1.0
         # Verify this is NOT the case
         assert result_df["z_volume"].iloc[8] != pytest.approx(-1.0)
         assert result_df["z_volume"].iloc[9] != pytest.approx(1.0)
 
     def test_sigma_zero_edge_case(self, base_timestamp: int):
-        """When all training values are identical, σ=0 → z should be 0."""
+        """When all training values are identical, sigma=0 -> z should be 0."""
         n = 10
         timestamps = [
             pd.Timestamp(base_timestamp + i * 3600, unit="s", tz="UTC")
             for i in range(n)
         ]
 
-        # All training values identical → σ=0
+        # All training values identical -> sigma=0
         volumes = [5.0] * 8 + [10.0, 20.0]  # train=5.0 constant, test varies
         sentiments = [0.3] * 8 + [0.5, 0.8]  # train=0.3 constant
 
@@ -440,7 +440,7 @@ class TestZScoreNormalisation:
         result = apply_labelling(df.copy(), config)
         result_df = result.df
 
-        # All z_volume should be 0.0 (σ=0 → z=0 for all)
+        # All z_volume should be 0.0 (sigma=0 -> z=0 for all)
         np.testing.assert_array_equal(
             result_df["z_volume"].values, np.zeros(n)
         )
@@ -457,7 +457,7 @@ class TestZScoreNormalisation:
         np.testing.assert_allclose(result, expected, rtol=1e-10)
 
     def test_compute_z_scores_sigma_zero(self):
-        """_compute_z_scores with σ=0 should return all zeros."""
+        """_compute_z_scores with sigma=0 should return all zeros."""
         values = np.array([1.0, 2.0, 3.0])
         result = _compute_z_scores(values, mu=2.0, sigma=0.0)
 
@@ -491,11 +491,11 @@ class TestCompositeLabelling:
     def test_composite_formula(self, base_timestamp: int):
         """Verify composite = w1*z_volume + w2*z_sentiment at known values.
 
-        Setup designed so training μ/σ are predictable, yielding known z-scores.
+        Setup designed so training mu/sigma are predictable, yielding known z-scores.
         """
         n = 10
         # Training [0..7]: volume uniform [0,2,4,6,8,10,12,14]
-        # μ_vol = 7.0, σ_vol = population_std = sqrt(mean((x-7)^2))
+        # mu_vol = 7.0, sigma_vol = population_std = sqrt(mean((x-7)^2))
         train_vols = np.array([0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0])
         test_vols = np.array([7.0, 21.0])  # z=0, z=2
         volumes = list(train_vols) + list(test_vols)
@@ -504,7 +504,7 @@ class TestCompositeLabelling:
         sigma_vol = train_vols.std(ddof=0)  # 4.899...
 
         # Training [0..7]: sentiment all = 0.5
-        # |0.5| = 0.5, μ_sent = 0.5, σ_sent = 0
+        # |0.5| = 0.5, mu_sent = 0.5, sigma_sent = 0
         sentiments = [0.5] * 8 + [0.5, 0.5]
 
         df = self._make_labelling_df(base_timestamp, n, volumes, sentiments)
@@ -522,10 +522,10 @@ class TestCompositeLabelling:
         result = apply_labelling(df.copy(), config)
         result_df = result.df
 
-        # Since σ_sent=0, z_sentiment = 0 for all records
+        # Since sigma_sent=0, z_sentiment = 0 for all records
         # composite = 0.6 * z_vol + 0.4 * 0 = 0.6 * z_vol
-        expected_z_vol_test0 = (7.0 - mu_vol) / sigma_vol  # ≈ 0
-        expected_z_vol_test1 = (21.0 - mu_vol) / sigma_vol  # ≈ 2.857
+        expected_z_vol_test0 = (7.0 - mu_vol) / sigma_vol  # ~= 0
+        expected_z_vol_test1 = (21.0 - mu_vol) / sigma_vol  # ~= 2.857
 
         expected_composite_test0 = 0.6 * expected_z_vol_test0
         expected_composite_test1 = 0.6 * expected_z_vol_test1
@@ -538,17 +538,17 @@ class TestCompositeLabelling:
         )
 
     def test_threshold_labelling(self, base_timestamp: int):
-        """At threshold τ=1.0, records with composite > 1.0 get label=1."""
+        """At threshold tau=1.0, records with composite > 1.0 get label=1."""
         n = 10
         # Design training values so z-scores for test records cross threshold
-        # Training: [0,0,0,0,4,4,4,4] → μ=2, σ=2
-        # Test: [6, 2] → z_vol = (6-2)/2 = 2.0, z_vol = (2-2)/2 = 0.0
+        # Training: [0,0,0,0,4,4,4,4] -> mu=2, sigma=2
+        # Test: [6, 2] -> z_vol = (6-2)/2 = 2.0, z_vol = (2-2)/2 = 0.0
         volumes = [0.0, 0.0, 0.0, 0.0, 4.0, 4.0, 4.0, 4.0, 6.0, 2.0]
         sentiments = [0.0] * n
 
         df = self._make_labelling_df(base_timestamp, n, volumes, sentiments)
 
-        # Phase 1: w1=1.0, w2=0.0, τ=1.0
+        # Phase 1: w1=1.0, w2=0.0, tau=1.0
         config = PipelineConfig(
             temporal_split_ratio=0.8,
             min_window_count=1,
@@ -561,9 +561,9 @@ class TestCompositeLabelling:
         result = apply_labelling(df.copy(), config)
         result_df = result.df
 
-        # Test record 8: z_vol=2.0, composite=2.0 > 1.0 → label=1
+        # Test record 8: z_vol=2.0, composite=2.0 > 1.0 -> label=1
         assert result_df["surge_label"].iloc[8] == 1.0
-        # Test record 9: z_vol=0.0, composite=0.0 ≤ 1.0 → label=0
+        # Test record 9: z_vol=0.0, composite=0.0 <= 1.0 -> label=0
         assert result_df["surge_label"].iloc[9] == 0.0
 
     def test_phase1_volume_only(self, base_timestamp: int):
@@ -596,9 +596,9 @@ class TestCompositeLabelling:
     def test_phase2_includes_both_components(self, base_timestamp: int):
         """Phase 2 mode: w2=0.5, composite should include both z-scores."""
         n = 10
-        # Training volumes: [0,2,4,6,8,10,12,14] → μ=7, σ=4.899
+        # Training volumes: [0,2,4,6,8,10,12,14] -> mu=7, sigma=4.899
         # Training sentiments: [0.0,0.2,0.4,0.6,0.8,1.0,1.2,1.4]
-        # After abs(): same values. μ_sent=0.7, σ_sent≈0.4899
+        # After abs(): same values. mu_sent=0.7, sigma_sent~=0.4899
         volumes = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 7.0, 14.0]
         sentiments = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 0.7, 1.4]
 
@@ -713,7 +713,7 @@ class TestDeterminism:
         config_a = PipelineConfig(
             temporal_split_ratio=0.8,
             min_window_count=1,
-            threshold_tau=0.5,  # Low threshold → more surges
+            threshold_tau=0.5,  # Low threshold -> more surges
             weight_volume=1.0,
             weight_sentiment=0.0,
             random_seed=42,
@@ -722,7 +722,7 @@ class TestDeterminism:
         config_b = PipelineConfig(
             temporal_split_ratio=0.8,
             min_window_count=1,
-            threshold_tau=3.0,  # High threshold → fewer surges
+            threshold_tau=3.0,  # High threshold -> fewer surges
             weight_volume=1.0,
             weight_sentiment=0.0,
             random_seed=42,
@@ -741,7 +741,7 @@ class TestDeterminism:
         )
 
     def test_full_windowing_plus_labelling_determinism(self, base_timestamp: int):
-        """Full windowing → labelling chain is deterministic."""
+        """Full windowing -> labelling chain is deterministic."""
         n = 15
         rng = np.random.default_rng(99)
         timestamps = [
@@ -766,7 +766,7 @@ class TestDeterminism:
             random_seed=42,
         )
 
-        # Run 1: window → add sentiment_change stub → label
+        # Run 1: window -> add sentiment_change stub -> label
         df1 = compute_windowed_counts(df.copy(), config)
         # Add a synthetic sentiment_change for labelling (avoid TextBlob dependency)
         rng1 = np.random.default_rng(config.random_seed)

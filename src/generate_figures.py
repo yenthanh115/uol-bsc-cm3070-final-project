@@ -1,7 +1,9 @@
 """Standalone figure generation from saved models.
 
-Generates evaluation figures (confusion matrices, ROC curves, threshold
-sensitivity) without re-running the full training pipeline.
+Generates all evaluation figures (confusion matrices, ROC curves, threshold
+sensitivity, and the permutation feature-importance comparison) without
+re-running the full training pipeline, matching the figure set produced by
+run_training.py.
 
 Usage:
     # Generate Phase 2 figures from latest models (default)
@@ -24,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -31,12 +34,14 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from run_training import _resolve_default_data_path
 from surge_pipeline.evaluation import (
+    compute_feature_importance,
     generate_evaluation_figures,
+    plot_feature_importance,
     plot_roc_curve_combined,
 )
 from surge_pipeline.features import FEATURE_COLUMNS, compute_features
-
 
 MODEL_NAMES = ["logistic_regression", "random_forest", "xgboost"]
 
@@ -92,33 +97,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def resolve_data_path() -> str:
-    """Resolve data path from output/processed/latest_outputs.json."""
-    import json
-
-    latest_file = Path(__file__).resolve().parent.parent / "output" / "processed" / "latest_outputs.json"
-    if latest_file.exists():
-        data = json.loads(latest_file.read_text(encoding="utf-8"))
-        rel_path = data.get("outputs", {}).get("labelled_dataset", "")
-        if rel_path:
-            candidate = (latest_file.parent / rel_path).resolve()
-            if candidate.exists():
-                return str(candidate)
-            candidate = (Path(__file__).resolve().parent / rel_path).resolve()
-            if candidate.exists():
-                return str(candidate)
-    # Fallback
-    return str(Path(__file__).resolve().parent.parent / "output" / "processed" / "labelled_dataset.csv")
-
-
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
-    # Resolve data path
+    # Resolve data path. Reuse run_training's resolver so the two entry points
+    # can't drift in how they locate the latest labelled dataset.
     if args.data_path:
         data_path = Path(args.data_path)
     else:
-        data_path = Path(resolve_data_path())
+        data_path = Path(_resolve_default_data_path())
 
     if not data_path.exists():
         print(f"ERROR: Data file not found: {data_path}")
@@ -142,8 +129,17 @@ def main(argv: list[str] | None = None) -> None:
     # Compute features if not already present (supports older datasets)
     missing_features = [c for c in FEATURE_COLUMNS if c not in df.columns]
     if missing_features:
-        print(f"  Computing features (missing from CSV)...")
+        print("  Computing features (missing from CSV)...")
         df = compute_features(df)
+
+    required_cols = {"partition", "excluded", "surge_label"}
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        print(
+            f"ERROR: Dataset is missing required column(s): {sorted(missing_cols)}. "
+            "Re-run the labelling pipeline to produce a dataset with partitions and labels."
+        )
+        sys.exit(1)
 
     test_mask = (df["partition"] == "test") & (~df["excluded"].astype(bool))
     test_df = df.loc[test_mask]
@@ -160,53 +156,65 @@ def main(argv: list[str] | None = None) -> None:
     figures_dir = Path(args.figures_dir)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    # Resolve model filenames — from manifest, --timestamp, or legacy fallback
-    import json as _json
-
+    # Resolve model filenames - from manifest, --timestamp, or legacy fallback
     model_timestamp = args.timestamp
     manifest_path = models_dir / "latest_models.json"
 
+    # Resolution values default to the CLI args, but the manifest is the source
+    # of truth for what was actually written to disk. When we fall back to the
+    # manifest (no explicit --timestamp), also adopt its phase/seed and the
+    # literal filenames it recorded, so we never reconstruct a name that
+    # silently mismatches the saved models.
+    resolved_phase = args.phase
+    resolved_seed = args.seed
+    manifest_files: dict[str, str] = {}
+
     if model_timestamp is None and manifest_path.exists():
-        manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         model_timestamp = manifest.get("timestamp")
-        print(f"\n  Resolved timestamp from manifest: {model_timestamp}")
+        resolved_phase = manifest.get("phase", args.phase)
+        resolved_seed = manifest.get("random_seed", args.seed)
+        manifest_files = manifest.get("models", {}) or {}
+        print(f"\n  Resolved from manifest: timestamp={model_timestamp}, "
+              f"phase={resolved_phase}, seed={resolved_seed}")
+        if resolved_phase != args.phase:
+            print(f"    NOTE: manifest phase ({resolved_phase}) overrides --phase ({args.phase}).")
+        if resolved_seed != args.seed:
+            print(f"    NOTE: manifest seed ({resolved_seed}) overrides --seed ({args.seed}).")
 
     roc_data = []
     generated_paths = []
+    importance_results = []
+    n_models_loaded = 0
 
     for name in MODEL_NAMES:
-        # Try timestamped filename first, fall back to legacy (no timestamp)
-        if model_timestamp:
-            model_filename = f"{name}_{args.phase}_{args.seed}_{model_timestamp}.joblib"
+        # Prefer the exact filename recorded in the manifest when available.
+        if name in manifest_files:
+            model_path = models_dir / manifest_files[name]
+        elif model_timestamp:
+            model_path = models_dir / f"{name}_{resolved_phase}_{resolved_seed}_{model_timestamp}.joblib"
         else:
-            model_filename = f"{name}_{args.phase}_{args.seed}.joblib"
-
-        model_path = models_dir / model_filename
+            model_path = models_dir / f"{name}_{resolved_phase}_{resolved_seed}.joblib"
 
         if not model_path.exists():
-            # Try legacy filename as fallback when timestamp was specified but file doesn't exist
-            legacy_filename = f"{name}_{args.phase}_{args.seed}.joblib"
-            legacy_path = models_dir / legacy_filename
-            if legacy_path.exists():
-                print(f"\n  NOTE: Timestamped model not found, using legacy: {legacy_filename}")
-                model_path = legacy_path
-            else:
-                print(f"\n  WARNING: Model not found: {model_path} — skipping.")
-                continue
+            print(f"\n  WARNING: Model not found: {model_path} - skipping.")
+            continue
 
         print(f"\n  Loading {name}...")
         model_dict = joblib.load(model_path)
         model = model_dict["model"]
         scaler = model_dict["scaler"]
-        threshold = model_dict.get("optimal_threshold", 0.5)
+        n_models_loaded += 1
 
-        # Generate predictions
+        # Generate predictions at the default 0.5 threshold, matching the
+        # per-model confusion matrices produced by run_training.py (which uses
+        # model.predict). ROC curves use y_prob and are threshold-independent.
         X_scaled = scaler.transform(X_test)
         y_prob = model.predict_proba(X_scaled)[:, 1]
-        y_pred = (y_prob >= threshold).astype(int)
+        y_pred = model.predict(X_scaled)
 
-        print(f"    Threshold: {threshold:.3f}")
-        print(f"    Predictions: {int(y_pred.sum())} positive, {int(len(y_pred) - y_pred.sum())} negative")
+        print(f"    Predictions (threshold=0.50): "
+              f"{int(y_pred.sum())} positive, {int(len(y_pred) - y_pred.sum())} negative")
 
         # Generate per-model figures
         display_name = f"{args.prefix}{name}" if args.prefix else name
@@ -219,14 +227,50 @@ def main(argv: list[str] | None = None) -> None:
 
         roc_data.append((display_name, y_test, y_prob))
 
-    # Combined ROC curve
+        # Permutation feature importance (mirrors run_training.py, n_repeats=10)
+        if len(np.unique(y_test)) >= 2:
+            fi = compute_feature_importance(
+                model=model,
+                scaler=scaler,
+                X_test=X_test,
+                y_test=y_test,
+                model_name=display_name,
+                feature_names=FEATURE_COLUMNS,
+                n_repeats=10,
+                random_seed=resolved_seed,
+            )
+            importance_results.append(fi)
+
+    # Combined ROC curve - requires both classes in the test set. y_test is
+    # shared across all models, so a single check suffices.
     if roc_data:
-        combined_path = plot_roc_curve_combined(roc_data, figures_dir=figures_dir)
-        generated_paths.append(combined_path)
+        if len(np.unique(y_test)) >= 2:
+            combined_path = plot_roc_curve_combined(roc_data, figures_dir=figures_dir)
+            generated_paths.append(combined_path)
+        else:
+            print("\n  NOTE: Only one class in test set - skipping combined ROC curve.")
+
+    # Feature importance comparison figure (mirrors run_training.py)
+    if importance_results:
+        fi_path = plot_feature_importance(importance_results, figures_dir=figures_dir)
+        generated_paths.append(fi_path)
+
+    # Fail loudly if no models were loaded - otherwise a phase/seed/timestamp
+    # mismatch would silently produce an empty figure set with exit code 0.
+    if n_models_loaded == 0:
+        print("\n" + "=" * 60)
+        print(f"ERROR: No models loaded from {models_dir}.")
+        print("  Checked names: " + ", ".join(MODEL_NAMES))
+        print(f"  Resolved phase={resolved_phase}, seed={resolved_seed}, "
+              f"timestamp={model_timestamp or '(none)'}.")
+        print("  Verify --phase/--seed/--timestamp or that latest_models.json is present.")
+        print("=" * 60)
+        sys.exit(1)
 
     # Summary
     print("\n" + "=" * 60)
-    print(f"  Generated {len(generated_paths)} figures:")
+    print(f"  Loaded {n_models_loaded}/{len(MODEL_NAMES)} models. "
+          f"Generated {len(generated_paths)} figures:")
     for p in generated_paths:
         print(f"    {p}")
     print("=" * 60)

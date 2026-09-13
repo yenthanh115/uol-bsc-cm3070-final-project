@@ -10,7 +10,7 @@ Supports two surge methods:
     (no forward-looking data needed).
 
 Requirements: R2 (Temporal Windowing per Ticker), R3 (Posting Volume Growth)
-Design Decision: D1 — searchsorted-based O(n log n) approach.
+Design Decision: D1 - searchsorted-based O(n log n) approach.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         times = epoch_seconds[idx]  # Already sorted (loader guarantees chrono order)
 
         # Vectorised binary search for window boundaries
-        # backward window: (t - 24h, t) — posts strictly before t, within 24h
+        # backward window: (t - 24h, t) - posts strictly before t, within 24h
         #   left boundary: first index where time > (t - 24h)
         #     = searchsorted(times, t - window, side='right')
         #   right boundary: first index where time >= t
@@ -119,7 +119,7 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         backward_right = np.searchsorted(times, times, side="left")
         group_backward = backward_right - backward_left
 
-        # forward window: (t, t + 24h] — posts strictly after t, within 24h
+        # forward window: (t, t + 24h] - posts strictly after t, within 24h
         #   left boundary: first index where time > t
         #     = searchsorted(times, t, side='right')
         #   right boundary: first index where time > (t + 24h)
@@ -154,7 +154,7 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         excluded = backward_counts < config.min_window_count
 
         logger.info(
-            "Windowing complete (backward_only) — %d records | "
+            "Windowing complete (backward_only) - %d records | "
             "excluded: %d (%.1f%%) | min_window_count threshold: %d",
             n,
             excluded.sum(),
@@ -171,7 +171,7 @@ def compute_windowed_counts(df: pd.DataFrame, config: PipelineConfig) -> pd.Data
         excluded = forward_counts < config.min_window_count
 
         logger.info(
-            "Windowing complete (forward_growth) — %d records | "
+            "Windowing complete (forward_growth) - %d records | "
             "excluded: %d (%.1f%%) | min_window_count threshold: %d",
             n,
             excluded.sum(),
@@ -201,7 +201,7 @@ def _compute_backward_surge_ratio(
         backward_count / max(historical_mean, 1) - 1
 
     A value of 0 means activity matches historical average.
-    A value of 1.0 means activity is 2× the historical average.
+    A value of 1.0 means activity is 2x the historical average.
 
     For the first record of a ticker (no history), historical_mean is
     set to the record's own backward_count, yielding ratio = 0.
@@ -230,7 +230,7 @@ def _compute_backward_surge_ratio(
         # For i=0 (first record), use the record's own count (ratio=0).
         group_size = len(idx)
         if group_size == 1:
-            # Single record — no history, ratio = 0
+            # Single record - no history, ratio = 0
             result[idx[0]] = 0.0
             continue
 
@@ -240,7 +240,7 @@ def _compute_backward_surge_ratio(
         # historical_mean[i] = cumsum[i-1] / i for i >= 1
         # For i=0: use counts[0] itself (yields ratio=0)
         historical_means = np.empty(group_size, dtype=np.float64)
-        historical_means[0] = max(counts[0], 1.0)  # self → ratio=0
+        historical_means[0] = max(counts[0], 1.0)  # self -> ratio=0
         historical_means[1:] = cumsum[:-1] / np.arange(1, group_size)
 
         # Avoid division by zero

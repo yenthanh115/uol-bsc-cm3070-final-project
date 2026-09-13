@@ -31,9 +31,9 @@ class PipelineConfig:
 
     # --- Windowing ---
     # Surge method controls how the surge metric is computed:
-    #   "forward_growth" (default) — uses forward/backward ratio,
+    #   "forward_growth" (default) - uses forward/backward ratio,
     #       requires future posts to exist (excludes end-of-timeline).
-    #   "backward_only" — defines surge as backward_count exceeding
+    #   "backward_only" - defines surge as backward_count exceeding
     #       the ticker's historical average. No forward-looking data
     #       needed, making every record with sufficient backward
     #       history usable.

@@ -4,7 +4,7 @@ Performs temporal train/test split, z-score normalisation using training
 statistics only, composite metric computation, and binary surge labelling.
 
 Requirements: R5 (Z-Score Normalisation), R6 (Composite Surge Labelling)
-Design Decision: D2 — Training/test split before normalisation.
+Design Decision: D2 - Training/test split before normalisation.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def _temporal_split(
 def _compute_z_scores(
     values: np.ndarray, mu: float, sigma: float
 ) -> np.ndarray:
-    """Compute z-scores, handling σ=0 edge case.
+    """Compute z-scores, handling sigma=0 edge case.
 
     Parameters
     ----------
@@ -91,7 +91,7 @@ def _compute_z_scores(
     Returns
     -------
     np.ndarray
-        Z-score normalised values. Returns zeros if σ=0.
+        Z-score normalised values. Returns zeros if sigma=0.
     """
     if sigma == 0.0:
         return np.zeros_like(values, dtype=np.float64)
@@ -135,7 +135,7 @@ def _compute_class_distribution(
     )
 
     logger.info(
-        "Class distribution [%s] — surge: %d | no-surge: %d | "
+        "Class distribution [%s] - surge: %d | no-surge: %d | "
         "total: %d | surge rate: %.2f%% | imbalance ratio: %.2f:1",
         partition_name,
         surge_count,
@@ -161,9 +161,9 @@ def apply_labelling(
 
     Workflow:
         1. Temporal train/test split at 80th percentile timestamp (R5-AC1).
-        2. Compute μ/σ from training partition only (R5-AC2, AC3, AC6).
+        2. Compute mu/sigma from training partition only (R5-AC2, AC3, AC6).
         3. Z-score normalise ALL records using training stats (R5-AC4).
-        4. Handle σ=0 by setting z=0 (R5-AC5).
+        4. Handle sigma=0 by setting z=0 (R5-AC5).
         5. Compute composite metric with configurable weights (R6-AC1).
         6. Apply threshold for binary label (R6-AC2).
         7. Report class distribution (R6-AC5).
@@ -241,7 +241,7 @@ def apply_labelling(
     test_size = int(test_mask.sum())
 
     logger.info(
-        "Temporal split — train: %d | test: %d | excluded: %d | "
+        "Temporal split - train: %d | test: %d | excluded: %d | "
         "split timestamp: %.0f",
         train_size,
         test_size,
@@ -254,7 +254,7 @@ def apply_labelling(
     # ------------------------------------------------------------------
     if train_size == 0:
         logger.warning(
-            "No included training records — cannot compute normalisation. "
+            "No included training records - cannot compute normalisation. "
             "All labels set to NaN."
         )
         df = df.assign(
@@ -275,7 +275,7 @@ def apply_labelling(
         return LabellingResult(df=df, stats=stats, class_distributions={})
 
     # ------------------------------------------------------------------
-    # Step 2: Compute μ/σ from training partition ONLY (R5-AC2, AC3, AC6)
+    # Step 2: Compute mu/sigma from training partition ONLY (R5-AC2, AC3, AC6)
     # ------------------------------------------------------------------
     train_volume = df.loc[train_mask, "posting_volume_growth"].values.astype(
         np.float64
@@ -290,8 +290,8 @@ def apply_labelling(
     sigma_sent = float(np.std(train_sentiment, ddof=0))  # population std
 
     logger.info(
-        "Normalisation params (training only) — "
-        "μ_vol: %.6f | σ_vol: %.6f | μ_sent: %.6f | σ_sent: %.6f",
+        "Normalisation params (training only) - "
+        "mu_vol: %.6f | sigma_vol: %.6f | mu_sent: %.6f | sigma_sent: %.6f",
         mu_vol,
         sigma_vol,
         mu_sent,
@@ -299,9 +299,9 @@ def apply_labelling(
     )
 
     if sigma_vol == 0.0:
-        logger.warning("σ_vol = 0 — z_volume will be set to 0 for all records.")
+        logger.warning("sigma_vol = 0 - z_volume will be set to 0 for all records.")
     if sigma_sent == 0.0:
-        logger.warning("σ_sent = 0 — z_sentiment will be set to 0 for all records.")
+        logger.warning("sigma_sent = 0 - z_sentiment will be set to 0 for all records.")
 
     # ------------------------------------------------------------------
     # Step 3: Z-score normalise ALL included records (R5-AC4, AC5)
@@ -326,7 +326,7 @@ def apply_labelling(
     composite = (w1 * z_volume) + (w2 * z_sentiment)
 
     logger.info(
-        "Composite metric — w_volume: %.2f | w_sentiment: %.2f | "
+        "Composite metric - w_volume: %.2f | w_sentiment: %.2f | "
         "mode: %s",
         w1,
         w2,
@@ -382,7 +382,7 @@ def apply_labelling(
     )
 
     logger.info(
-        "Labelling complete — %d records labelled | threshold τ=%.2f",
+        "Labelling complete - %d records labelled | threshold tau=%.2f",
         int(included_mask.sum()),
         tau,
     )
@@ -425,7 +425,7 @@ def sweep_thresholds(
         )
 
         logger.info(
-            "Threshold sweep τ=%.2f — surge rate: %.2f%%",
+            "Threshold sweep tau=%.2f - surge rate: %.2f%%",
             tau,
             result.class_distributions.get("all", {}).get("surge_rate", 0.0),
         )

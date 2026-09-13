@@ -315,8 +315,8 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     for r in mcnemar_results:
         sig_marker = "***" if r.is_significant else "   "
         print(f"  {r.model_a} vs {r.model_b}: "
-              f"χ²={r.test_statistic:.3f}, p={r.p_value:.4f} "
-              f"(adj.α={r.adjusted_alpha:.4f}) {sig_marker}")
+              f"chi2={r.test_statistic:.3f}, p={r.p_value:.4f} "
+              f"(adj.alpha={r.adjusted_alpha:.4f}) {sig_marker}")
 
     # ------------------------------------------------------------------
     # 6. Baseline comparisons (Phase 2.2)
@@ -338,7 +338,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     print("\n  Model vs baseline comparison:")
     for name, comp in baseline_comparisons.items():
         print(f"    {name}: AUC={comp.model_auc:.4f} | "
-              f"beats_random={'✓' if comp.beats_random else '✗'} | "
+              f"beats_random={'[OK]' if comp.beats_random else '[X]'} | "
               f"improvement_over_best_feature={comp.improvement_over_best_single_feature:+.4f}")
 
     # ------------------------------------------------------------------
@@ -406,7 +406,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
                   f"F1={model_metrics[name].f1:.3f}")
             print(f"    Tuned   ({tr.optimal_threshold:.2f}): P={prec_tuned:.3f}  "
                   f"R={rec_tuned:.3f}  "
-                  f"F1={f1_tuned:.3f}  ← {f1_gain:+.3f} F1")
+                  f"F1={f1_tuned:.3f}  <- {f1_gain:+.3f} F1")
             print(f"    (Threshold selected on validation fold: "
                   f"val_F1={tr.f1_at_threshold:.3f})")
         else:
@@ -439,7 +439,7 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
         ranked = fi.ranked()
         print(f"\n  {name}:")
         for rank, (feat, imp, std) in enumerate(ranked, 1):
-            print(f"    {rank:2d}. {feat:<30s} {imp:+.4f} ± {std:.4f}")
+            print(f"    {rank:2d}. {feat:<30s} {imp:+.4f} +/- {std:.4f}")
 
     # Also get built-in importances for tree models
     builtin_results: dict = {}
@@ -493,12 +493,12 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
 
     for name, tr in tier_results.items():
         tier_display = tr.tier_achieved.replace("_", " ").title()
-        print(f"  {name}: AUC={tr.auc_roc:.4f} → {tier_display}")
+        print(f"  {name}: AUC={tr.auc_roc:.4f} -> {tier_display}")
 
     overall_pass = any(tr.achieves_minimum for tr in tier_results.values())
     best_model = max(model_metrics, key=lambda k: model_metrics[k].auc_roc)
     best_tier = tier_results[best_model].tier_achieved
-    print(f"\n  Overall pass: {'✓' if overall_pass else '✗'}")
+    print(f"\n  Overall pass: {'[OK]' if overall_pass else '[X]'}")
     print(f"  Best model: {best_model} ({best_tier})")
 
     # ------------------------------------------------------------------

@@ -1,26 +1,26 @@
-"""Feature engineering module — backward-only prediction features.
+"""Feature engineering module - backward-only prediction features.
 
 Computes 11 prediction features from the labelled dataset using only
 backward-looking or creation-time information, preventing temporal leakage.
 
 Base features (9):
-  1. sentiment_score — reuse sentiment_polarity from sentiment stage
-  2. hour_of_day — extract from created_utc (0–23)
-  3. day_of_week — extract from created_utc (0–6, Monday=0)
-  4. time_since_previous — hours since last post mentioning same ticker (−1 if first)
-  5. ticker_post_rate_24h — reuse backward_count from windowing
-  6. ticker_post_acceleration — ratio of 12h/12h backward counts
-  7. word_count — whitespace-separated tokens in title+selftext
-  8. title_length — whitespace-separated tokens in title
-  9. num_tickers_mentioned — count of distinct tickers per original record
+  1. sentiment_score - reuse sentiment_polarity from sentiment stage
+  2. hour_of_day - extract from created_utc (0-23)
+  3. day_of_week - extract from created_utc (0-6, Monday=0)
+  4. time_since_previous - hours since last post mentioning same ticker (-1 if first)
+  5. ticker_post_rate_24h - reuse backward_count from windowing
+  6. ticker_post_acceleration - ratio of 12h/12h backward counts
+  7. word_count - whitespace-separated tokens in title+selftext
+  8. title_length - whitespace-separated tokens in title
+  9. num_tickers_mentioned - count of distinct tickers per original record
 
 Interaction features (2, experiment B2):
-  10. word_count_x_hour — word_count × hour_of_day (long posts at peak hours)
-  11. accel_x_time_since_prev — ticker_post_acceleration × time_since_previous
+  10. word_count_x_hour - word_count x hour_of_day (long posts at peak hours)
+  11. accel_x_time_since_prev - ticker_post_acceleration x time_since_previous
       (rapid acceleration after silence)
 
 Requirements: R11 (Prediction Feature Engineering), R12 (Feature Leakage Prevention)
-Design Decision: D8 — Backward-only feature computation with vectorised windowing.
+Design Decision: D8 - Backward-only feature computation with vectorised windowing.
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.assign(sentiment_score=df["sentiment_polarity"].values.copy())
 
     # ------------------------------------------------------------------
-    # Features 2–3: hour_of_day, day_of_week (R11-AC2)
+    # Features 2-3: hour_of_day, day_of_week (R11-AC2)
     # Extract from created_utc (creation-time information only)
     # ------------------------------------------------------------------
     created_utc = pd.to_datetime(df["created_utc"], utc=True)
@@ -177,7 +177,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # ------------------------------------------------------------------
     # Feature 10: word_count_x_hour (B2 interaction)
-    # Long posts at peak hours — gives models an explicit interaction
+    # Long posts at peak hours - gives models an explicit interaction
     # signal between content length and temporal posting pattern.
     # ------------------------------------------------------------------
     df = df.assign(
@@ -186,7 +186,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # ------------------------------------------------------------------
     # Feature 11: accel_x_time_since_prev (B2 interaction)
-    # Rapid acceleration after silence — combines ticker momentum with
+    # Rapid acceleration after silence - combines ticker momentum with
     # gap duration. For first-occurrence records (time_since_previous=-1),
     # use 0 to avoid spurious negative products.
     # ------------------------------------------------------------------
@@ -232,7 +232,7 @@ def _compute_time_since_previous(
     for _ticker, group in df.groupby("ticker", sort=False):
         idx = group.index.values
         if len(idx) < 2:
-            # Single occurrence — first record stays -1 (AC11)
+            # Single occurrence - first record stays -1 (AC11)
             continue
 
         times = epoch_seconds[idx]
@@ -253,8 +253,8 @@ def _compute_ticker_post_acceleration(
 
     acceleration = count_in_(t-12h, t] / max(count_in_(t-24h, t-12h], 1)
 
-    If denominator is zero (no posts in prior 12–24h window), set value
-    to the numerator count — treating empty denominator as 1 (R11-AC10).
+    If denominator is zero (no posts in prior 12-24h window), set value
+    to the numerator count - treating empty denominator as 1 (R11-AC10).
 
     Parameters
     ----------
@@ -280,9 +280,9 @@ def _compute_ticker_post_acceleration(
         # Count in (t-12h, t]: posts strictly after t-12h and at or before t
         # Using searchsorted on the sorted times array:
         #   left boundary: searchsorted(times, t - 12h, side='right')
-        #     → first index where time > (t - 12h)
+        #     -> first index where time > (t - 12h)
         #   right boundary: searchsorted(times, t, side='left')
-        #     → first index where time >= t (excludes self)
+        #     -> first index where time >= t (excludes self)
         # count_recent = right - left
         recent_left = np.searchsorted(times, times - _12H_SECONDS, side="right")
         recent_right = np.searchsorted(times, times, side="left")
@@ -290,15 +290,15 @@ def _compute_ticker_post_acceleration(
 
         # Count in (t-24h, t-12h]: posts strictly after t-24h and at or before t-12h
         #   left boundary: searchsorted(times, t - 24h, side='right')
-        #     → first index where time > (t - 24h)
+        #     -> first index where time > (t - 24h)
         #   right boundary: searchsorted(times, t - 12h, side='left')
-        #     → first index where time >= (t - 12h)
-        #   Wait — we want posts <= t-12h. Since side='right' gives first index
+        #     -> first index where time >= (t - 12h)
+        #   Wait - we want posts <= t-12h. Since side='right' gives first index
         #   where time > (t-12h), that's what we want as the right boundary.
         #   Actually: we want count of times in (t-24h, t-12h].
         #   (t-24h, t-12h] means time > t-24h AND time <= t-12h.
-        #   left = searchsorted(times, t-24h, side='right') → first > t-24h
-        #   right = searchsorted(times, t-12h, side='right') → first > t-12h
+        #   left = searchsorted(times, t-24h, side='right') -> first > t-24h
+        #   right = searchsorted(times, t-12h, side='right') -> first > t-12h
         #   count = right - left (all elements > t-24h and <= t-12h)
         older_left = np.searchsorted(times, times - _24H_SECONDS, side="right")
         older_right = np.searchsorted(times, times - _12H_SECONDS, side="right")
@@ -348,7 +348,7 @@ def _log_feature_summary(df: pd.DataFrame) -> None:
     # Feature matrix shape
     feature_matrix = df[FEATURE_COLUMNS]
     logger.info(
-        "Feature matrix shape: %d rows × %d features",
+        "Feature matrix shape: %d rows x %d features",
         len(feature_matrix),
         len(FEATURE_COLUMNS),
     )

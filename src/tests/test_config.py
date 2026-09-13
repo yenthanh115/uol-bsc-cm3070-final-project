@@ -1,8 +1,8 @@
 """Tests for PipelineConfig JSON serialisation roundtrip and edge cases.
 
 Validates:
-  1. Roundtrip: to_json() → from_json() preserves all fields (R7-AC3)
-  2. File-based roundtrip: save_json() → load_json()
+  1. Roundtrip: to_json() -> from_json() preserves all fields (R7-AC3)
+  2. File-based roundtrip: save_json() -> load_json()
   3. Custom values survive serialisation
   4. Default values are correct
   5. Unknown fields in JSON are rejected (strict schema)
@@ -67,7 +67,7 @@ class TestDefaults:
 
 
 class TestJsonRoundtrip:
-    """Verify to_json() → from_json() preserves all fields."""
+    """Verify to_json() -> from_json() preserves all fields."""
 
     def test_roundtrip_with_defaults(self):
         original = PipelineConfig()
@@ -135,7 +135,7 @@ class TestJsonRoundtrip:
 
 
 class TestFileRoundtrip:
-    """Verify save_json() → load_json() roundtrip via filesystem."""
+    """Verify save_json() -> load_json() roundtrip via filesystem."""
 
     def test_save_and_load(self, tmp_path):
         original = PipelineConfig(
