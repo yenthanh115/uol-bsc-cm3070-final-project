@@ -21,6 +21,8 @@ dependencies = [
     "xgboost>=1.7",
     "joblib>=1.2",
     "tqdm>=4.60",
+    "kaggle>=1.6",
+    "huggingface_hub>=0.20",
 ]
 
 [project.optional-dependencies]
