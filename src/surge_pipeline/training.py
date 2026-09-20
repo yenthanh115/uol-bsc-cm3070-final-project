@@ -383,13 +383,22 @@ def _train_single_model(
 # ---------------------------------------------------------------------------
 
 
+#: Model types supported by the training pipeline, in canonical order.
+SUPPORTED_MODELS: tuple[str, ...] = (
+    "logistic_regression",
+    "random_forest",
+    "xgboost",
+)
+
+
 def train_models(
     df: pd.DataFrame,
     config: PipelineConfig,
     output_dir: str | None = None,
     timestamp: str | None = None,
+    model_names: list[str] | None = None,
 ) -> TrainingPipelineResult:
-    """Train all models (LR, RF, XGBoost) with temporal cross-validation.
+    """Train the selected models with temporal cross-validation.
 
     Parameters
     ----------
@@ -403,6 +412,11 @@ def train_models(
     timestamp : str, optional
         Timestamp prefix for versioned model filenames (e.g. "2026-07-16_18-52").
         If not provided, generates one from the current time.
+    model_names : list of str, optional
+        Subset of models to train. Each must be one of SUPPORTED_MODELS
+        ("logistic_regression", "random_forest", "xgboost"). Defaults to all
+        three. The canonical training order is preserved regardless of the
+        order given.
 
     Returns
     -------
@@ -410,6 +424,21 @@ def train_models(
         Contains all trained models, phase info, and metadata.
     """
     from datetime import datetime as _dt
+
+    # Resolve and validate the requested model selection.
+    if model_names is None:
+        selected = list(SUPPORTED_MODELS)
+    else:
+        unknown = [m for m in model_names if m not in SUPPORTED_MODELS]
+        if unknown:
+            raise ValueError(
+                f"Unknown model name(s): {unknown}. "
+                f"Supported models: {list(SUPPORTED_MODELS)}."
+            )
+        if not model_names:
+            raise ValueError("model_names must contain at least one model.")
+        # Preserve canonical order and de-duplicate.
+        selected = [m for m in SUPPORTED_MODELS if m in set(model_names)]
 
     random_seed = config.random_seed
     phase = "phase1" if config.weight_sentiment == 0.0 else "phase2"
@@ -446,29 +475,34 @@ def train_models(
     splits = get_expanding_window_splits(folds)
     _verify_temporal_ordering(train_df, folds, splits)
 
-    # Train each model type
+    logger.info("Models selected for training: %s", selected)
+
+    # Train each selected model type (canonical order preserved).
     models: dict[str, TrainedModel] = {}
 
     # --- Logistic Regression ---
-    logger.info("Training Logistic Regression...")
-    models["logistic_regression"] = _train_single_model(
-        "logistic_regression", _get_lr_param_grid(),
-        X_train_full, y_train_full, splits, random_seed, _make_lr,
-    )
+    if "logistic_regression" in selected:
+        logger.info("Training Logistic Regression...")
+        models["logistic_regression"] = _train_single_model(
+            "logistic_regression", _get_lr_param_grid(),
+            X_train_full, y_train_full, splits, random_seed, _make_lr,
+        )
 
     # --- Random Forest ---
-    logger.info("Training Random Forest...")
-    models["random_forest"] = _train_single_model(
-        "random_forest", _get_rf_param_grid(),
-        X_train_full, y_train_full, splits, random_seed, _make_rf,
-    )
+    if "random_forest" in selected:
+        logger.info("Training Random Forest...")
+        models["random_forest"] = _train_single_model(
+            "random_forest", _get_rf_param_grid(),
+            X_train_full, y_train_full, splits, random_seed, _make_rf,
+        )
 
     # --- XGBoost (with scale_pos_weight grid for class imbalance - P6) ---
-    logger.info("Training XGBoost...")
-    models["xgboost"] = _train_single_model(
-        "xgboost", _get_xgb_param_grid(random_seed, imbalance_ratio=imbalance_ratio),
-        X_train_full, y_train_full, splits, random_seed, _make_xgb,
-    )
+    if "xgboost" in selected:
+        logger.info("Training XGBoost...")
+        models["xgboost"] = _train_single_model(
+            "xgboost", _get_xgb_param_grid(random_seed, imbalance_ratio=imbalance_ratio),
+            X_train_full, y_train_full, splits, random_seed, _make_xgb,
+        )
 
     # Serialise models to disk (including optimal threshold from validation fold)
     from surge_pipeline.evaluation import find_optimal_threshold

@@ -118,6 +118,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Output directory for serialised models.",
     )
     parser.add_argument(
+        "--models",
+        type=str,
+        nargs="+",
+        default=["logistic_regression", "random_forest", "xgboost"],
+        choices=["logistic_regression", "random_forest", "xgboost"],
+        help=(
+            "Which model(s) to train and evaluate. Defaults to all three. "
+            "Select a subset for faster iteration, e.g. --models xgboost. "
+            "Note: McNemar's pairwise significance test is skipped when fewer "
+            "than two models are selected."
+        ),
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -236,7 +249,8 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
     )
 
     training_result: TrainingPipelineResult = train_models(
-        df, config, output_dir=args.models_dir, timestamp=prefix
+        df, config, output_dir=args.models_dir, timestamp=prefix,
+        model_names=args.models,
     )
     training_summary = get_training_summary(training_result)
 
@@ -312,6 +326,9 @@ def _run_pipeline(args: argparse.Namespace, logger: logging.Logger) -> None:
 
     mcnemar_results = mcnemar_pairwise_test(y_test, predictions)
 
+    if not mcnemar_results:
+        print("  Skipped: pairwise comparison requires at least two models "
+              f"(only {len(predictions)} trained).")
     for r in mcnemar_results:
         sig_marker = "***" if r.is_significant else "   "
         print(f"  {r.model_a} vs {r.model_b}: "
