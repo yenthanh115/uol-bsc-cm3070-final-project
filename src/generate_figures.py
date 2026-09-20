@@ -45,6 +45,9 @@ from surge_pipeline.features import FEATURE_COLUMNS, compute_features
 
 MODEL_NAMES = ["logistic_regression", "random_forest", "xgboost"]
 
+# Default paths resolved from project root (works regardless of CWD)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -59,13 +62,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--models-dir",
         type=str,
-        default="../output/models",
+        default=str(_PROJECT_ROOT / "output" / "models"),
         help="Directory containing saved .joblib models.",
     )
     parser.add_argument(
         "--figures-dir",
         type=str,
-        default="../output/figures/evaluation",
+        default=str(_PROJECT_ROOT / "output" / "figures" / "evaluation"),
         help="Output directory for generated figures.",
     )
     parser.add_argument(
