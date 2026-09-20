@@ -23,9 +23,6 @@ A machine learning pipeline that detects emerging "surge" trends in Reddit stock
 
 - Python 3.10 or higher, CPU only (no GPU needed)
 - ~1 GB disk (includes virtual environment); 8 GB RAM recommended
-- Input datasets (~260 MB total) are included in the repository, so no internet is needed after setup
-
-A full labelling + training run takes roughly 5-10 minutes on the larger r/wallstreetbets dataset (222 MB), or under 2 minutes on r/pennystocks (38 MB).
 
 ## Setup
 
@@ -42,6 +39,34 @@ pip install -r requirements.txt
 pip install -e .                    # enables CLI entry points and imports
 python -m textblob.download_corpora # one-time, required for sentiment analysis
 ```
+
+## Dataset
+
+The pipeline reads two Reddit submission CSVs that are **not included in the
+repository** (they total ~260 MB and are excluded via `.gitignore`). Download
+them from Kaggle and place them in `input/raw/` before running any commands.
+
+| Source (Kaggle) | File in the dataset | Rename/save to |
+|---|---|---|
+| [`leukipp/pennystocks`](https://www.kaggle.com/datasets/leukipp/pennystocks) | `submissions_reddit.csv` | `input/raw/r_pennystocks_submissions_reddit.csv` |
+| [`leukipp/wallstreetbets`](https://www.kaggle.com/datasets/leukipp/wallstreetbets) | `submissions_reddit.csv` | `input/raw/r_wallstreetbets_submissions_reddit.csv` |
+
+### Option A — Kaggle CLI
+
+```bash
+pip install kaggle          # already in requirements.txt
+# Requires ~/.kaggle/kaggle.json (Kaggle → Account → Create New API Token)
+
+kaggle datasets download -d leukipp/pennystocks -p input/raw --unzip
+kaggle datasets download -d leukipp/  -p input/raw --unzip
+# then rename each extracted submissions_reddit.csv to the names in the table above
+```
+
+### Option B — Manual download
+Download each dataset from the Kaggle links above, unzip, and copy/rename submissions_reddit.csv into input/raw/ using the target names in the table.
+
+### Synthetic fallback
+Running `surge-label` with no `--file-path` (or a path that doesn't exist) generates a small synthetic dataset automatically, so the pipeline can be run end-to-end without downloading anything. Results are illustrative only.
 
 ## Usage
 
