@@ -87,7 +87,7 @@ Common flags: `--threshold-tau` (surge threshold, default 1.5), `--weight-volume
 Train Logistic Regression, Random Forest, and XGBoost with temporal cross-validation, then evaluate (per-model metrics, McNemar's significance tests, baseline comparisons, bootstrap confidence intervals):
 
 ```bash
-surge-train --data-path output/processed/labelled_dataset.csv
+surge-train
 ```
 
 Add `--no-figures` to skip evaluation plots. Results are written to `output/evaluation/`, models to `output/models/`.
