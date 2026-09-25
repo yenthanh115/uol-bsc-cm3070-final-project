@@ -74,12 +74,23 @@ link-citations: true
 ```{=typst}
 #align(center)[
   #text(size: 17pt, weight: "bold")[
-    Predicting Volume and Sentiment Surges in Reddit Financial Communities Using Machine Learning
+    CM3070 Final Project 
   ]
   #v(0.3cm)
   #text(size: 14pt, weight: "bold")[\*\*\*]
-  #text(size: 14pt)[
-    https://github.com/yenthanh115/uol-bsc-cm3070-final-project.git
+  #v(0.3cm)
+  #text(size: 17pt, weight: "bold")[
+     Project Title: Predicting Volume and Sentiment Surges in Reddit Financial Communities Using Machine Learning
+  ]
+  #v(0.3cm)
+  #text(size: 14pt, weight: "bold")[\*\*\*]
+  #v(0.3cm)
+  #text(size: 12pt)[
+    Data Science Project Template: Predictive Modelling of Social Media Trend Emergence
+  ]
+  #v(0.3cm)
+  #text(size: 12pt)[
+    Repository: https://github.com/yenthanh115/uol-bsc-cm3070-final-project.git
   ]
 
 ]
@@ -94,7 +105,7 @@ link-citations: true
 
 ---
 
-# Introduction
+# Introduction (890/1000 words)
 
 ## Background and Context {#sec:background}
 
@@ -169,7 +180,7 @@ Section 2 reviews the literature on online attention prediction, financial senti
 
 ---
 
-# Literature Review
+# Literature Review (1911/2500 words)
 
 ## The Predictability of Online Attention
 
@@ -286,7 +297,7 @@ Whether this integration yields meaningful predictive performance is the empiric
 
 ---
 
-# Design
+# Design (1914/2000 words)
 
 ## Context, Requirements, and Acceptance Criteria {#sec:requirements}
 
@@ -558,7 +569,7 @@ The plan is derived from the CRISP-DM data-mining process model, whose stages (b
 
 ---
 
-# Implementation
+# Implementation (2500/2500 words)
 
 ## Code Organisation
 
@@ -597,7 +608,7 @@ Pipeline behaviour is controlled centrally via a `PipelineConfig` dataclass, whi
 
 ## Exploratory Data Analysis Tooling {#sec:eda-tooling}
 
-The dataset-selection decisions in [@sec:eda] are backed by a separate toolset kept outside the pipeline package: three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline` and produce no artefacts the pipeline consumes. Each re-implements inline the little shared logic it needs (ticker extraction, VADER scoring), so the screening stays reproducible on its own, and each writes a standalone CSV (plus figures, for the last) to `eda/output/`. [@tbl:eda-notebooks] lists the three; the stages below map them onto the decisions in [@sec:eda].
+The dataset-selection decisions in [@sec:eda] are backed by a separate toolset kept outside the pipeline package: three Jupyter notebooks under `eda/`, run in sequence, that import nothing from `surge_pipeline`. Each re-implements the little shared logic it needs (ticker extraction, VADER scoring) and writes a standalone CSV (plus figures, for the last) to `eda/output/`. [@tbl:eda-notebooks] lists the three; the stages below map them onto the decisions in [@sec:eda].
 
 | Notebook | Screening stage | Input | Output artefact |
 |--------------|-----------|-----------|---------------|
@@ -607,9 +618,9 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate toolset k
 
 : EDA notebooks, in run order, with their inputs and outputs. All three are standalone and share no code with the pipeline package. {#tbl:eda-notebooks}
 
-**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 Kaggle, 10 HuggingFace). Since these APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a score blending that inferred completeness with log-scaled download popularity. This is a deliberately coarse funnel: its output is a draft shortlist, not a decision, and it degrades gracefully to an empty result when the APIs or credentials are unavailable. The `leukipp/reddit-finance-data` archive [@leukipp2021reddit] appears in the shortlist alongside several Twitter and tweet-based alternatives.
+**Stage 1: candidate discovery** (`01_discovery.ipynb`). The notebook queries the Kaggle and HuggingFace dataset APIs for financial social-media data ("twitter finance", "reddit finance") and returns 47 raw candidates (37 Kaggle, 10 HuggingFace). Since these APIs rarely expose column schemas, completeness is inferred coarsely from titles and tags, and candidates are ranked by a score blending that with log-scaled download popularity. This coarse funnel yields a draft shortlist, not a decision. The `leukipp/reddit-finance-data` archive [@leukipp2021reddit] appears in it alongside several Twitter and tweet-based alternatives.
 
-**Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted, manually-downloaded datasets are profiled side by side on cheap properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields a surge label needs (text, timestamp, engagement) are present. Profiling reads a 20,000-row sample per dataset (ticker diversity and the sentiment ratio use smaller 5,000- and 2,000-row sub-samples) and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets carry none and cannot support a surge label whatever their ticker vocabulary.
+**Stage 2: high-level comparative profiling** (`02_highlevel_eval.ipynb`). The shortlisted datasets are profiled side by side on cheap properties: column schema, date span, per-column missingness, sampled ticker diversity, bullish/bearish ratio, and a `surge_label_ready` flag for whether the fields a surge label needs (text, timestamp, engagement) are present. Profiling reads a 20,000-row sample per dataset and writes `highlevel_comparison.csv`. The result ([@tbl:eda-highlevel]) settles the platform decision from [@sec:eda]: the two Reddit submission datasets carry engagement fields and are surge-label-ready, whereas the Twitter and tweet-based datasets carry none and cannot support a surge label whatever their ticker vocabulary.
 
 | Dataset | Records (sampled) | Date span | Engagement fields | Surge-label ready |
 |--------------------------|------------|---------------------|---------|---------|
@@ -620,9 +631,9 @@ The dataset-selection decisions in [@sec:eda] are backed by a separate toolset k
 
 : High-level dataset comparison from the EDA screening. Profiled on a 20,000-row sample per dataset; the Twitter-derived datasets are excluded because they carry no engagement fields and cannot support a surge label. {#tbl:eda-highlevel}
 
-The `leukipp/reddit-finance-data` archive bundles several financial subreddits. A preliminary screening of these against the subreddit criteria from [@sec:eda], done ahead of and outside the committed notebooks, narrowed the field to the two most suitable: `WSB` (high-density) and `r/pennystocks` (sparse). This pair spans opposite ends of the posting-density spectrum, serving the abundance-versus-scarcity and cross-dataset-transfer goals; single-ticker or mostly long-form communities were set aside as unfit for the per-ticker surge design. The profiling above ([@tbl:eda-highlevel]) is therefore reported for this pair, with full-run sizes given later in [@tbl:loader-attrition].
+The `leukipp/reddit-finance-data` archive bundles several financial subreddits. A preliminary screening against the subreddit criteria from [@sec:eda] narrowed these to the two most suitable: `WSB` (high-density) and `r/pennystocks` (sparse), spanning opposite ends of the posting-density spectrum to serve the abundance-versus-scarcity and cross-dataset-transfer goals; single-ticker or mostly long-form communities were unfit for the per-ticker surge design. Profiling above ([@tbl:eda-highlevel]) is therefore reported for this pair, with full-run sizes in [@tbl:loader-attrition].
 
-**Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows). The notebook measures data quality (duplicates, high-risk columns), temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement (on a 3,000-row sample) as a reliability check, then runs a surge-viability sweep across nine candidate definitions crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is recommended `suitable` only when the surge-label fields exist and at least one definition puts over 2% of posts in the positive class. Both pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume inside a narrower sampled window.
+**Stage 3: deep viability assessment** (`03_deep_assessment.ipynb`). The two surviving Reddit datasets are deep-dived on a larger sample (up to 100,000 rows) for data quality, temporal coverage and gaps, and VADER-versus-TextBlob sentiment agreement, then run through a surge-viability sweep of nine candidate definitions crossing three volume percentiles (0.90, 0.95, 0.99) with three standard-deviation multipliers (0.5, 1.0, 1.5). A dataset is `suitable` only when the surge-label fields exist and at least one definition puts over 2% of posts in the positive class. Both pass ([@tbl:eda-deep]): `r/pennystocks` with full-year coverage and stronger sentiment agreement, `WSB` with far higher volume in a narrower window.
 
 | Property | `r/pennystocks` | `WSB` |
 |----------------|------------|------------|
@@ -636,7 +647,7 @@ The `leukipp/reddit-finance-data` archive bundles several financial subreddits. 
 
 : Deep viability assessment from the EDA screening. A definition is viable when over 2% of posts qualify; the "best" rate is the maximum across the sweep, at the loosest definition (percentile 0.90, multiplier 0.5). Both datasets clear the bar, confirming a workable positive class before any pipeline development. {#tbl:eda-deep}
 
-[@fig:eda-viability] shows the `WSB` sweep and how the positive-class rate shrinks as the definition tightens, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties behind the sparse-versus-dense framing used throughout the evaluation.
+[@fig:eda-viability] shows the `WSB` sweep and how the positive-class rate shrinks as the definition tightens, while [@fig:eda-cross-dataset] sets the two communities side by side on the properties behind the sparse-versus-dense framing.
 
 ![Surge-viability sweep for `WSB` from the EDA screening. Each cell reports the positive-class rate for a candidate surge definition (a volume percentile crossed with a standard-deviation multiplier). Shaded cells clear the minimum viable positive-class threshold, confirming that a usable surge signal exists before any pipeline development.](../../eda/output/figures/surge_viability_leukipp_wallstreetbets_submissions_reddit.png){#fig:eda-viability}
 
@@ -953,13 +964,13 @@ At $\tau = 1.5$, extreme imbalance (1.44% surge rate; 102:1) led an early XGBoos
 
 ## Implementation Status
 
-All six pipeline stages ([@tbl:pipeline-stages]) execute end-to-end on both datasets to produce reproducible artefacts, directly serving goal G5. Execution runtime (from target labelling through final evaluation) is approximately 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a standard laptop CPU, with VADER sentiment computation accounting for the majority of compute time.
+All six pipeline stages ([@tbl:pipeline-stages]) execute end-to-end on both datasets to produce reproducible artefacts, directly serving goal G5. End-to-end runtime is about 8 minutes for `r/pennystocks` and 19 minutes for `WSB` on a laptop CPU, most of it VADER sentiment computation.
 
-Determinism was verified empirically: running the `r/pennystocks` baseline (configuration A1, [@tbl:experiment-plan], seed 42) on July 13 and July 19 produced identical AUC values (0.753) and byte-identical execution logs. Results are robust to seed choice across the five robustness seeds (42, 123, 456, 789, 2024) on `r/pennystocks`, with AUC scores spanning 0.734 to 0.753 (a 0.019 margin). All 30+ experimental runs across the planned matrix ([@tbl:experiment-plan]) are fully trackable via logged configuration JSONs, Git commit SHAs, and timestamped output paths, so any reported result can be traced back to the exact configuration and code revision that produced it.
+Determinism was verified empirically: re-running the `r/pennystocks` baseline (configuration A1, [@tbl:experiment-plan], seed 42) on two dates produced identical AUC (0.753) and byte-identical logs. Results are robust across the five robustness seeds on `r/pennystocks`, with AUC spanning 0.734 to 0.753 (a 0.019 margin). All 30+ runs in the matrix ([@tbl:experiment-plan]) log their configuration JSON, Git commit SHA, and output path, so any reported result traces back to the exact configuration and code revision that produced it.
 
 ## Testing Strategy
 
-Pipeline stability, software health, and correctness claims are maintained through a 10-module `pytest` suite, strict static type checking (`mypy`), and automated linting (`ruff`), all passing with zero errors. The test suite mirrors the library's module structure, using analytically hand-computed edge cases to verify mathematical and temporal invariants across each pipeline stage.
+Correctness and correctness claims are maintained through a 10-module `pytest` suite, strict type checking (`mypy`), and linting (`ruff`), all passing with zero errors. The suite mirrors the library's module structure, using hand-computed edge cases to verify mathematical and temporal invariants per stage.
 
 | Test Module | Pipeline Stage | Key Invariants Tested |
 |-------------|---------------|----------------------|
@@ -1019,7 +1030,7 @@ These unit tests execute on synthetic datasets and run automatically prior to ev
 
 ---
 
-# Evaluation
+# Evaluation (2170/2500 words)
 
 ## Evaluation Against Project Objectives {#sec:eval-objectives}
 
@@ -1273,7 +1284,7 @@ The validation-test gap for Random Forest (val_F1 = 0.911 at tuned threshold vs 
 
 ---
 
-# Conclusion
+# Conclusion (824/1000 words)
 
 ## Current Achievements
 
@@ -1327,13 +1338,6 @@ Two directions would extend the methodology:
 
 ---
 
-# References {#sec:ref}
-
-```{=typst}
-#bibliography("references.bib", title: none, style: "association-for-computing-machinery")
-```
-
----
 
 # Appendices {#sec:appendices}
 
@@ -1407,3 +1411,11 @@ src/
 ├── generate_prediction_examples.py  # CLI: worked prediction examples
 └── build_stopwords.py           # Regenerates ticker_stopwords.txt
 ```
+
+# References {#sec:ref}
+
+```{=typst}
+#bibliography("references.bib", title: none, style: "association-for-computing-machinery")
+```
+
+---

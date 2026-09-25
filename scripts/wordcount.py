@@ -19,7 +19,7 @@ Counted:
 Requires: pandoc on PATH (no Python third-party packages).
 
 Usage:
-  python scripts/wordcount.py reports/05-final/final-report-v0.0.2.md
+  python scripts/wordcount.py reports/05-final/final-report-v1.0.0.md
   python scripts/wordcount.py <file.md> --split-level 2 --budget 800
   python scripts/wordcount.py <file.md> --json
 """
